@@ -17,8 +17,8 @@
   temp0=298.0,             ! Reference temperature
   ig=-1,                   ! Random seed for velocity
   ntr=1                    ! Restraints
-  restraint_wt = 0.1,                 ! Constraints of 2.5 kcal/mol
-  restraintmask = '@CA,C,O,N,Na,CL & !:WAT'      ! Constraints of heavy atoms except WAT
+  restraint_wt = 0.1,                 ! Constraints of 0.1 kcal/mol
+  restraintmask = '@CA,C,O,N'         ! Constraints on backbone
   ntpr=1000,               ! Energy information every 2 ps
   ntwx=1000                ! Coordinates written every 2 ps
  &end

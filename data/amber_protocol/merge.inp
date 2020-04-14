@@ -1,6 +1,6 @@
 parm ../scr/mol.prmtop
 trajin ../scr/8-prod.nc
 autoimage
-strip :WAT,Na+,Cl- parmout ../scr/start-desolv.prmtop
+strip :WAT,Na,CL parmout ../scr/start-desolv.prmtop
 trajout ../scr/traj_desolv.nc
 go
