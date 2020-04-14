@@ -338,6 +338,7 @@ class CoSolventBox:
                 TLEAP_TEMPLATE += "loadamberparams %s\n" % frcmod_filename
                 TLEAP_TEMPLATE += "loadoff %s\n" % lib_filename
 
+        TLEAP_TEMPLATE += "set default nocenter off\n"
         TLEAP_TEMPLATE += "m = loadpdb system.pdb\n"
         TLEAP_TEMPLATE += "charge m\n"
         TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
