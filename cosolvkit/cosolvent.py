@@ -115,14 +115,22 @@ class CoSolvent:
         Because RDKit does not know how to read a mol2 file...
         """
         atom_names = []
+        read_flag = False
+        
+        with open(mol2_filename) as f:
+            lines = f.readlines()
 
-        OBMol = ob.OBMol()
-        obConversion = ob.OBConversion()
-        obConversion.SetInFormat("mol2")
-        obConversion.ReadFile(OBMol, mol2_filename)
-        for residue in ob.OBResidueIter(OBMol):
-            for atom in ob.OBResidueAtomIter(residue):
-                atom_names.append(residue.GetAtomID(atom))
+            for line in lines:
+                if '@<TRIPOS>BOND' in line:
+                    read_flag = False
+                    break
+
+                if read_flag:
+                    sline = line.split()
+                    atom_names.append(sline[1])
+
+                if '@<TRIPOS>ATOM' in line:
+                    read_flag = True
 
         self.atom_names = atom_names
 
