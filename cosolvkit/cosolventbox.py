@@ -16,6 +16,40 @@ from .cosolvent import CoSolvent
 from . import utils
 
 
+def _positions_from_pdb_file(pdb_filename):
+    """Get the atomic coordinates from the pdb file
+    """
+    positions = []
+
+    with open(pdb_filename) as f:
+        lines = f.readlines()
+
+        for line in lines:
+            if "ATOM" in line or "HETATM" in line:
+                positions.append([np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])])
+
+    positions = np.array(positions)
+
+    return positions
+
+
+def _segnames_from_pdb_file(pdb_filename):
+    """Get segnames from pdb file
+    """
+    segnames = []
+
+    with open(pdb_filename) as f:
+        lines = f.readlines()
+
+        for line in lines:
+            if "ATOM" in line or "HETATM" in line:
+                segnames.append(line[21:22].strip())
+
+    segnames = list(set(segnames))
+
+    return segnames
+
+
 def _is_close_to_edge(xyz, distance, box_dimension):
     """Is it too close from the edge?
     """
@@ -53,63 +87,6 @@ def _water_is_in_box(xyz, box_dimension):
         all_in[[i, i + 1, i + 2]] = [np.all(all_in[[i, i + 1, i + 2]])] * 3
 
     return all_in
-
-
-def _write_frag_box(fname, residues_xyzs, resname, atom_types, segname="W"):
-    template = "%-6s%5d  %-3s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f          %2s%2s\n"
-
-    n_atom = 1
-    n_residue = 1
-
-    with open(fname, 'w') as w:
-        for residue_xyzs in residues_xyzs:
-            for atom_xyz, atom_type in zip(residue_xyzs, atom_types):
-                x, y, z = atom_xyz
-                w.write(template % ("ATOM", n_atom, atom_type, " ", resname, segname, 
-                                    n_residue, " ", x, y, z, 0., 0., atom_type[0], " "))
-                n_atom += 1
-
-            n_residue += 1
-
-        w.write("TER")
-
-
-def _write_water_box(fname, wat_xyzs, segname="W"):
-    template = "%-6s%5d  %-3s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f          %2s%2s\n"
-
-    n_atom = 1
-    n_residue = 1
-    atom_types = ["O", "H1", "H2"] * int(wat_xyzs.shape[0] / 3)
-
-    with open(fname, 'w') as w:
-        for wat_xyz, atom_type in zip(wat_xyzs, atom_types):
-            x, y, z = wat_xyz
-            w.write(template % ("ATOM", n_atom, atom_type, " ", 'WAT', segname, 
-                                n_residue, " ", x, y, z, 0., 0., atom_type[0], " "))
-
-            if n_atom % 3 == 0:
-                n_residue += 1
-
-            n_atom += 1
-
-        w.write("TER")
-
-
-def _positions_from_pdb_file(pdb_filename):
-    """Get the atomic coordinates from the pdb file
-    """
-    positions = []
-
-    with open(pdb_filename) as f:
-        lines = f.readlines()
-
-        for line in lines:
-            if "ATOM" in line or "HETATM" in line:
-                positions.append([np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])])
-
-    positions = np.array(positions)
-
-    return positions
 
 
 def _create_waterbox(box_dimension, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
@@ -253,6 +230,7 @@ class CoSolventBox:
         """
         self._receptor_filename = receptor_filename
         self._receptor_xyzs = _positions_from_pdb_file(receptor_filename)
+        self._receptor_segnames = _segnames_from_pdb_file(receptor_filename)
 
         if self._dimensions is None:
             xmin = np.min(self._receptor_xyzs[:,0]) - self._cutoff
@@ -307,21 +285,94 @@ class CoSolventBox:
     def export(self, prefix=None, water_segname="W"):
         """Export pdb file for tleap
         """
-        if self._wat_xyzs is not None:
-            filename = "water.pdb"
-            if prefix is not None:
-                filename = "%s_" % prefix + filename
+        n_atom = 0
+        n_residue = 1
+        prmtop_filename = "system.prmtop"
+        inpcrd_filename = "system.inpcrd"
+        pdb_filename = "system.pdb"
+        # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
+        template = "%-6s%5d  %-3s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
 
-            _write_water_box(filename, self._wat_xyzs, water_segname)
+        if prefix is not None:
+            prmtop_filename = prefix + "_" + prmtop_filename
+            inpcrd_filename = prefix + "_" + inpcrd_filename
+            pdb_filename = prefix + "_" + pdb_filename
 
-        if self._cosolv_xyzs is not None:
-            for cosolv_name in self._cosolvents:
-                cosolv_xyzs = self._cosolv_xyzs[cosolv_name]
-                segname = self._cosolvents_segnames[cosolv_name]
-                atom_types = self._cosolvents[cosolv_name].symbols
+        # Create system
+        with open("system.pdb", 'w') as w:
+            # Write receptor first
+            with open(self._receptor_filename) as f:
+                lines = f.readlines()
 
-                filename = "%s.pdb" % cosolv_name
-                if prefix is not None:
-                    filename = "%s_" % prefix + filename
+                for line in lines:
+                    if "ATOM" in line or "HETATM" in line:
+                        w.write(line)
+                        n_atom += 1
+                    elif "TER" in line:
+                        w.write(line)
 
-                _write_frag_box(filename, cosolv_xyzs, cosolv_name[:3].upper(), atom_types, segname)
+            # Write cosolvent molecules
+            if self._cosolv_xyzs is not None:
+                for name in self._cosolvents:
+                    cosolv_xyzs = self._cosolv_xyzs[name]
+                    residue_name = self._cosolvents[name].residue_name
+                    segname = self._cosolvents_segnames[name]
+                    atom_names = self._cosolvents[name].atom_names
+
+                    for residue_xyzs in cosolv_xyzs:
+                        for atom_xyz, atom_name in zip(residue_xyzs, atom_names):
+                            x, y, z = atom_xyz
+                            w.write(template % ("ATOM", n_atom, atom_name, " ", residue_name, n_residue, " ", x, y, z, 0., 0.))
+                            n_atom += 1
+                        n_residue += 1
+
+                    w.write("TER\n")
+
+            # And water molecules at the end
+            n_residue = 1
+            n_atom_water = 1
+            atom_types = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
+
+            for wat_xyz, atom_type in zip(self._wat_xyzs, atom_types):
+                x, y, z = wat_xyz
+                w.write(template % ("ATOM", n_atom, atom_type, " ", 'WAT', n_residue, " ", x, y, z, 0., 0.))
+
+                if n_atom_water % 3 == 0:
+                    n_residue += 1
+
+                n_atom_water += 1
+                n_atom += 1
+
+            w.write("TER\n")
+            w.write("END\n")
+
+        # Create tleap template
+        TLEAP_TEMPLATE = ("source leaprc.protein.ff14SB\n"
+                          "source leaprc.DNA.bsc1\n"
+                          "source leaprc.water.tip3p\n"
+                          "source leaprc.gaff2\n"
+                          )
+
+        if self._cosolvents is not None:
+            for name in self._cosolvents:
+                frcmod_filename = os.path.basename(self._cosolvents[name]._frcmod_filename)
+                lib_filename = os.path.basename(self._cosolvents[name]._lib_filename)
+
+                TLEAP_TEMPLATE += "loadamberparams %s\n" % frcmod_filename
+                TLEAP_TEMPLATE += "loadoff %s\n" % lib_filename
+
+        TLEAP_TEMPLATE += "m = loadpdb system.pdb\n"
+        TLEAP_TEMPLATE += "charge m\n"
+        TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
+        TLEAP_TEMPLATE += "addIonsRand m Na+ 0\n"
+        TLEAP_TEMPLATE += "check m\n"
+        TLEAP_TEMPLATE += "setBox m \"vdw\"\n"
+        TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
+        TLEAP_TEMPLATE += "savepdb m %s\n" % (pdb_filename)
+        TLEAP_TEMPLATE += "quit\n"
+
+        with open("tleap.cmd", 'w') as w:
+            w.write(TLEAP_TEMPLATE)
+
+        cmd = 'tleap -f tleap.cmd'
+        outputs, errors = utils.execute_command(cmd)

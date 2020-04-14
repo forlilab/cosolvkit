@@ -59,7 +59,7 @@ def _run_antechamber(mol2_filename, molecule_name, residue_name, charge=0, charg
                                       'molecule_name': molecule_name,
                                       'residue_name': residue_name
                                       })
-        cmd = 'tleap -f tleap.cmd'
+        cmd = 'tleap -s -f tleap.cmd'
         outputs, errors = utils.execute_command(cmd)
 
         # Copy back all we need
@@ -76,9 +76,10 @@ class CoSolvent:
         self._name = name
         self._charge = charge
         if residue_name is None:
-            self._residue_name = name[:3].upper()
+            self.residue_name = name[:3].upper()
         else:
-            self._residue_name = residue_name
+            self.residue_name = residue_name
+        self.atom_names = None
         self._mol2_filename = None
         self._frcmod_filename = None
         self._lib_filename = None
@@ -90,7 +91,6 @@ class CoSolvent:
         AllChem.EmbedMolecule(self._RDmol)
         # Get some properties
         self.positions = np.array([c.GetPositions() for c in self._RDmol.GetConformers()][0])
-        self.symbols = np.array([a.GetSymbol() for a in self._RDmol.GetAtoms()])
         self.volume = AllChem.ComputeMolVolume(self._RDmol)
 
         self.parametrize()
@@ -110,14 +110,33 @@ class CoSolvent:
         obConversion.ReadString(OBMol, mol_string)
         obConversion.WriteFile(OBMol, fname)
 
+    def atom_types_from_mol2(self, mol2_filename):
+        """Get atom names using OpenBabel. 
+        Because RDKit does not know how to read a mol2 file...
+        """
+        atom_names = []
+
+        OBMol = ob.OBMol()
+        obConversion = ob.OBConversion()
+        obConversion.SetInFormat("mol2")
+        obConversion.ReadFile(OBMol, mol2_filename)
+        for residue in ob.OBResidueIter(OBMol):
+            for atom in ob.OBResidueAtomIter(residue):
+                atom_names.append(residue.GetAtomID(atom))
+
+        self.atom_names = atom_names
+
     def parametrize(self, charge_method="bcc", gaff_version="gaff2"):
         """Run antechamber for the small parametrization.
         """
         mol2_filename = '%s.mol2' % self._name
         self.write_mol2(mol2_filename)
 
-        mol2_filename, frcmod_filename, lib_filename = _run_antechamber(mol2_filename, self._name, self._residue_name, 
+        mol2_filename, frcmod_filename, lib_filename = _run_antechamber(mol2_filename, self._name, self.residue_name, 
                                                                         self._charge, charge_method, gaff_version)
+
+        self.atom_types_from_mol2(mol2_filename)
+
         self._mol2_filename = mol2_filename
         self._frcmod_filename = frcmod_filename
         self._lib_filename = lib_filename
