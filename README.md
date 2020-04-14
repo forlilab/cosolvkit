@@ -10,7 +10,7 @@ You need, at a minimum (requirements):
 * RDKit
 * Numpy 
 * Scipy
-* AmberTools (protein preparation and gist calculations)
+* AmberTools
 
 ## Installation
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
