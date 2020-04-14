@@ -17,7 +17,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n cosolvkit python=3.6
 $ conda activate cosolvkit
-$ conda install -c conda-forge -c ambermd mkl numpy scipy rdkit ambertools
+$ conda install -c conda-forge -c ambermd numpy scipy mkl openbabel rdkit ambertools
 ```
 
 Finally, we can install the `CoSolvKit` package

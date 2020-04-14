@@ -10,10 +10,9 @@ import itertools
 import os
 
 import numpy as np
-from rdkit import Chem
-from rdkit.Chem import AllChem
 from scipy import spatial
 
+from .cosolvent import CoSolvent
 from . import utils
 
 
@@ -50,6 +49,61 @@ def _water_is_in_box(xyz, box_dimension):
         all_in[[i, i + 1, i + 2]] = [np.all(all_in[[i, i + 1, i + 2]])] * 3
 
     return all_in
+
+
+def _write_frag_box(fname, residues_xyzs, resname, atom_types, segname="W"):
+    template = "%-6s%5d  %-3s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f          %2s%2s\n"
+
+    n_atom = 1
+    n_residue = 1
+
+    with open(fname, 'w') as w:
+        for residue_xyzs in residues_xyzs:
+            for atom_xyz, atom_type in zip(residue_xyzs, atom_types):
+                x, y, z = atom_xyz
+                w.write(template % ("ATOM", n_atom, atom_type, " ", resname, segname, 
+                                    n_residue, " ", x, y, z, 0., 0., atom_type[0], " "))
+                n_atom += 1
+
+            n_residue += 1
+
+        w.write("TER")
+
+
+def _write_water_box(fname, wat_xyzs, segname="W"):
+    template = "%-6s%5d  %-3s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f          %2s%2s\n"
+
+    n_atom = 1
+    n_residue = 1
+    atom_types = ["O", "H1", "H2"] * int(wat_xyzs.shape[0] / 3)
+
+    with open(fname, 'w') as w:
+        for wat_xyz, atom_type in zip(wat_xyzs, atom_types):
+            x, y, z = wat_xyz
+            w.write(template % ("ATOM", n_atom, atom_type, " ", 'WAT', segname, 
+                                n_residue, " ", x, y, z, 0., 0., atom_type[0], " "))
+
+            if n_atom % 3 == 0:
+                n_residue += 1
+
+            n_atom += 1
+
+        w.write("TER")
+
+
+def _positions_from_pdb_file(pdb_filename):
+    positions = []
+
+    with open(pdb_filename) as f:
+        lines = f.readlines()
+
+        for line in lines:
+            if "ATOM" in line or "HETATM" in line:
+                positions.append([np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])])
+
+    positions = np.array(positions)
+
+    return positions
 
 
 def _create_waterbox(box_dimension, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
@@ -162,72 +216,6 @@ def _add_solvent(wat_xyzs, cosolvents, box_dimension, receptor_xyzs=None, final_
     return wat_xyzs, cosolv_xyzs, concentration
 
 
-def _write_frag_box(fname, residues_xyzs, resname, atom_types, segname="W"):
-    template = "%-6s%5d  %-3s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f          %2s%2s\n"
-
-    n_atom = 1
-    n_residue = 1
-
-    with open(fname, 'w') as w:
-        for residue_xyzs in residues_xyzs:
-            for atom_xyz, atom_type in zip(residue_xyzs, atom_types):
-                x, y, z = atom_xyz
-                w.write(template % ("ATOM", n_atom, atom_type, " ", resname, segname, 
-                                    n_residue, " ", x, y, z, 0., 0., atom_type[0], " "))
-                n_atom += 1
-
-            n_residue += 1
-
-        w.write("TER")
-
-
-def _write_water_box(fname, wat_xyzs, segname="W"):
-    template = "%-6s%5d  %-3s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f          %2s%2s\n"
-
-    n_atom = 1
-    n_residue = 1
-    atom_types = ["O", "H1", "H2"] * int(wat_xyzs.shape[0] / 3)
-
-    with open(fname, 'w') as w:
-        for wat_xyz, atom_type in zip(wat_xyzs, atom_types):
-            x, y, z = wat_xyz
-            w.write(template % ("ATOM", n_atom, atom_type, " ", 'WAT', segname, 
-                                n_residue, " ", x, y, z, 0., 0., atom_type[0], " "))
-
-            if n_atom % 3 == 0:
-                n_residue += 1
-
-            n_atom += 1
-
-        w.write("TER")
-
-
-def _positions_from_pdb_file(pdb_filename):
-    positions = []
-
-    with open(pdb_filename) as f:
-        lines = f.readlines()
-
-        for line in lines:
-            if "ATOM" in line or "HETATM" in line:
-                positions.append([np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])])
-
-    positions = np.array(positions)
-
-    return positions
-
-
-class CoSolvent:
-
-    def __init__(self, smiles):
-        mol = Chem.MolFromSmiles(smiles)
-        self._mol = Chem.AddHs(mol)
-        AllChem.EmbedMolecule(self._mol)
-        self.positions = np.array([c.GetPositions() for c in self._mol.GetConformers()][0])
-        self.symbols = np.array([a.GetSymbol() for a in self._mol.GetAtoms()])
-        self.volume = AllChem.ComputeMolVolume(self._mol)
-
-
 class CoSolventBox:
 
     def __init__(self, concentration=10, cutoff=12, dimensions=None, pH=7.):
@@ -269,7 +257,7 @@ class CoSolventBox:
             self._dimensions += receptor_center[:,None]
         
     def add_cosolvent(self, name, smiles, segname="F"):
-        c = CoSolvent(smiles)
+        c = CoSolvent(name, smiles)
         self._cosolvents[name] = c
         self._cosolvents_segnames[name] = segname
     
