@@ -33,23 +33,6 @@ def _positions_from_pdb_file(pdb_filename):
     return positions
 
 
-def _segnames_from_pdb_file(pdb_filename):
-    """Get segnames from pdb file
-    """
-    segnames = []
-
-    with open(pdb_filename) as f:
-        lines = f.readlines()
-
-        for line in lines:
-            if "ATOM" in line or "HETATM" in line:
-                segnames.append(line[21:22].strip())
-
-    segnames = list(set(segnames))
-
-    return segnames
-
-
 def _is_close_to_edge(xyz, distance, box_dimension):
     """Is it too close from the edge?
     """
@@ -221,7 +204,6 @@ class CoSolventBox:
 
         self._receptor_xyzs = None
         self._cosolvents = {}
-        self._cosolvents_segnames = {}
         self._wat_xysz = None
         self._cosolv_xyzs = None
 
@@ -230,7 +212,6 @@ class CoSolventBox:
         """
         self._receptor_filename = receptor_filename
         self._receptor_xyzs = _positions_from_pdb_file(receptor_filename)
-        self._receptor_segnames = _segnames_from_pdb_file(receptor_filename)
 
         if self._dimensions is None:
             xmin = np.min(self._receptor_xyzs[:,0]) - self._cutoff
@@ -247,12 +228,11 @@ class CoSolventBox:
             self._dimensions -= box_center[:,None]
             self._dimensions += receptor_center[:,None]
         
-    def add_cosolvent(self, name, smiles, segname="F"):
+    def add_cosolvent(self, name, smiles):
         """Add cosolvent and parametrize it
         """
         c = CoSolvent(name, smiles)
         self._cosolvents[name] = c
-        self._cosolvents_segnames[name] = segname
     
     def build(self):
         """Build the cosolvent box
@@ -282,7 +262,7 @@ class CoSolventBox:
         else:
             print("Error: box dimensions was not defined.")
 
-    def export(self, prefix=None, water_segname="W"):
+    def export(self, prefix=None):
         """Export pdb file for tleap
         """
         n_atom = 0
@@ -316,7 +296,6 @@ class CoSolventBox:
                 for name in self._cosolvents:
                     cosolv_xyzs = self._cosolv_xyzs[name]
                     residue_name = self._cosolvents[name].residue_name
-                    segname = self._cosolvents_segnames[name]
                     atom_names = self._cosolvents[name].atom_names
 
                     for residue_xyzs in cosolv_xyzs:

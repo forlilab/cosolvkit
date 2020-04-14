@@ -34,8 +34,8 @@ from cosolvkit import CoSolventBox
 
 cosolv = CoSolventBox(concentration=2.5, cutoff=12)
 cosolv.add_receptor("protein.pdb")
-cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1', segname='F')
-cosolv.add_cosolvent(name='ethanol', smiles='CCO', segname='G')
+cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
+cosolv.add_cosolvent(name='ethanol', smiles='CCO')
 cosolv.build()
-cosolv.export(prefix="cosolv", water_segname="W")
+cosolv.export(prefix="cosolv")
 ```
