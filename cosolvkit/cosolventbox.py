@@ -17,6 +17,8 @@ from . import utils
 
 
 def _is_close_to_edge(xyz, distance, box_dimension):
+    """Is it too close from the edge?
+    """
     xyz = np.atleast_2d(xyz)
     x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
 
@@ -33,6 +35,8 @@ def _is_close_to_edge(xyz, distance, box_dimension):
 
 
 def _water_is_in_box(xyz, box_dimension):
+    """Check if the water is in the box or not.
+    """
     xyz = np.atleast_2d(xyz)
     x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
 
@@ -92,6 +96,8 @@ def _write_water_box(fname, wat_xyzs, segname="W"):
 
 
 def _positions_from_pdb_file(pdb_filename):
+    """Get the atomic coordinates from the pdb file
+    """
     positions = []
 
     with open(pdb_filename) as f:
@@ -107,6 +113,8 @@ def _positions_from_pdb_file(pdb_filename):
 
 
 def _create_waterbox(box_dimension, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
+    """Create the water box.
+    """
     wat_xyzs = []
 
     watref_xyzs = np.atleast_2d(watref_xyzs)
@@ -151,7 +159,9 @@ def _create_waterbox(box_dimension, receptor_xyzs=None, watref_xyzs=None, watref
     return wat_xyzs
 
 
-def _add_solvent(wat_xyzs, cosolvents, box_dimension, receptor_xyzs=None, final_concentration=5.):
+def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, receptor_xyzs=None, final_concentration=5.):
+    """Add cosolvent to the water box.
+    """
     i = 1
     water_vol = 20.088000000000005
     frag_vol = 0.
@@ -239,6 +249,9 @@ class CoSolventBox:
         self._cosolv_xyzs = None
 
     def add_receptor(self, receptor_filename):
+        """Add receptor
+        """
+        self._receptor_filename = receptor_filename
         self._receptor_xyzs = _positions_from_pdb_file(receptor_filename)
 
         if self._dimensions is None:
@@ -257,19 +270,23 @@ class CoSolventBox:
             self._dimensions += receptor_center[:,None]
         
     def add_cosolvent(self, name, smiles, segname="F"):
+        """Add cosolvent and parametrize it
+        """
         c = CoSolvent(name, smiles)
         self._cosolvents[name] = c
         self._cosolvents_segnames[name] = segname
     
     def build(self):
+        """Build the cosolvent box
+        """
         if self._dimensions is not None:
             self._wat_xyzs = _create_waterbox(self._dimensions, self._receptor_xyzs,
                                               self._watref_xyzs, self._watref_dims)
 
             if self._cosolvents:
-                wat_xyzs, cosolv_xyzs, conc = _add_solvent(self._wat_xyzs, self._cosolvents,
-                                                           self._dimensions, self._receptor_xyzs,
-                                                           self._concentration)
+                wat_xyzs, cosolv_xyzs, conc = _add_cosolvent(self._wat_xyzs, self._cosolvents,
+                                                             self._dimensions, self._receptor_xyzs,
+                                                             self._concentration)
 
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
@@ -288,6 +305,8 @@ class CoSolventBox:
             print("Error: box dimensions was not defined.")
 
     def export(self, prefix=None, water_segname="W"):
+        """Export pdb file for tleap
+        """
         if self._wat_xyzs is not None:
             filename = "water.pdb"
             if prefix is not None:
