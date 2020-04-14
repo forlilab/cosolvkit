@@ -267,9 +267,11 @@ class CoSolventBox:
         """
         n_atom = 0
         n_residue = 1
+        n_atom_water = 1
         prmtop_filename = "system.prmtop"
         inpcrd_filename = "system.inpcrd"
         pdb_filename = "system.pdb"
+        water_atom_names = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
         # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
         template = "%-6s%5d  %-3s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
 
@@ -308,13 +310,9 @@ class CoSolventBox:
                     w.write("TER\n")
 
             # And water molecules at the end
-            n_residue = 1
-            n_atom_water = 1
-            atom_types = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
-
-            for wat_xyz, atom_type in zip(self._wat_xyzs, atom_types):
+            for wat_xyz, atom_name in zip(self._wat_xyzs, water_atom_names):
                 x, y, z = wat_xyz
-                w.write(template % ("ATOM", n_atom, atom_type, " ", 'WAT', n_residue, " ", x, y, z, 0., 0.))
+                w.write(template % ("ATOM", n_atom, atom_name, " ", 'WAT', n_residue, " ", x, y, z, 0., 0.))
 
                 if n_atom_water % 3 == 0:
                     n_residue += 1
