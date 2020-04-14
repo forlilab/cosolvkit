@@ -1,0 +1,8 @@
+Minimization with Cartesian restraints for the solute
+ &cntrl
+ imin=1, 
+ maxcyc=2000,
+ ntr=1,
+ restraint_wt = 0.1,                 ! Constraints of 2.5 kcal/mol
+ restraintmask = '@CA,C,O,N,Na,CL & !:WAT'      ! Constraints of heavy atoms except WAT
+ &end

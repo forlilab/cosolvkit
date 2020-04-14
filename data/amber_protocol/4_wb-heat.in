@@ -1,0 +1,23 @@
+25 ps heat protein-ligand
+ &cntrl
+  imin=0,                  ! Run MD without minimization
+  irest=0,                 ! New MD, no restart
+  nstlim=25000,            ! Number of MD steos
+  dt=0.001,                ! Time step in ps
+  ntc=2,                   ! SHAKE
+  jfastw=0,                ! SHAKE for water
+  ntf=2,                   ! bond interactions involving H-atoms omitted
+  cut=12.0,                ! Non-bonded cutoff  
+  ntb=1,                   ! Periodic box, constant volume (NVT), Ewald on
+  ntp = 0,                 ! No pressure control (NVT)
+  ntt=3,                   ! Langevin thermostat
+  gamma_ln=2.0,            ! Collision frequency
+  tempi=1.0,               ! Initial temperature
+  temp0=298.0,             ! Reference temperature
+  ig=-1,                   ! Random seed for velocity
+  ntr=1,                   ! Restraints
+  restraint_wt = 100.0,                 ! Constraints of 2.5 kcal/mol
+  restraintmask = '!@H=,Na,CL & !:WAT',      ! Constraints of heavy atoms except WAT
+  ntpr=1000,               ! Energy information every 2 ps
+  ntwx=1000                ! Coordinates written every 2 ps
+ &end

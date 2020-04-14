@@ -1,0 +1,27 @@
+5 ns production
+ &cntrl
+  imin=0,                  ! Run MD without minimization
+  irest=1,                 ! New MD, no restart
+  ntx=5,                   ! Read coordinates and velocities
+  t=0                      ! Time at the start
+  iwrap=1,                 ! Wrap water
+  nstlim=2500000,          ! Number of MD steps
+  dt=0.002,                ! Time step in ps
+  ntc=2,                   ! SHAKE
+  jfastw=0,                ! SHAKE for water
+  ntf=2,                   ! bond interactions involving H-atoms omitted
+  cut=12.0,                ! Non-bonded cutoff  
+  ntb=1,                   ! Periodic box, constant volume (NVT), Ewald on
+  ntp = 0,                 ! No pressure control (NVT)
+  ntt=3,                   ! Langevin thermostat
+  gamma_ln=2.0,            ! Collision frequency
+  tempi=298.0,             ! Initiale temperature
+  temp0=298.0,             ! Reference temperature
+  tautp=1,                 ! Time constant heating in ps
+  ig=-1,                   ! Random seed for velocity
+  ntr=1,                   ! Restraints
+  restraint_wt = 0.1,                 ! Constraints of 2.5 kcal/mol
+  restraintmask = '@CA,C,O,N,Na,CL & !:WAT'      ! Constraints of heavy atoms except WAT
+  ntpr=250,               ! Energy information every 0.2 ps 
+  ntwx=250                ! Coordinates written every 0.2 ps 
+ &end
