@@ -228,10 +228,10 @@ class CoSolventBox:
             self._dimensions -= box_center[:,None]
             self._dimensions += receptor_center[:,None]
         
-    def add_cosolvent(self, name, smiles, charge=0, residue_name=None):
+    def add_cosolvent(self, name, smiles, charge=0, resname=None):
         """Add cosolvent and parametrize it
         """
-        c = CoSolvent(name, smiles, charge, residue_name)
+        c = CoSolvent(name, smiles, charge, resname)
         self._cosolvents[name] = c
     
     def build(self):
@@ -255,7 +255,7 @@ class CoSolventBox:
                 print("Water (WAT): %3d" % (self._wat_xyzs.shape[0] / 3))
                 for cosolv_name in self._cosolvents:
                     print("%s (%s): %3d" % (cosolv_name.capitalize(), 
-                                            self._cosolvents[cosolv_name].residue_name,
+                                            self._cosolvents[cosolv_name].resname,
                                             len(self._cosolv_xyzs[cosolv_name])))
                 print("------------------------------------")
 
@@ -297,13 +297,13 @@ class CoSolventBox:
             if self._cosolv_xyzs is not None:
                 for name in self._cosolvents:
                     cosolv_xyzs = self._cosolv_xyzs[name]
-                    residue_name = self._cosolvents[name].residue_name
+                    resname = self._cosolvents[name].resname
                     atom_names = self._cosolvents[name].atom_names
 
                     for residue_xyzs in cosolv_xyzs:
                         for atom_xyz, atom_name in zip(residue_xyzs, atom_names):
                             x, y, z = atom_xyz
-                            w.write(template % ("ATOM", n_atom, atom_name, " ", residue_name, n_residue, " ", x, y, z, 0., 0.))
+                            w.write(template % ("ATOM", n_atom, atom_name, " ", resname, n_residue, " ", x, y, z, 0., 0.))
                             n_atom += 1
                         n_residue += 1
 

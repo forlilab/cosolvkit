@@ -25,9 +25,9 @@ source leaprc.DNA.bsc1
 source leaprc.water.tip3p
 source leaprc.%(gaff_version)s
 loadamberparams out.frcmod
-%(residue_name)s = loadmol2 out.mol2
-check %(residue_name)s
-saveoff %(residue_name)s out.lib
+%(resname)s = loadmol2 out.mol2
+check %(resname)s
+saveoff %(resname)s out.lib
 quit
 """
 
@@ -47,7 +47,7 @@ AMBER_SUPPORTED_RESNAMES = ('ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GL
 
 
 
-def _run_antechamber(mol2_filename, molecule_name, residue_name, charge=0, charge_method="bcc", gaff_version="gaff2"):
+def _run_antechamber(mol2_filename, molecule_name, resname, charge=0, charge_method="bcc", gaff_version="gaff2"):
     """Run antechamber.
     """
     original_mol2_filename = os.path.abspath(mol2_filename)
@@ -61,7 +61,7 @@ def _run_antechamber(mol2_filename, molecule_name, residue_name, charge=0, charg
 
         # Run Antechamber
         cmd = "antechamber -i %s -fi mol2 -o out.mol2 -fo mol2 -s 2 -at gaff -c %s -nc %d -rn %s"
-        cmd = cmd % (local_mol2_filename, charge_method, charge, residue_name)
+        cmd = cmd % (local_mol2_filename, charge_method, charge, resname)
         outputs, errors = utils.execute_command(cmd)
 
         # Run parmchk2 for the additional force field file
@@ -73,7 +73,7 @@ def _run_antechamber(mol2_filename, molecule_name, residue_name, charge=0, charg
         with open('tleap.cmd', 'w') as w:
             w.write(TLEAP_TEMPLATE % {'gaff_version': gaff_version, 
                                       'molecule_name': molecule_name,
-                                      'residue_name': residue_name
+                                      'resname': resname
                                       })
         cmd = 'tleap -s -f tleap.cmd'
         outputs, errors = utils.execute_command(cmd)
@@ -88,15 +88,15 @@ def _run_antechamber(mol2_filename, molecule_name, residue_name, charge=0, charg
 
 class CoSolvent:
 
-    def __init__(self, name, smiles, charge=0, residue_name=None):
+    def __init__(self, name, smiles, charge=0, resname=None):
         self._name = name
         self._charge = charge
-        if residue_name is None:
-            self.residue_name = name[:3].upper()
+        if resname is None:
+            self.resname = name[:3].upper()
         else:
-            self.residue_name = residue_name
+            self.resname = resname
 
-        assert not self.residue_name in AMBER_SUPPORTED_RESNAMES, print("Error: the residue name %s is already defined in AMBER." % self.residue_name)
+        assert not self.resname in AMBER_SUPPORTED_RESNAMES, print("Error: the residue name %s is already defined in AMBER." % self.resname)
 
         self.atom_names = None
         self._mol2_filename = None
@@ -159,7 +159,7 @@ class CoSolvent:
         mol2_filename = '%s.mol2' % self._name
         self.write_mol2(mol2_filename)
 
-        mol2_filename, frcmod_filename, lib_filename = _run_antechamber(mol2_filename, self._name, self.residue_name, 
+        mol2_filename, frcmod_filename, lib_filename = _run_antechamber(mol2_filename, self._name, self.resname, 
                                                                         self._charge, charge_method, gaff_version)
 
         self.atom_types_from_mol2(mol2_filename)
