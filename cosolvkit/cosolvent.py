@@ -8,6 +8,7 @@
 
 import os
 import shutil
+import sys
 from io import StringIO
 
 import numpy as np
@@ -29,6 +30,21 @@ check %(residue_name)s
 saveoff %(residue_name)s out.lib
 quit
 """
+
+
+AMBER_SUPPORTED_RESNAMES = ('ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 
+                            'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 
+                            'TYR', 'VAL', 'HID', 'HIE', 'HIN', 'HIP', 'CYX', 'ASH', 'GLH', 
+                            'LYH', 'ACE', 'NME', 'GL4', 'AS4', 'C', 'G', 'U', 'A', 'DC', 'DG', 
+                            'DT', 'DA', 'OHE', 'C5', 'G5', 'U5', 'A5', 'C3', 'G3', 'U3', 'A3', 
+                            'DC5', 'DG5', 'DT5', 'DA5', 'DC3', 'DG3', 'DT3', 'DA3', 'WAT', 
+                            'HOH', 'AG', 'AL', 'Ag', 'BA', 'BR', 'Be', 'CA', 'CD', 'CE', 'CL', 
+                            'CO', 'CR', 'CS', 'CU', 'CU1', 'Ce', 'Cl-', 'Cr', 'Dy', 'EU', 'EU3', 
+                            'Er', 'F', 'FE', 'FE2', 'GD3', 'HE+', 'HG', 'HZ+', 'Hf', 'IN', 'IOD', 
+                            'K', 'K+', 'LA', 'LI', 'LU', 'MG', 'MN', 'NA', 'NH4', 'NI', 'Na+', 
+                            'Nd', 'PB', 'PD', 'PR', 'PT', 'Pu', 'RB', 'Ra', 'SM', 'SR', 'Sm', 
+                            'Sn', 'TB', 'TL', 'Th', 'Tl', 'Tm', 'U4+', 'V2+', 'Y', 'YB2', 'ZN', 'Zr')
+
 
 
 def _run_antechamber(mol2_filename, molecule_name, residue_name, charge=0, charge_method="bcc", gaff_version="gaff2"):
@@ -79,6 +95,9 @@ class CoSolvent:
             self.residue_name = name[:3].upper()
         else:
             self.residue_name = residue_name
+
+        assert not self.residue_name in AMBER_SUPPORTED_RESNAMES, print("Error: the residue name %s is already defined in AMBER." % self.residue_name)
+
         self.atom_names = None
         self._mol2_filename = None
         self._frcmod_filename = None

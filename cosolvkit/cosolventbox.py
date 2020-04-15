@@ -228,10 +228,10 @@ class CoSolventBox:
             self._dimensions -= box_center[:,None]
             self._dimensions += receptor_center[:,None]
         
-    def add_cosolvent(self, name, smiles):
+    def add_cosolvent(self, name, smiles, charge=0, residue_name=None):
         """Add cosolvent and parametrize it
         """
-        c = CoSolvent(name, smiles)
+        c = CoSolvent(name, smiles, charge, residue_name)
         self._cosolvents[name] = c
     
     def build(self):
@@ -255,7 +255,7 @@ class CoSolventBox:
                 print("Water (WAT): %3d" % (self._wat_xyzs.shape[0] / 3))
                 for cosolv_name in self._cosolvents:
                     print("%s (%s): %3d" % (cosolv_name.capitalize(), 
-                                            cosolv_name[:3].upper(),
+                                            self._cosolvents[cosolv_name].residue_name,
                                             len(self._cosolv_xyzs[cosolv_name])))
                 print("------------------------------------")
 
