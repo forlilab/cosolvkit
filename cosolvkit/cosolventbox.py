@@ -188,15 +188,24 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, receptor_xyzs=None, fina
 
 class CoSolventBox:
 
-    def __init__(self, concentration=10, cutoff=12, dimensions=None, pH=7.):
+    def __init__(self, concentration=10, cutoff=12, box="cubic", dimensions=None, pH=7.):
+        """Initialize the cosolvent box
+        """
+        assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
+
         self._concentration = concentration
         self._cutoff = cutoff
         self._pH = pH
+        self._box = box
         if dimensions is not None:
-            self._dimensions = np.array(dimensions).astype(np.float)
+            assert np.ravel(dimensions).size == 3, "Error: dimensions should contain only (a, b, c)."
+            self._dimensions = np.array([[0, dimensions[0]], 
+                                         [0, dimensions[1]], 
+                                         [0, dimensions[2]]]).astype(np.float)
         else:
             self._dimensions = None
 
+        # Read the reference water box
         d = utils.path_module("cosolvkit")
         waterbox_filename = os.path.join(d, "data/waterbox.pdb")
         self._watref_xyzs = _positions_from_pdb_file(waterbox_filename)
@@ -220,13 +229,19 @@ class CoSolventBox:
             ymax = np.max(self._receptor_xyzs[:,1]) + self._cutoff
             zmin = np.min(self._receptor_xyzs[:,2]) - self._cutoff
             zmax = np.max(self._receptor_xyzs[:,2]) + self._cutoff
-            self._dimensions = np.array([[xmin, xmax], [ymin, ymax], [zmin, zmax]])
-        else:
-            # Center box around the receptor
-            receptor_center = np.mean(self._receptor_xyzs, axis=0)
-            box_center = np.mean(self._dimensions, axis=1)
-            self._dimensions -= box_center[:,None]
-            self._dimensions += receptor_center[:,None]
+
+            if self._box == "orthorombic":
+                self._dimensions = np.array([[xmin, xmax], [ymin, ymax], [zmin, zmax]])
+            else:
+                lmin = np.min([xmin, ymin, zmin])
+                lmax = np.max([xmax, ymax, zmax])
+                self._dimensions = np.array([[lmin, lmax], [lmin, lmax], [lmin, lmax]])
+
+        # Center box around the receptor
+        receptor_center = np.mean(self._receptor_xyzs, axis=0)
+        box_center = np.mean(self._dimensions, axis=1)
+        self._dimensions -= box_center[:,None]
+        self._dimensions += receptor_center[:,None]
         
     def add_cosolvent(self, name, smiles, charge=0, resname=None):
         """Add cosolvent and parametrize it
