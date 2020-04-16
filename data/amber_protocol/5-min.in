@@ -3,6 +3,6 @@ Minimization with Cartesian restraints for the solute
  imin=1, 
  maxcyc=2000,
  ntr=1,
- restraint_wt = 0.1,      ! Constraints of 0.1 kcal/mol
- restraintmask = '@CA'    ! Constraints on backbone
+ restraint_wt = 0.1,            ! Constraints of 0.1 kcal/mol
+ restraintmask = ':1-XXX@CA'          ! Constraints of heavy atoms except WAT
  &end

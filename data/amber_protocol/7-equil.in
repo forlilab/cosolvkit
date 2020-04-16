@@ -20,8 +20,8 @@
   tautp=1,                 ! Time constant heating in ps
   ig=-1,                   ! Random seed for velocity
   ntr=1                    ! Restraints
-  restraint_wt = 0.1,      ! Constraints of 0.1 kcal/mol
-  restraintmask = '@CA'    ! Constraints on backbone
+  restraint_wt = 0.1,            ! Constraints of 0.1 kcal/mol
+  restraintmask = ':1-XXX@CA'          ! Constraints of heavy atoms except WAT
   ntpr=1000,               ! Energy information every 2 ps
   ntwx=1000                ! Coordinates written every 2 ps
  &end

@@ -17,7 +17,7 @@
   ig=-1,                   ! Random seed for velocity
   ntr=1,                   ! Restraints
   restraint_wt = 100.0,                 ! Constraints of 2.5 kcal/mol
-  restraintmask = '!@H= & !:WAT',      ! Constraints of heavy atoms except WAT
+  restraintmask = ':1-XXX&!@H='          ! Constraints of heavy atoms except WAT
   ntpr=1000,               ! Energy information every 2 ps
   ntwx=1000                ! Coordinates written every 2 ps
  &end
