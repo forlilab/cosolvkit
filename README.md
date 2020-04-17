@@ -6,11 +6,13 @@ The python package for creating cosolvent box
 ## Prerequisites
 
 You need, at a minimum (requirements):
-* Python 3
+* python 3
 * RDKit
-* Numpy 
-* Scipy
-* AmberTools
+* numpy 
+* scipy
+* ambertools
+* parmed
+* openbabel
 
 ## Installation
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
