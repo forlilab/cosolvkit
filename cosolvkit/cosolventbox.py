@@ -188,7 +188,7 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, receptor_xyzs=None, fina
 
 class CoSolventBox:
 
-    def __init__(self, concentration=10, cutoff=12, box="cubic", dimensions=None, pH=7.):
+    def __init__(self, concentration=1.0, cutoff=12, box="cubic", dimensions=None, pH=7.):
         """Initialize the cosolvent box
         """
         assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
