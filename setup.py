@@ -24,10 +24,12 @@ setup(name="cosolvkit",
       author_email="jerome@scripps.edu",
       url="https://github.com/jeeberhardt/cosolvkit",
       packages=find_packages(),
+      scripts=["scripts/wk_prepare_receptor.py"],
       package_data={
             "cosolvkit" : ["data/*"]
       },
-      data_files=[("", ["README.md", "LICENSE"])],
+      data_files=[("", ["README.md", "LICENSE"]),
+                  ("scripts", find_files("scripts"))],
       include_package_data=True,
       zip_safe=False,
       license="MIT",
