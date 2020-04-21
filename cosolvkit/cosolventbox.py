@@ -363,7 +363,7 @@ class CoSolventBox:
             w.write("END\n")
 
         # Create tleap template
-        TLEAP_TEMPLATE = ("source leaprc.protein.ff14SB\n"
+        TLEAP_TEMPLATE = ("source leaprc.protein.ff19SB\n"
                           "source leaprc.DNA.bsc1\n"
                           "source leaprc.water.tip3p\n"
                           "source leaprc.gaff2\n"
