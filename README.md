@@ -34,7 +34,7 @@ $ python setup.py build install
 ```python
 from cosolvkit import CoSolventBox
 
-cosolv = CoSolventBox(concentration=1.0, cutoff=12, box='cubic')
+cosolv = CoSolventBox(concentration=0.15, cutoff=12, box='cubic') # 0.15 M concentration
 cosolv.add_receptor("protein.pdb")
 cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
 cosolv.add_cosolvent(name='methanol', smiles='CO', resname="MEH")
