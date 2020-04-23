@@ -57,7 +57,7 @@ class Analysis(AnalysisBase):
         self.density = Grid((hist - np.mean(hist)) / np.std(hist), origin=(edges[0][0], edges[1][0], edges[2][0]), delta=self._gridsize)
 
     def grid_free_energy(self, volume, concentration, temperature=300.):
-        print("Warning: The GFE functionnality is very experimental.")
+        print("Warning: The GFE functionnality is still experimental.")
         n_voxel = np.prod(self.histogram.grid.shape)
         # Avoid 0 in the histogram
         hist = self.histogram + 1E-10

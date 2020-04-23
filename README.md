@@ -12,6 +12,7 @@ You need, at a minimum (requirements):
 * scipy
 * ambertools
 * parmed
+* MDAnalysis
 * openbabel
 
 ## Installation
@@ -19,7 +20,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n cosolvkit python=3.6
 $ conda activate cosolvkit
-$ conda install -c conda-forge -c ambermd numpy scipy mkl openbabel rdkit ambertools parmed
+$ conda install -c conda-forge -c ambermd numpy scipy mkl openbabel rdkit ambertools parmed mdanalysis
 ```
 
 Finally, we can install the `CoSolvKit` package
@@ -32,8 +33,12 @@ $ python setup.py build install
 ## Quick tutorial
 
 ```python
-from cosolvkit import CoSolventBox
+from MDAnalysis import Universe
 
+from cosolvkit import CoSolventBox
+from cosolvkit import Analysis
+
+# Preparation
 cosolv = CoSolventBox(concentration=0.15, cutoff=12, box='cubic') # 0.15 M concentration
 cosolv.add_receptor("protein.pdb")
 cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
@@ -43,4 +48,23 @@ cosolv.add_cosolvent(name='imidazole', smiles='C1=CN=CN1')
 cosolv.add_cosolvent(name='acetamide', smiles='CC(=O)NC', resname="ACT")
 cosolv.build()
 cosolv.export(prefix="cosolv")
+
+# Analysis
+u = Universe("cosolvent_system.prmtop", ["traj_1.nc", "traj_2.nc"])
+
+a = Analysis(u.select_atoms("(resname BEN or resname PRP)"), verbose=True)
+a.run()
+a.density.export("map_hydrophobe.dx")
+
+a = Analysis(u.select_atoms("(resname IMI)"), verbose=True)
+a.run()
+a.density.export("map_imidazole.dx")
+
+a = Analysis(u.select_atoms("(resname MEH or resname ACT) and name O*"), verbose=True)
+a.run()
+a.density.export("map_O.dx")
+
+a = Analysis(u.select_atoms("(resname ACT) and name N*"), verbose=True)
+a.run()
+a.density.export("map_N.dx")
 ```
