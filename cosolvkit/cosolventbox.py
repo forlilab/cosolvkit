@@ -279,7 +279,6 @@ class CoSolventBox:
             print("Box dimensions: x %s y %s z %s" % (np.around(self._dimensions[0], 3), 
                                                       np.around(self._dimensions[1], 3),
                                                       np.around(self._dimensions[2], 3)))
-            print("")
 
             if self._cosolvents:
                 wat_xyzs, cosolv_xyzs = _add_cosolvent(self._wat_xyzs, self._cosolvents,
@@ -289,6 +288,7 @@ class CoSolventBox:
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
 
+                print("")
                 print("Water (WAT): %3d" % (self._wat_xyzs.shape[0] / 3))
                 for cosolv_name in self._cosolvents:
                     print("%s (%s): %3d" % (cosolv_name.capitalize(), 
