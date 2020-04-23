@@ -6,5 +6,6 @@
 
 from .cosolventbox import CoSolventBox
 from .cosolvent import CoSolvent
+from .analysis import Analysis
 
-__all__ = ["CoSolventBox", "CoSolvent"]
+__all__ = ["CoSolventBox", "CoSolvent", "Analysis"]
