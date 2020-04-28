@@ -41,10 +41,10 @@ class Analysis(AnalysisBase):
         self._positions = []
 
     def _single_frame(self):
-        self._positions.extend(self._ag.atoms.positions)
+        self._positions.extend(self._ag.atoms.positions.astype(np.float32))
 
     def _conclude(self):
-        self._positions = np.array(self._positions)
+        self._positions = np.array(self._positions, dtype=np.float32)
 
         x, y, z = self._center
         sd = self._dimensions / 2.
