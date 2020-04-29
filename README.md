@@ -39,7 +39,7 @@ from cosolvkit import CoSolventBox
 from cosolvkit import Analysis
 
 # Preparation
-cosolv = CoSolventBox(concentration=0.15, cutoff=12, box='cubic') # 0.15 M concentration
+cosolv = CoSolventBox(concentration=0.25, cutoff=12, box='cubic') # 0.15 M concentration
 cosolv.add_receptor("protein.pdb")
 cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
 cosolv.add_cosolvent(name='methanol', smiles='CO', resname="MEH")

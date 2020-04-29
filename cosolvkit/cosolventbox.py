@@ -151,7 +151,7 @@ def _volume_box(n_water):
     return ((18.856 * 18.856 * 18.856) / 216) * n_water
 
 
-def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, volume, receptor_xyzs=None, concentration=0.15):
+def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, volume, receptor_xyzs=None, concentration=0.25):
     """Add cosolvent to the water box.
     """
     cosolv_xyzs = {name: [] for name in cosolvents}
@@ -219,7 +219,7 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, volume, receptor_xyzs=No
 
 class CoSolventBox:
 
-    def __init__(self, concentration=0.15, cutoff=12, box="cubic", dimensions=None, pH=7.):
+    def __init__(self, concentration=0.25, cutoff=12, box="cubic", dimensions=None, pH=7.):
         """Initialize the cosolvent box
         """
         assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
