@@ -36,11 +36,11 @@ def _positions_from_pdb_file(pdb_filename):
     return positions
 
 
-def _is_close_to_edge(xyz, distance, box_dimension):
+def _is_water_close_to_edge(wat_xyzs, distance, box_dimension):
     """Is it too close from the edge?
     """
-    xyz = np.atleast_2d(xyz)
-    x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+    wat_xyzs = np.atleast_2d(wat_xyzs)
+    x, y, z = wat_xyzs[:, 0], wat_xyzs[:, 1], wat_xyzs[:, 2]
 
     xmin, xmax = box_dimension[0]
     ymin, ymax = box_dimension[1]
@@ -51,14 +51,35 @@ def _is_close_to_edge(xyz, distance, box_dimension):
     z_close = np.logical_or(np.abs(zmin - z) <= distance, np.abs(zmax - z) <= distance)
     close_to = np.any((x_close, y_close, z_close), axis=0)
 
+    for i in range(0, wat_xyzs.shape[0], 3):
+        close_to[[i, i + 1, i + 2]] = [np.all(close_to[[i, i + 1, i + 2]])] * 3
+
     return close_to
 
 
-def _water_is_in_box(xyz, box_dimension):
+def _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance=3.):
+    """Is too close from the receptor?
+    """
+    kdtree = spatial.cKDTree(wat_xyzs)
+
+    ids = kdtree.query_ball_point(receptor_xyzs, r=distance, p=2)
+    # Keep the unique ids
+    ids = np.unique(np.hstack(ids)).astype(np.int)
+
+    close_to = np.zeros(len(wat_xyzs), np.bool)
+    close_to[ids] = True
+
+    for i in range(0, wat_xyzs.shape[0], 3):
+        close_to[[i, i + 1, i + 2]] = [np.all(close_to[[i, i + 1, i + 2]])] * 3
+
+    return close_to
+
+    
+def _water_is_in_box(wat_xyzs, box_dimension):
     """Check if the water is in the box or not.
     """
-    xyz = np.atleast_2d(xyz)
-    x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+    wat_xyzs = np.atleast_2d(wat_xyzs)
+    x, y, z = wat_xyzs[:, 0], wat_xyzs[:, 1], wat_xyzs[:, 2]
 
     xmin, xmax = box_dimension[0]
     ymin, ymax = box_dimension[1]
@@ -69,7 +90,7 @@ def _water_is_in_box(xyz, box_dimension):
     z_in = np.logical_and(zmin - 1. <= z, z <= zmax + 1.)
     all_in = np.all((x_in, y_in, z_in), axis=0)
 
-    for i in range(0, xyz.shape[0], 3):
+    for i in range(0, wat_xyzs.shape[0], 3):
         all_in[[i, i + 1, i + 2]] = [np.all(all_in[[i, i + 1, i + 2]])] * 3
 
     return all_in
@@ -133,69 +154,67 @@ def _volume_box(n_water):
 def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, volume, receptor_xyzs=None, concentration=0.15):
     """Add cosolvent to the water box.
     """
-    i = 1
-    n_molecules = np.int(np.round((concentration * AVOGADRO_CONSTANT_NA) / 1E27 * volume))
-    n_molecules = np.int(np.round(n_molecules / len(cosolvents)))
-
     cosolv_xyzs = {name: [] for name in cosolvents}
-    cosolv_ns = {name: 0 for name in cosolvents}
     cosolv_names = cosolvents.keys()
 
+    # Get water molecules that are too close from the edges of the box
+    too_close_edge = _is_water_close_to_edge(wat_xyzs, 3., box_dimension)
+    # Get water molecules that are too close from the receptor
     if receptor_xyzs is not None:
-        kdtree_receptor = spatial.cKDTree(receptor_xyzs)
+        too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, 3.)
 
-    for cosolv_name in itertools.cycle(cosolv_names):
-        is_finished = True
+    # Combine both
+    to_keep = np.any((too_close_edge, too_close_protein), axis=0)
 
-        if cosolv_ns[cosolv_name] < n_molecules:
-            # Update kdtree
-            kdtree = spatial.cKDTree(wat_xyzs)
+    # Put aside water edges box and close to the protein
+    to_keep_wat_xyzs = wat_xyzs[to_keep]
+    # We will work on the ones in between
+    wat_xyzs = wat_xyzs[~to_keep]
 
-            # Choose a random water molecule
-            wat_o = wat_xyzs[::3]
-            wat_id = np.random.choice(range(0, wat_o.shape[0]))
-            wat_xyz = wat_o[wat_id]
+    for i, cosolv_name in enumerate(itertools.cycle(cosolv_names)):
+        # Update kdtree
+        kdtree = spatial.cKDTree(wat_xyzs)
 
-            # Check if it is not too close from the edges or the protein
-            # Not the best efficient way...
-            too_close_edge = _is_close_to_edge(wat_xyz, 2., box_dimension)[0]
+        # Choose a random water molecule
+        wat_o = wat_xyzs[::3]
+        wat_id = np.random.choice(range(0, wat_o.shape[0]))
+        wat_xyz = wat_o[wat_id]
 
-            if receptor_xyzs is not None:
-                too_close_protein = kdtree_receptor.query_ball_point([wat_xyz], r=3, p=2)
-                too_close_protein = np.unique(np.hstack(too_close_protein))
+        # Translate fragment on the top of the selected water molecule
+        cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
 
-            if not too_close_edge and too_close_protein.size == 0:
-                # Translate fragment on the top of the selected water molecule
-                cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
+        # Add fragment to list
+        cosolv_xyzs[cosolv_name].append(cosolv_xyz)
 
-                # Add fragment to list
-                cosolv_xyzs[cosolv_name].append(cosolv_xyz)
-                cosolv_ns[cosolv_name] += 1
+        # Get the ids of all the closest water atoms
+        to_be_removed = kdtree.query_ball_point(cosolv_xyz, r=1.5, p=2)
+        # Keep the unique ids
+        to_be_removed = np.unique(np.hstack(to_be_removed))
+        # Get the ids of the water oxygen atoms
+        to_be_removed = np.unique(to_be_removed - (to_be_removed % 3.))
+        # Complete with the ids of the hydrogen atoms
+        to_be_removed = [[r, r + 1, r + 2]  for r in to_be_removed]
+        to_be_removed = np.hstack(to_be_removed).astype(int)
+        # Remove those water molecules
+        mask = np.ones(len(wat_xyzs), np.bool)
+        mask[to_be_removed] = 0
+        wat_xyzs = wat_xyzs[mask]
 
-                # Get the ids of all the closest water atoms
-                to_be_removed = kdtree.query_ball_point(cosolv_xyz, r=1.5, p=2)
-                # Keep the unique ids
-                to_be_removed = np.unique(np.hstack(to_be_removed))
-                # Get the ids of the water oxygen atoms
-                to_be_removed = np.unique(to_be_removed - (to_be_removed % 3.))
-                # Complete with the ids of the hydrogen atoms
-                to_be_removed = [[r, r + 1, r + 2]  for r in to_be_removed]
-                to_be_removed = np.hstack(to_be_removed).astype(int)
+        # We compute the concentration only after 
+        # placing the same number of cosolvent molecules
+        if (i + 1) % len(cosolvents) == 0:
+            n_water = (to_keep_wat_xyzs.shape[0] + wat_xyzs.shape[0]) / 3
+            # 1 cosolvent molecule per 55 waters correspond
+            # to a concentration of 1 M
+            final_concentration = 55. / (n_water / (i + 1))
 
-                # Remove those water molecules
-                mask = np.ones(len(wat_xyzs), np.bool)
-                mask[to_be_removed] = 0
-                wat_xyzs = wat_xyzs[mask]
+            if final_concentration >= concentration:
+                break
 
-                # Did we placed all the fragments?
-                for key in cosolv_names:
-                    if cosolv_ns[key] != n_molecules:
-                        is_finished = False
+    # Add back water molecules we put aside at the beginning
+    wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs))
 
-                if is_finished:
-                    break
-    
-    return wat_xyzs, cosolv_xyzs
+    return wat_xyzs, cosolv_xyzs, final_concentration
 
 
 class CoSolventBox:
@@ -269,11 +288,12 @@ class CoSolventBox:
             self._wat_xyzs = _create_waterbox(self._dimensions, self._receptor_xyzs,
                                               self._watref_xyzs, self._watref_dims)
 
-            self._volume = _volume_box(self._wat_xyzs.shape[0])
+            n_water = np.int(self._wat_xyzs.shape[0] / 3)
+            self._volume = _volume_box(n_water)
 
             print("------------------------------------")
             print("Volume box: %10.3f A**3" % self._volume)
-            print("Water (before cosolvent): %d" % self._wat_xyzs.shape[0])
+            print("Water (before cosolvent): %d" % n_water)
             x, y, z = self._receptor_center
             print("Receptor center: %8.3f %8.3f %8.3f" % (x, y, z))
             print("Box dimensions: x %s y %s z %s" % (np.around(self._dimensions[0], 3), 
@@ -281,15 +301,18 @@ class CoSolventBox:
                                                       np.around(self._dimensions[2], 3)))
 
             if self._cosolvents:
-                wat_xyzs, cosolv_xyzs = _add_cosolvent(self._wat_xyzs, self._cosolvents,
+                wat_xyzs, cosolv_xyzs, conc = _add_cosolvent(self._wat_xyzs, self._cosolvents,
                                                        self._dimensions, self._volume,
                                                        self._receptor_xyzs,self._concentration)
 
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
+                n_water = np.int(self._wat_xyzs.shape[0] / 3)
 
                 print("")
-                print("Water (WAT): %3d" % (self._wat_xyzs.shape[0] / 3))
+                print("Target concentration (M): %5.3f" % self._concentration)
+                print("Final concentration (M): %5.3f" % conc)
+                print("Water (WAT): %3d" % (n_water))
                 for cosolv_name in self._cosolvents:
                     print("%s (%s): %3d" % (cosolv_name.capitalize(), 
                                             self._cosolvents[cosolv_name].resname,
