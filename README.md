@@ -32,7 +32,7 @@ $ python setup.py build install
 
 ## Quick tutorial
 
-1. Preparation
+1. **Preparation**
 ```python
 from cosolvkit import CoSolventBox
 
@@ -47,7 +47,7 @@ cosolv.build()
 cosolv.export(prefix="cosolv")
 ```
 
-2. Analysis
+2. **Analysis**
 ```python
 from MDAnalysis import Universe
 
