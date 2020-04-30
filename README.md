@@ -79,3 +79,5 @@ Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and re
 * Acetamide CC(=O)NC ACM
 * Methylammonium C[NH3+] MAM
 * Acetate CC(=O)[O-] ACT
+* Formamide C(=O)N FOM
+* Acetaldehyde CC=O ACD
