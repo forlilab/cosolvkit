@@ -32,11 +32,10 @@ $ python setup.py build install
 
 ## Quick tutorial
 
-### Preparation
+1. Preparation
 ```python
 from cosolvkit import CoSolventBox
 
-# Preparation
 cosolv = CoSolventBox(concentration=0.25, cutoff=12, box='cubic') # 0.25 M concentration
 cosolv.add_receptor("protein.pdb")
 cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
@@ -48,13 +47,12 @@ cosolv.build()
 cosolv.export(prefix="cosolv")
 ```
 
-### Analysis
+2. Analysis
 ```python
 from MDAnalysis import Universe
 
 from cosolvkit import Analysis
 
-# Analysis
 u = Universe("cosolvent_system.prmtop", ["traj_1.nc", "traj_2.nc"])
 # Volume occupied by the water molecules, obtained during the preparation
 volume = 423700.936 # A**3
