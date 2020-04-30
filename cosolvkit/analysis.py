@@ -14,7 +14,6 @@ from MDAnalysis.analysis.base import AnalysisBase
 from . import utils
 
 
-AVOGADRO_CONSTANT_NA = 6.02214179e+23
 BOLTZMANN_CONSTANT_KB = 0.0019872041
 
 
@@ -25,6 +24,7 @@ class Analysis(AnalysisBase):
         self._u = atomgroup.universe
         self._ag = atomgroup
         self._gridsize = gridsize
+        self._nframes = 0
 
         if center is None:
             receptor = self._u.select_atoms("protein or nucleic")
@@ -42,6 +42,7 @@ class Analysis(AnalysisBase):
 
     def _single_frame(self):
         self._positions.extend(self._ag.atoms.positions.astype(np.float32))
+        self._nframes += 1
 
     def _conclude(self):
         self._positions = np.array(self._positions, dtype=np.float32)
@@ -56,18 +57,26 @@ class Analysis(AnalysisBase):
         self.histogram = Grid(hist, origin=(edges[0][0], edges[1][0], edges[2][0]), delta=self._gridsize)
         self.density = Grid((hist - np.mean(hist)) / np.std(hist), origin=(edges[0][0], edges[1][0], edges[2][0]), delta=self._gridsize)
 
-    def grid_free_energy(self, volume, concentration, temperature=300.):
-        print("Warning: The GFE functionnality is still experimental.")
-        n_voxel = np.prod(self.histogram.grid.shape)
+    def grid_free_energy(self, volume, temperature=300., n_atoms=None):
+        """Compute grid free energy.
+        """
+        if n_atoms is None:
+            n_atoms = 0
+            # Hydrogen atoms does not count
+            ag = self._ag.select_atoms("not name H*")
+            for resn in np.unique(ag.resnames):
+                ag_tmp = ag.select_atoms("resname %s" % resn)
+                n_atoms += ag_tmp.n_atoms / ag_tmp.n_residues
+
         # Avoid 0 in the histogram
         hist = self.histogram + 1E-10
-
-        N_o = ((1E-27 * volume) * AVOGADRO_CONSTANT_NA * concentration) / (n_voxel)
-        gfe = -BOLTZMANN_CONSTANT_KB * temperature * np.log(hist.grid / N_o)
-
-        # Empirical trick to remove the noise
-        avg_value = np.mean(gfe[np.where(gfe < 0.)])
-        gfe += np.abs(avg_value)
-        gfe[gfe > 0.] = 0
+        # The volume here is the volume of water and not the entire box
+        n_voxel = volume / self._gridsize
+        # Bulk probability without protein
+        N_o = (self._ag.n_residues / n_voxel)
+        # Probability with the protein
+        N = hist.grid / self._nframes
+        # Free energy
+        gfe = (-BOLTZMANN_CONSTANT_KB * temperature) * np.log(N / (n_atoms * N_o))
 
         self.gfe = Grid(gfe, origin=self.histogram.origin, delta=self._gridsize)
