@@ -31,7 +31,6 @@ $ python setup.py build install
 ```
 
 ## Quick tutorial
-
 ```python
 from MDAnalysis import Universe
 
@@ -67,7 +66,6 @@ a.gfe.export("map_gfe_O.dx")
 ```
 
 ## List of cosolvent molecules
-
 Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and resname):
 * Benzene 1ccccc1 BEN
 * Methanol CO MEH
@@ -78,3 +76,6 @@ Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and re
 * Acetate CC(=O)[O-] ACT
 * Formamide C(=O)N FOM
 * Acetaldehyde CC=O ACD
+
+## Citations
+* Ustach, Vincent D., et al. "Optimization and Evaluation of Site-Identification by Ligand Competitive Saturation (SILCS) as a Tool for Target-Based Ligand Optimization." Journal of chemical information and modeling 59.6 (2019): 3018-3035.
