@@ -45,7 +45,7 @@ cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
 cosolv.add_cosolvent(name='methanol', smiles='CO', resname="MEH")
 cosolv.add_cosolvent(name='propane', smiles='CCC', resname="PRP")
 cosolv.add_cosolvent(name='imidazole', smiles='C1=CN=CN1')
-cosolv.add_cosolvent(name='acetamide', smiles='CC(=O)NC', resname="ACT")
+cosolv.add_cosolvent(name='acetamide', smiles='CC(=O)NC', resname="ACM")
 cosolv.build()
 cosolv.export(prefix="cosolv")
 
@@ -60,7 +60,7 @@ a = Analysis(u.select_atoms("(resname IMI)"), verbose=True)
 a.run()
 a.density.export("map_imidazole.dx")
 
-a = Analysis(u.select_atoms("(resname MEH or resname ACT) and name O*"), verbose=True)
+a = Analysis(u.select_atoms("(resname MEH or resname ACM) and name O*"), verbose=True)
 a.run()
 a.density.export("map_O.dx")
 
@@ -68,3 +68,14 @@ a = Analysis(u.select_atoms("(resname ACT) and name N*"), verbose=True)
 a.run()
 a.density.export("map_N.dx")
 ```
+
+## List of fragments
+
+Here an non-exhaustive list of cosolvent molecules that can be used for cosolvent MD simulations (molecule_name, smiles and resname):
+* Benzene 1ccccc1 BEN
+* Methanol CO MEH
+* Propane CCC PRP
+* Imidazole C1=CN=CN1 IMI
+* Acetamide CC(=O)NC ACM
+* Methylammonium C[NH3+] MAM
+* Acetate CC(=O)[O-] ACT
