@@ -69,9 +69,9 @@ a.run()
 a.density.export("map_N.dx")
 ```
 
-## List of suggested cosolvent molecules
+## List of cosolvent molecules
 
-Non-exhaustive list of cosolvents (molecule_name, SMILES string and resname) that can be used for cosolvent MD simulations:
+Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and resname):
 * Benzene 1ccccc1 BEN
 * Methanol CO MEH
 * Propane CCC PRP
