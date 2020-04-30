@@ -71,7 +71,7 @@ a.density.export("map_N.dx")
 
 ## List of fragments
 
-Here an non-exhaustive list of cosolvent molecules that can be used for cosolvent MD simulations (molecule_name, smiles and resname):
+Here an non-exhaustive list of cosolvent molecules (molecule_name, smiles and resname) that can be used for cosolvent MD simulations:
 * Benzene 1ccccc1 BEN
 * Methanol CO MEH
 * Propane CCC PRP
