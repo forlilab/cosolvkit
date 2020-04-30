@@ -51,22 +51,19 @@ cosolv.export(prefix="cosolv")
 
 # Analysis
 u = Universe("cosolvent_system.prmtop", ["traj_1.nc", "traj_2.nc"])
+# Volume occupied by the water molecules, obtained during the preparation
+volume = 423700.936 # A**3
+temperature = 300. # K
 
 a = Analysis(u.select_atoms("(resname BEN or resname PRP)"), verbose=True)
 a.run()
-a.density.export("map_hydrophobe.dx")
-
-a = Analysis(u.select_atoms("(resname IMI)"), verbose=True)
-a.run()
-a.density.export("map_imidazole.dx")
+a.grid_free_energy(volume, temperature)
+a.gfe.export("map_gfe_hydrophobe.dx")
 
 a = Analysis(u.select_atoms("(resname MEH or resname ACM) and name O*"), verbose=True)
 a.run()
-a.density.export("map_O.dx")
-
-a = Analysis(u.select_atoms("(resname ACT) and name N*"), verbose=True)
-a.run()
-a.density.export("map_N.dx")
+a.grid_free_energy(volume, temperature)
+a.gfe.export("map_gfe_O.dx")
 ```
 
 ## List of cosolvent molecules
