@@ -31,11 +31,10 @@ $ python setup.py build install
 ```
 
 ## Quick tutorial
-```python
-from MDAnalysis import Universe
 
+### Preparation
+```python
 from cosolvkit import CoSolventBox
-from cosolvkit import Analysis
 
 # Preparation
 cosolv = CoSolventBox(concentration=0.25, cutoff=12, box='cubic') # 0.25 M concentration
@@ -47,6 +46,13 @@ cosolv.add_cosolvent(name='imidazole', smiles='C1=CN=CN1')
 cosolv.add_cosolvent(name='acetamide', smiles='CC(=O)NC', resname="ACM")
 cosolv.build()
 cosolv.export(prefix="cosolv")
+```
+
+### Analysis
+```python
+from MDAnalysis import Universe
+
+from cosolvkit import Analysis
 
 # Analysis
 u = Universe("cosolvent_system.prmtop", ["traj_1.nc", "traj_2.nc"])
