@@ -48,9 +48,7 @@ cosolv.export(prefix="cosolv")
 ```
 
 2. **Run MD simulations**
-```
-See Amber input files in `data/amber_protocol` directory.
-```
+> See Amber input files in the _data/amber_protocol_ directory.
 
 3. **Analysis**
 ```python
