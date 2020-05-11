@@ -47,7 +47,12 @@ cosolv.build()
 cosolv.export(prefix="cosolv")
 ```
 
-2. **Analysis**
+2. **Run MD simulations**
+```
+See Amber input files in `data/amber_protocol` directory.
+```
+
+3. **Analysis**
 ```python
 from MDAnalysis import Universe
 
