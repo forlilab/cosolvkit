@@ -46,8 +46,8 @@ def _run_antechamber(mol2_filename, molecule_name, resname, charge=0, charge_met
         shutil.copy2(original_mol2_filename, local_mol2_filename)
 
         # Run Antechamber
-        cmd = "antechamber -i %s -fi mol2 -o out.mol2 -fo mol2 -s 2 -at gaff -c %s -nc %d -rn %s"
-        cmd = cmd % (local_mol2_filename, charge_method, charge, resname)
+        cmd = "antechamber -i %s -fi mol2 -o out.mol2 -fo mol2 -s 2 -at %s -c %s -nc %d -rn %s"
+        cmd = cmd % (local_mol2_filename, gaff_version, charge_method, charge, resname)
         outputs, errors = utils.execute_command(cmd)
 
         # Run parmchk2 for the additional force field file
