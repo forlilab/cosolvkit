@@ -33,6 +33,59 @@ quit
 """
 
 
+def _transfer_coordinates_from_pdb_to_mol2(pdb_filename, mol2_filename, new_mol2_filename=None):
+    """ Transfer coordinates from pdb to mol2 filename. 
+    I neither trust RDKit or OpenBabel for doing that...
+    """
+    i = 0
+    pdb_coordinates = []
+    output_mol2 = ""
+    coordinate_flag = False
+
+    # Get all the coordinates from the pdb
+    with open(pdb_filename) as f:
+        lines = f.readlines()
+
+        for line in lines:
+            x = line[31:39].strip()
+            y = line[39:47].strip()
+            z = line[47:54].strip()
+            pdb_coordinates.append([x, y, z])
+
+    pdb_coordinates = np.array(pdb_coordinates, dtype=np.float)
+
+    # We read the mol2 file and modify each atom line
+    with open(mol2_filename) as f:
+        lines = f.readlines()
+
+        for line in lines:
+            # Stop reading coordinates
+            # '@<TRIPOS>SUBSTRUCTURE' in case there is only one atom...
+            # But who would do this?!
+            if '@<TRIPOS>BOND' in line or '@<TRIPOS>SUBSTRUCTURE' in line:
+                coordinate_flag = False
+
+            if coordinate_flag:
+                x, y, z = pdb_coordinates[i]
+                new_line = line[0:17] + "%10.4f %10.4f %10.4f " % (x, y, z) + line[50:]
+                output_mol2 += new_line
+                i += 1
+            else:
+                output_mol2 += line
+
+            # It's time to read the coordinates
+            if '@<TRIPOS>ATOM' in line:
+                coordinate_flag = True
+
+    # Write the new mol2 file
+    if new_mol2_filename is None:
+        with open(mol2_filename, 'w') as w:
+            w.write(output_mol2)
+    else:
+        with open(new_mol2_filename, 'w') as w:
+            w.write(output_mol2)
+
+
 def _run_antechamber(mol2_filename, molecule_name, resname, charge=0, charge_method="bcc", gaff_version="gaff2"):
     """Run antechamber.
     """
@@ -63,6 +116,10 @@ def _run_antechamber(mol2_filename, molecule_name, resname, charge=0, charge_met
                                       })
         cmd = 'tleap -s -f tleap.cmd'
         outputs, errors = utils.execute_command(cmd)
+
+        # The final mol2 file from antechamber does not contain
+        # the optimized geometry from sqm. Why?!
+        _transfer_coordinates_from_pdb_to_mol2('sqm.pdb', 'out.mol2')
 
         # Copy back all we need
         shutil.copy('out.mol2', original_mol2_filename)
