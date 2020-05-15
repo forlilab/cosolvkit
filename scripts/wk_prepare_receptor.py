@@ -302,7 +302,6 @@ def find_gaps(molecule, resprot):
             N_atoms.append(i)
 
     nca = len(CA_atoms)
-    ngaps = 0
 
     for i in range(nca - 1):
         is_ter = molecule.atoms[CA_atoms[i]].residue.ter
@@ -321,16 +320,7 @@ def find_gaps(molecule, resprot):
             gaprecord = (gap, C_atom.residue.name, C_atom.residue.idx,
                          N_atom.residue.name, N_atom.residue.idx)
             gaplist.append(gaprecord)
-            ngaps += 1
 
-    if ngaps > 0:
-        logger.info("\n---------- Gaps (Renumbered Residues!)")
-        cformat = "gap of %lf A between %s %d and %s %d"
-        for _, (d, resname0, resid0, resname1,
-                resid1) in enumerate(gaplist):
-            # convert to 1-based
-            logger.info(cformat % (d, resname0, resid0 + 1, resname1,
-                                   resid1 + 1))
     return gaplist
 
 
@@ -411,6 +401,11 @@ def main():
 
     # Find all the gaps
     gaplist = find_gaps(pdbfixer.parm, RESPROT)
+    if gaplist:
+        cformat = "gap of %lf A between %s %d and %s %d"
+        for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
+            # convert to 1-based
+            logger.info(cformat % (d, resname0, resid0 + 1, resname1, resid1 + 1))
 
     # Find missing heavy atoms
     missing_atoms = pdbfixer.find_missing_heavy_atoms(HEAVY_ATOM_DICT)
