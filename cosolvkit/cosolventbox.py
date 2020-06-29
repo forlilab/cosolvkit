@@ -8,6 +8,7 @@
 
 import itertools
 import os
+from operator import itemgetter
 
 import numpy as np
 from scipy import spatial
@@ -19,32 +20,47 @@ from . import utils
 AVOGADRO_CONSTANT_NA = 6.02214179e+23
 
 
-def _positions_from_pdb_file(pdb_filename):
-    """Get the atomic coordinates from the pdb file
-    """
+def _read_pdb(pdb_filename, ignore_hydrogen=False):
+    names = []
+    resnames = []
+    resids = []
+    chains = []
     positions = []
+    dtype = [("name", "U4"), ("resname", "U3"), ("resid", "i4"), ('chain', 'U1'), ("xyz", "f4", (3))]
 
     with open(pdb_filename) as f:
         lines = f.readlines()
 
         for line in lines:
             if "ATOM" in line or "HETATM" in line:
-                positions.append([np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])])
+                name = line[12:16].strip()
 
-    positions = np.array(positions)
+                if (not ignore_hydrogen and name[0] == 'H') or name[0] != "H":
+                    names.append(line[12:16].strip())
+                    resnames.append(line[17:20].strip())
+                    resids.append(int(line[22:26]))
+                    chains.append(line[21:22].strip())
+                    positions.append([np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])])
 
-    return positions
+    data = np.zeros(len(resids), dtype=dtype)
+    data['name'] = names
+    data['resname'] = resnames
+    data['resid'] = resids
+    data['chain'] = chains
+    data['xyz'] = positions
+
+    return data
 
 
-def _is_water_close_to_edge(wat_xyzs, distance, box_dimension):
+def _is_water_close_to_edge(wat_xyzs, distance, box_origin, box_size):
     """Is it too close from the edge?
     """
     wat_xyzs = np.atleast_2d(wat_xyzs)
     x, y, z = wat_xyzs[:, 0], wat_xyzs[:, 1], wat_xyzs[:, 2]
 
-    xmin, xmax = box_dimension[0]
-    ymin, ymax = box_dimension[1]
-    zmin, zmax = box_dimension[2]
+    xmin, xmax = box_origin[0], box_origin[0] + box_size[0]
+    ymin, ymax = box_origin[1], box_origin[1] + box_size[1]
+    zmin, zmax = box_origin[2], box_origin[2] + box_size[2]
 
     x_close = np.logical_or(np.abs(xmin - x) <= distance, np.abs(xmax - x) <= distance)
     y_close = np.logical_or(np.abs(ymin - y) <= distance, np.abs(ymax - y) <= distance)
@@ -74,21 +90,29 @@ def _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance=3.):
 
     return close_to
 
+
+def _is_in_box(xyzs, box_origin, box_size, box_buffer=0):
+    """Is in the box or not?
+    """
+    xyzs = np.atleast_2d(xyzs)
+    x, y, z = xyzs[:, 0], xyzs[:, 1], xyzs[:, 2]
+
+    xmin, xmax = box_origin[0] - box_buffer, box_origin[0] + box_size[0] + box_buffer
+    ymin, ymax = box_origin[1] - box_buffer, box_origin[1] + box_size[1] + box_buffer
+    zmin, zmax = box_origin[2] - box_buffer, box_origin[2] + box_size[2] + box_buffer
+
+    x_in = np.logical_and(xmin <= x, x <= xmax)
+    y_in = np.logical_and(ymin <= y, y <= ymax)
+    z_in = np.logical_and(zmin <= z, z <= zmax)
+    all_in = np.all((x_in, y_in, z_in), axis=0)
+
+    return all_in
+
     
-def _water_is_in_box(wat_xyzs, box_dimension):
+def _water_is_in_box(wat_xyzs, box_origin, box_size):
     """Check if the water is in the box or not.
     """
-    wat_xyzs = np.atleast_2d(wat_xyzs)
-    x, y, z = wat_xyzs[:, 0], wat_xyzs[:, 1], wat_xyzs[:, 2]
-
-    xmin, xmax = box_dimension[0]
-    ymin, ymax = box_dimension[1]
-    zmin, zmax = box_dimension[2]
-
-    x_in = np.logical_and(xmin - 1. <= x, x <= xmax + 1.)
-    y_in = np.logical_and(ymin - 1. <= y, y <= ymax + 1.)
-    z_in = np.logical_and(zmin - 1. <= z, z <= zmax + 1.)
-    all_in = np.all((x_in, y_in, z_in), axis=0)
+    all_in = _is_in_box(wat_xyzs, box_origin, box_size, 1.)
 
     for i in range(0, wat_xyzs.shape[0], 3):
         all_in[[i, i + 1, i + 2]] = [np.all(all_in[[i, i + 1, i + 2]])] * 3
@@ -96,16 +120,35 @@ def _water_is_in_box(wat_xyzs, box_dimension):
     return all_in
 
 
-def _create_waterbox(box_dimension, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
+def _protein_in_box(receptor_data, box_origin, box_size, truncate_buffer=5., ignore_peptide_size=2):
+    fragments = []
+    resids_to_keep = []
+
+    all_in = _is_in_box(receptor_data['xyz'], box_origin, box_size + (2 * truncate_buffer))
+    resids_in_box = np.unique(receptor_data["resid"][all_in])
+    
+    # Get continuous peptide             
+    for k, g in itertools.groupby(enumerate(resids_in_box), lambda x: x[0] - x[1]):
+        group = list(map(itemgetter(1), g))
+
+        if not len(group) < ignore_peptide_size:
+            resids_to_keep.extend(group)
+        else:
+            print("Warning: peptide %s will be ignored (minimal size allowed: %d)." % (group, ignore_peptide_size))
+
+    return receptor_data[np.isin(receptor_data["resid"], resids_to_keep)]
+
+
+def _create_waterbox(box_origin, box_size, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
     """Create the water box.
     """
     wat_xyzs = []
 
     watref_xyzs = np.atleast_2d(watref_xyzs)
 
-    xmin, xmax = box_dimension[0]
-    ymin, ymax = box_dimension[1]
-    zmin, zmax = box_dimension[2]
+    xmin, xmax = box_origin[0], box_origin[0] + box_size[0]
+    ymin, ymax = box_origin[1], box_origin[1] + box_size[1]
+    zmin, zmax = box_origin[2], box_origin[2] + box_size[2]
 
     x = np.arange(xmin, xmax, watref_dims[0]) + (watref_dims[0] / 2.)
     y = np.arange(ymin, ymax, watref_dims[1]) + (watref_dims[1] / 2.)
@@ -119,7 +162,7 @@ def _create_waterbox(box_dimension, receptor_xyzs=None, watref_xyzs=None, watref
     wat_xyzs = np.vstack(wat_xyzs)
 
     # we cut everything that goes outside the box
-    wat_ids = _water_is_in_box(wat_xyzs, box_dimension)
+    wat_ids = _water_is_in_box(wat_xyzs, box_origin, box_size)
     wat_xyzs = wat_xyzs[wat_ids]
 
     # Remove water molecules that overlap with the receptor
@@ -143,7 +186,7 @@ def _create_waterbox(box_dimension, receptor_xyzs=None, watref_xyzs=None, watref
     return wat_xyzs
 
 
-def _volume_box(n_water):
+def _volume_water(n_water):
     """ Compute volume of the box based on the number
     of water molecules. The volume of one water molecule is based
     on the reference water box.
@@ -151,14 +194,23 @@ def _volume_box(n_water):
     return ((18.856 * 18.856 * 18.856) / 216) * n_water
 
 
-def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, volume, receptor_xyzs=None, concentration=0.25):
+def _volume_protein(n_water, gridsize):
+    vol_box = np.prod(gridsize)
+    vol_water = _volume_water(n_water)
+
+    assert vol_water <= vol_box, "The volume of water (%f) is superior than the whole box (%f)." % (vol_water, vol_box)
+
+    return vol_box - vol_water
+
+
+def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_xyzs=None, concentration=0.25):
     """Add cosolvent to the water box.
     """
     cosolv_xyzs = {name: [] for name in cosolvents}
     cosolv_names = cosolvents.keys()
 
     # Get water molecules that are too close from the edges of the box
-    too_close_edge = _is_water_close_to_edge(wat_xyzs, 3., box_dimension)
+    too_close_edge = _is_water_close_to_edge(wat_xyzs, 3., box_origin, box_size)
     # Get water molecules that are too close from the receptor
     if receptor_xyzs is not None:
         too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, 3.)
@@ -219,31 +271,47 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_dimension, volume, receptor_xyzs=No
 
 class CoSolventBox:
 
-    def __init__(self, concentration=0.25, cutoff=12, box="cubic", dimensions=None, pH=7.):
+    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, gridsize=None, 
+                 truncate=False, truncate_buffer=5., min_size_peptide=4):
         """Initialize the cosolvent box
         """
         assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
 
         self._concentration = concentration
         self._cutoff = cutoff
-        self._pH = pH
+        self._truncate = truncate
+        self._truncate_buffer = truncate_buffer
+        self._min_size_peptide = min_size_peptide
         self._box = box
-        if dimensions is not None:
-            assert np.ravel(dimensions).size == 3, "Error: dimensions should contain only (a, b, c)."
-            self._dimensions = np.array([[0, dimensions[0]], 
-                                         [0, dimensions[1]], 
-                                         [0, dimensions[2]]]).astype(np.float)
+
+        if center is not None and gridsize is not None:
+            gridsize = np.array(gridsize)
+
+            # Check center
+            assert np.ravel(center).size == 3, "Error: center should contain only (x, y, z)."
+            # Check gridsize
+            assert np.ravel(gridsize).size == 3, "Error: grid size should contain only (a, b, c)."
+            assert (gridsize > 0).all(), "Error: grid size cannot contain negative numbers."
+
+            self._center = center
+            # It's easier to work with integers for grid size
+            self._gridsize = np.ceil(gridsize).astype(np.int)
+            self._origin = self._center - (self._gridsize  / 2.)
+        elif (center is not None and gridsize is None) or (center is None and gridsize is not None):
+            print("Error: cannot define the size of the grid without defining its center. Et vice et versa !")
+            sys.exit(1)
         else:
-            self._dimensions = None
+            self._center = None
+            self._gridsize = None
+            self._origin = None
 
         # Read the reference water box
         d = utils.path_module("cosolvkit")
         waterbox_filename = os.path.join(d, "data/waterbox.pdb")
-        self._watref_xyzs = _positions_from_pdb_file(waterbox_filename)
+        self._watref_xyzs = _read_pdb(waterbox_filename)['xyz']
         self._watref_dims = [18.856, 18.856, 18.856]
 
-        self._receptor_xyzs = None
-        self._receptor_center = None
+        self._receptor_data = None
         self._cosolvents = {}
         self._wat_xysz = None
         self._cosolv_xyzs = None
@@ -252,28 +320,31 @@ class CoSolventBox:
         """Add receptor
         """
         self._receptor_filename = receptor_filename
-        self._receptor_xyzs = _positions_from_pdb_file(receptor_filename)
+        self._receptor_data = _read_pdb(receptor_filename, ignore_hydrogen=True)
 
-        if self._dimensions is None:
-            xmin = np.min(self._receptor_xyzs[:,0]) - self._cutoff
-            xmax = np.max(self._receptor_xyzs[:,0]) + self._cutoff
-            ymin = np.min(self._receptor_xyzs[:,1]) - self._cutoff
-            ymax = np.max(self._receptor_xyzs[:,1]) + self._cutoff
-            zmin = np.min(self._receptor_xyzs[:,2]) - self._cutoff
-            zmax = np.max(self._receptor_xyzs[:,2]) + self._cutoff
+        if self._center is None and self._gridsize is None:
+            xmin = np.min(self._receptor_data['xyz'][:,0]) - self._cutoff
+            xmax = np.max(self._receptor_data['xyz'][:,0]) + self._cutoff
+            ymin = np.min(self._receptor_data['xyz'][:,1]) - self._cutoff
+            ymax = np.max(self._receptor_data['xyz'][:,1]) + self._cutoff
+            zmin = np.min(self._receptor_data['xyz'][:,2]) - self._cutoff
+            zmax = np.max(self._receptor_data['xyz'][:,2]) + self._cutoff
 
             if self._box == "orthorombic":
-                self._dimensions = np.array([[xmin, xmax], [ymin, ymax], [zmin, zmax]])
+                self._gridsize = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
             else:
-                lmin = np.min([xmin, ymin, zmin])
-                lmax = np.max([xmax, ymax, zmax])
-                self._dimensions = np.array([[lmin, lmax], [lmin, lmax], [lmin, lmax]])
+                lmax = np.max([xmax - xmin, ymax - ymin, zmax - zmin])
+                self._gridsize = np.ceil(np.array([lmax, lmax, lmax])).astype(np.int)
 
-        # Center box around the receptor
-        self._receptor_center = np.mean(self._receptor_xyzs, axis=0)
-        box_center = np.mean(self._dimensions, axis=1)
-        self._dimensions -= box_center[:,None]
-        self._dimensions += self._receptor_center[:,None]
+            self._center = np.mean(self._receptor_data['xyz'], axis=0)
+            self._origin = self._center - (self._gridsize / 2)
+
+        if self._truncate:
+            self._receptor_data = _protein_in_box(self._receptor_data, self._origin, self._gridsize, 
+                                                  self._truncate_buffer, self._min_size_peptide)
+            # You want <cutoff> A on each side, that's why 2 x <cutoff> and 2 x <truncate_buffer>
+            self._gridsize += (2 * self._cutoff) + np.int((2 * self._truncate_buffer))
+            self._origin = self._center - (self._gridsize  / 2.)
         
     def add_cosolvent(self, name, smiles, charge=0, resname=None):
         """Add cosolvent and parametrize it
@@ -284,26 +355,26 @@ class CoSolventBox:
     def build(self):
         """Build the cosolvent box
         """
-        if self._dimensions is not None:
-            self._wat_xyzs = _create_waterbox(self._dimensions, self._receptor_xyzs,
+        if self._origin is not None:
+            self._wat_xyzs = _create_waterbox(self._origin, self._gridsize, self._receptor_data['xyz'],
                                               self._watref_xyzs, self._watref_dims)
 
             n_water = np.int(self._wat_xyzs.shape[0] / 3)
-            self._volume = _volume_box(n_water)
+            self._volume = _volume_water(n_water)
+            volume_protein = _volume_protein(n_water, self._gridsize)
 
             print("------------------------------------")
-            print("Volume box: %10.3f A**3" % self._volume)
+            print("Volume box: %10.4f A**3" % self._volume)
+            print("Volume protein (box - water): %10.4f A**3" % volume_protein)
             print("Water (before cosolvent): %d" % n_water)
-            x, y, z = self._receptor_center
-            print("Receptor center: %8.3f %8.3f %8.3f" % (x, y, z))
-            print("Box dimensions: x %s y %s z %s" % (np.around(self._dimensions[0], 3), 
-                                                      np.around(self._dimensions[1], 3),
-                                                      np.around(self._dimensions[2], 3)))
+            print("Box type: %s" % self._box)
+            print("Box center: %8.3f %8.3f %8.3f" % (self._center[0], self._center[1], self._center[2]))
+            print("Box dimensions: x %d y %d z %d (A)" % (self._gridsize[0], self._gridsize[1], self._gridsize[2]))
 
             if self._cosolvents:
                 wat_xyzs, cosolv_xyzs, conc = _add_cosolvent(self._wat_xyzs, self._cosolvents,
-                                                       self._dimensions, self._volume,
-                                                       self._receptor_xyzs,self._concentration)
+                                                             self._origin, self._gridsize, self._volume,
+                                                             self._receptor_data['xyz'],self._concentration)
 
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
@@ -335,7 +406,8 @@ class CoSolventBox:
         pdb_filename = "system.pdb"
         water_atom_names = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
         # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
-        template = "%-6s%5d  %-3s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
+        template = "%-6s%5d %-4s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
+        resid_peptide = self._receptor_data[0]['resid']
 
         if prefix is not None:
             prmtop_filename = prefix + "_" + prmtop_filename
@@ -344,16 +416,31 @@ class CoSolventBox:
 
         # Create system
         with open("system.pdb", 'w') as w:
-            # Write receptor first
-            with open(self._receptor_filename) as f:
-                lines = f.readlines()
+            for i, atom in enumerate(self._receptor_data):
+                x, y, z = atom['xyz']
 
-                for line in lines:
-                    if "ATOM" in line or "HETATM" in line:
-                        w.write(line)
-                        n_atom += 1
-                    elif "TER" in line:
-                        w.write(line)
+                if len(atom['name']) <= 3:
+                    name = ' ' + atom['name']
+                else:
+                    name = atom['name']
+
+                w.write(template % ("ATOM", i, name, " ", atom['resname'], atom['resid'], 
+                                    atom['chain'], x, y, z, 0., 0.))
+
+                try:
+                    # We are looking for gap in the sequence, maybe due to the truncation
+                    if (atom['resid'] != self._receptor_data[i + 1]['resid']) and \
+                       (atom['resid'] + 1 != self._receptor_data[i + 1]['resid']):
+                        w.write("TER\n")
+
+                        if (atom['resid'] - resid_peptide + 1) < 14:
+                            print("Warning: Isolated short peptide of length %d, resid %d to %d." % \
+                                  (atom['resid'] - resid_peptide + 1, resid_peptide, atom['resid']))
+                            resid_peptide = self._receptor_data[i + 1]['resid']
+                except:
+                    continue
+
+            w.write("TER\n")
 
             # Write cosolvent molecules
             if self._cosolv_xyzs is not None:
