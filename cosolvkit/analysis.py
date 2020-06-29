@@ -86,11 +86,11 @@ class Analysis(AnalysisBase):
         positions = positions.reshape(new_shape)
         return positions
 
-    def grid_free_energy(self, volume, temperature=300.):
+    def atomic_grid_free_energy(self, volume, temperature=300.):
         """Compute grid free energy.
         """
-        gfe = _grid_free_energy(self.histogram.grid, volume, self._gridsize, self._n_atoms, self._nframes, temperature)
-        self.gfe = Grid(gfe, origin=self.histogram.origin, delta=self._gridsize)
+        agfe = _grid_free_energy(self.histogram.grid, volume, self._gridsize, self._n_atoms, self._nframes, temperature)
+        self.agfe = Grid(agfe, origin=self.histogram.origin, delta=self._gridsize)
 
     def convergence_density(self, sigma=20, n_steps=10):
         """Compute convergence of the density
@@ -140,12 +140,12 @@ class Analysis(AnalysisBase):
             positions = self._get_positions(stop=n_frame)
             hist, edges = np.histogramdd(positions, bins=self._hbins, range=self._hrange)
 
-            gfe = _grid_free_energy(hist, volume, self._gridsize, self._n_atoms, n_frame, temperature)
+            agfe = _atomic_grid_free_energy(hist, volume, self._gridsize, self._n_atoms, n_frame, temperature)
 
             if favorable_only:
-                grid_free_energies.append(gfe[gfe < 0].sum())
+                grid_free_energies.append(agfe[agfe < 0].sum())
             else:
-                grid_free_energies.append(gfe.sum())
+                grid_free_energies.append(agfe.sum())
 
         grid_free_energies = np.array(grid_free_energies)
 
