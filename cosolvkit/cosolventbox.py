@@ -416,15 +416,17 @@ class CoSolventBox:
 
         # Create system
         with open("system.pdb", 'w') as w:
+            # Write protein first
             for i, atom in enumerate(self._receptor_data):
                 x, y, z = atom['xyz']
 
+                # Special case when the atom types is 4 caracters long
                 if len(atom['name']) <= 3:
                     name = ' ' + atom['name']
                 else:
                     name = atom['name']
 
-                w.write(template % ("ATOM", i, name, " ", atom['resname'], atom['resid'], 
+                w.write(template % ("ATOM", i + 1, name, " ", atom['resname'], atom['resid'], 
                                     atom['chain'], x, y, z, 0., 0.))
 
                 try:
@@ -452,7 +454,8 @@ class CoSolventBox:
                     for residue_xyzs in cosolv_xyzs:
                         for atom_xyz, atom_name in zip(residue_xyzs, atom_names):
                             x, y, z = atom_xyz
-                            w.write(template % ("ATOM", n_atom, atom_name, " ", resname, n_residue, " ", x, y, z, 0., 0.))
+                            w.write(template % ("ATOM", n_atom, atom_name, " ", resname, n_residue, 
+                                                " ", x, y, z, 0., 0.))
                             n_atom += 1
                         n_residue += 1
 
@@ -487,13 +490,13 @@ class CoSolventBox:
                 TLEAP_TEMPLATE += "loadamberparams %s\n" % frcmod_filename
                 TLEAP_TEMPLATE += "loadoff %s\n" % lib_filename
 
+        TLEAP_TEMPLATE += "set default nocenter on\n"
         TLEAP_TEMPLATE += "m = loadpdb system.pdb\n"
         TLEAP_TEMPLATE += "charge m\n"
         TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
         TLEAP_TEMPLATE += "addIonsRand m Na+ 0\n"
         TLEAP_TEMPLATE += "check m\n"
         TLEAP_TEMPLATE += "setBox m \"vdw\"\n"
-        TLEAP_TEMPLATE += "set default nocenter on\n"
         TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
         TLEAP_TEMPLATE += "savepdb m %s\n" % (pdb_filename)
         TLEAP_TEMPLATE += "quit\n"
