@@ -342,9 +342,21 @@ class CoSolventBox:
         if self._truncate:
             self._receptor_data = _protein_in_box(self._receptor_data, self._origin, self._gridsize, 
                                                   self._truncate_buffer, self._min_size_peptide)
-            # You want <cutoff> A on each side, that's why 2 x <cutoff> and 2 x <truncate_buffer>
-            self._gridsize += (2 * self._cutoff) + np.int((2 * self._truncate_buffer))
+
+            xmin = np.min(self._receptor_data['xyz'][:,0]) - self._cutoff
+            xmax = np.max(self._receptor_data['xyz'][:,0]) + self._cutoff
+            ymin = np.min(self._receptor_data['xyz'][:,1]) - self._cutoff
+            ymax = np.max(self._receptor_data['xyz'][:,1]) + self._cutoff
+            zmin = np.min(self._receptor_data['xyz'][:,2]) - self._cutoff
+            zmax = np.max(self._receptor_data['xyz'][:,2]) + self._cutoff
+
+            self._gridsize = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
+            self._center = np.mean(self._receptor_data['xyz'], axis=0)
             self._origin = self._center - (self._gridsize  / 2.)
+
+            # You want <cutoff> A on each side, that's why 2 x <cutoff> and 2 x <truncate_buffer>
+            #self._gridsize += (2 * self._cutoff) + np.int((2 * self._truncate_buffer))
+            #self._origin = self._center - (self._gridsize  / 2.)
         
     def add_cosolvent(self, name, smiles, charge=0, resname=None):
         """Add cosolvent and parametrize it
@@ -490,7 +502,7 @@ class CoSolventBox:
                 TLEAP_TEMPLATE += "loadamberparams %s\n" % frcmod_filename
                 TLEAP_TEMPLATE += "loadoff %s\n" % lib_filename
 
-        TLEAP_TEMPLATE += "set default nocenter on\n"
+        #TLEAP_TEMPLATE += "set default nocenter on\n"
         TLEAP_TEMPLATE += "m = loadpdb system.pdb\n"
         TLEAP_TEMPLATE += "charge m\n"
         TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
