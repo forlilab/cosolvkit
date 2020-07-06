@@ -21,11 +21,7 @@ AVOGADRO_CONSTANT_NA = 6.02214179e+23
 
 
 def _read_pdb(pdb_filename, ignore_hydrogen=False):
-    names = []
-    resnames = []
-    resids = []
-    chains = []
-    positions = []
+    data = []
     dtype = [("name", "U4"), ("resname", "U3"), ("resid", "i4"), ('chain', 'U1'), ("xyz", "f4", (3))]
 
     with open(pdb_filename) as f:
@@ -36,18 +32,13 @@ def _read_pdb(pdb_filename, ignore_hydrogen=False):
                 name = line[12:16].strip()
 
                 if (not ignore_hydrogen and name[0] == 'H') or name[0] != "H":
-                    names.append(line[12:16].strip())
-                    resnames.append(line[17:20].strip())
-                    resids.append(int(line[22:26]))
-                    chains.append(line[21:22].strip())
-                    positions.append([np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])])
+                    data.append((line[12:16].strip(), 
+                                 line[17:20].strip(), 
+                                 int(line[22:26]), 
+                                 line[21:22].strip(),
+                                 [np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])]))
 
-    data = np.zeros(len(resids), dtype=dtype)
-    data['name'] = names
-    data['resname'] = resnames
-    data['resid'] = resids
-    data['chain'] = chains
-    data['xyz'] = positions
+    data = np.array(data, dtype=dtype)
 
     return data
 
@@ -198,7 +189,7 @@ def _volume_protein(n_water, gridsize):
     vol_box = np.prod(gridsize)
     vol_water = _volume_water(n_water)
 
-    assert vol_water <= vol_box, "The volume of water (%f) is superior than the whole box (%f)." % (vol_water, vol_box)
+    #assert vol_water <= vol_box, "The volume of water (%f) is superior than the whole box (%f)." % (vol_water, vol_box)
 
     return vol_box - vol_water
 
@@ -214,9 +205,10 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
     # Get water molecules that are too close from the receptor
     if receptor_xyzs is not None:
         too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, 3.)
-
-    # Combine both
-    to_keep = np.any((too_close_edge, too_close_protein), axis=0)
+        # Combine both
+        to_keep = np.any((too_close_edge, too_close_protein), axis=0)
+    else:
+        to_keep = too_close_edge
 
     # Put aside water edges box and close to the protein
     to_keep_wat_xyzs = wat_xyzs[to_keep]
@@ -368,7 +360,12 @@ class CoSolventBox:
         """Build the cosolvent box
         """
         if self._origin is not None:
-            self._wat_xyzs = _create_waterbox(self._origin, self._gridsize, self._receptor_data['xyz'],
+            if self._receptor_data is not None:
+                receptor_xyzs = self._receptor_data['xyz']
+            else:
+                receptor_xyzs = None
+
+            self._wat_xyzs = _create_waterbox(self._origin, self._gridsize, receptor_xyzs,
                                               self._watref_xyzs, self._watref_dims)
 
             n_water = np.int(self._wat_xyzs.shape[0] / 3)
@@ -377,7 +374,8 @@ class CoSolventBox:
 
             print("------------------------------------")
             print("Volume box: %10.4f A**3" % self._volume)
-            print("Volume protein (box - water): %10.4f A**3" % volume_protein)
+            if self._receptor_data is not None:
+                print("Volume protein (box - water): %10.4f A**3" % volume_protein)
             print("Water (before cosolvent): %d" % n_water)
             print("Box type: %s" % self._box)
             print("Box center: %8.3f %8.3f %8.3f" % (self._center[0], self._center[1], self._center[2]))
@@ -386,7 +384,7 @@ class CoSolventBox:
             if self._cosolvents:
                 wat_xyzs, cosolv_xyzs, conc = _add_cosolvent(self._wat_xyzs, self._cosolvents,
                                                              self._origin, self._gridsize, self._volume,
-                                                             self._receptor_data['xyz'],self._concentration)
+                                                             receptor_xyzs, self._concentration)
 
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
@@ -419,7 +417,11 @@ class CoSolventBox:
         water_atom_names = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
         # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
         template = "%-6s%5d %-4s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
-        resid_peptide = self._receptor_data[0]['resid']
+
+        if self._receptor_data is not None:
+            resid_peptide = self._receptor_data[0]['resid']
+        else:
+            resid_peptide = 0
 
         if prefix is not None:
             prmtop_filename = prefix + "_" + prmtop_filename
@@ -429,32 +431,33 @@ class CoSolventBox:
         # Create system
         with open("system.pdb", 'w') as w:
             # Write protein first
-            for i, atom in enumerate(self._receptor_data):
-                x, y, z = atom['xyz']
+            if self._receptor_data is not None:
+                for i, atom in enumerate(self._receptor_data):
+                    x, y, z = atom['xyz']
 
-                # Special case when the atom types is 4 caracters long
-                if len(atom['name']) <= 3:
-                    name = ' ' + atom['name']
-                else:
-                    name = atom['name']
+                    # Special case when the atom types is 4 caracters long
+                    if len(atom['name']) <= 3:
+                        name = ' ' + atom['name']
+                    else:
+                        name = atom['name']
 
-                w.write(template % ("ATOM", i + 1, name, " ", atom['resname'], atom['resid'], 
-                                    atom['chain'], x, y, z, 0., 0.))
+                    w.write(template % ("ATOM", i + 1, name, " ", atom['resname'], atom['resid'], 
+                                        atom['chain'], x, y, z, 0., 0.))
 
-                try:
-                    # We are looking for gap in the sequence, maybe due to the truncation
-                    if (atom['resid'] != self._receptor_data[i + 1]['resid']) and \
-                       (atom['resid'] + 1 != self._receptor_data[i + 1]['resid']):
-                        w.write("TER\n")
+                    try:
+                        # We are looking for gap in the sequence, maybe due to the truncation
+                        if (atom['resid'] != self._receptor_data[i + 1]['resid']) and \
+                           (atom['resid'] + 1 != self._receptor_data[i + 1]['resid']):
+                            w.write("TER\n")
 
-                        if (atom['resid'] - resid_peptide + 1) < 14:
-                            print("Warning: Isolated short peptide of length %d, resid %d to %d." % \
-                                  (atom['resid'] - resid_peptide + 1, resid_peptide, atom['resid']))
-                            resid_peptide = self._receptor_data[i + 1]['resid']
-                except:
-                    continue
+                            if (atom['resid'] - resid_peptide + 1) < 14:
+                                print("Warning: Isolated short peptide of length %d, resid %d to %d." % \
+                                      (atom['resid'] - resid_peptide + 1, resid_peptide, atom['resid']))
+                                resid_peptide = self._receptor_data[i + 1]['resid']
+                    except:
+                        continue
 
-            w.write("TER\n")
+                w.write("TER\n")
 
             # Write cosolvent molecules
             if self._cosolv_xyzs is not None:
@@ -502,13 +505,13 @@ class CoSolventBox:
                 TLEAP_TEMPLATE += "loadamberparams %s\n" % frcmod_filename
                 TLEAP_TEMPLATE += "loadoff %s\n" % lib_filename
 
-        #TLEAP_TEMPLATE += "set default nocenter on\n"
+        TLEAP_TEMPLATE += "set default nocenter on\n"
         TLEAP_TEMPLATE += "m = loadpdb system.pdb\n"
         TLEAP_TEMPLATE += "charge m\n"
         TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
         TLEAP_TEMPLATE += "addIonsRand m Na+ 0\n"
         TLEAP_TEMPLATE += "check m\n"
-        TLEAP_TEMPLATE += "setBox m \"vdw\"\n"
+        TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._gridsize[0], self._gridsize[1], self._gridsize[2])
         TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
         TLEAP_TEMPLATE += "savepdb m %s\n" % (pdb_filename)
         TLEAP_TEMPLATE += "quit\n"
