@@ -14,13 +14,15 @@ You need, at a minimum (requirements):
 * parmed
 * MDAnalysis
 * openbabel
+* OpenMM (for centroid repulsive potentials)
 
 ## Installation
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
 $ conda create -n cosolvkit python=3.6
 $ conda activate cosolvkit
-$ conda install -c conda-forge -c ambermd numpy scipy mkl openbabel rdkit ambertools parmed mdanalysis
+$ conda install -c conda-forge -c ambermd numpy scipy mkl openbabel \
+rdkit ambertools parmed mdanalysis openmm
 ```
 
 Finally, we can install the `CoSolvKit` package
@@ -72,6 +74,57 @@ a = Analysis(u.select_atoms("(resname MEH or resname ACM) and name O*"), verbose
 a.run()
 a.grid_free_energy(volume, temperature)
 a.gfe.export("map_gfe_O.dx")
+```
+
+## Add centroid-repulsive potential with OpenMM
+
+To overcome aggregation of small hydrophobic molecules at high concentration (1 M), a repulsive interaction energy between fragments can be added, insuring a faster sampling. This repulsive potential is applied only to the selected fragments, without perturbing the interactions between fragments and the protein. The repulsive potential is implemented by adding a virtual site (massless particle) at the geometric center of each fragment, and the energy is described using a Lennard-Jones potential (epsilon = -0.01 kcal/mol and sigma = 12 Ansgtrom).
+
+Luckily for us, OpenMM is flexible enough to make the addition of this repulsive potential between fragments effortless (for you). The addition of centroids in fragments and the repulsive potential to the `System` holds in one line using the `add_repulsive_centroid_force` function. Thus making the integration very easy in existing OpenMM protocols. In this example, a mixture of benzene (`BEN`) and propane (`PRP`) was generated at approximately 1 M in a small box of 40 x 40 x 40 Angstrom (see `data` directory). The MD simulation will be run in NPT condition at 300 K during 100 ps using periodic boundary conditions.
+
+```python
+from parmed.openmm import NetCDFReporter
+from simtk.openmm.app import *
+from simtk.openmm import *
+from simtk.unit import *
+from sys import stdout
+
+from cosolvkit import utils
+
+
+# Read file
+prmtop = AmberPrmtopFile('cosolv_ben_prp_system.prmtop')
+inpcrd = AmberInpcrdFile('cosolv_ben_prp_system.inpcrd')
+
+# Configuration system
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=9 * angstrom, constraints=HBonds)
+
+# This is where the magic is happening!
+# Add centroids and repulsive forces between benzene and propane fragments
+vs_index, force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names=["BEN", "PRP"])
+# Write pdb file with centroids
+utils.write_pdb("cosolv_ben_prp_system_centroid.pdb", prmtop, inpcrd)
+# The magic ends here.
+
+# NPT
+platform = Platform.getPlatformByName('GPU')
+system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
+integrator = LangevinIntegrator(300 * kelvin, 1 / picosecond, 0.002 * picoseconds)
+simulation = Simulation(prmtop.topology, system, integrator, platform)
+simulation.context.setPositions(inpcrd.positions)
+
+# Energy minimization
+simulation.minimizeEnergy()
+
+# MD simulations - equilibration(10 ps)
+simulation.step(5000)
+
+# MD simulations - production (100 ps, of course it has to be much more!)
+simulation.reporters.append(NetCDFReporter('cosolv_repulsive.nc', 100, crds=True))
+simulation.reporters.append(StateDataReporter(stdout, 500, step=True, time=True, 
+                                              potentialEnergy=True, kineticEnergy=True, totalEnergy=True, 
+                                              temperature=True, volume=True, density=True, speed=True))
+simulation.step(50000)
 ```
 
 ## List of cosolvent molecules
