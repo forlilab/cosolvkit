@@ -83,11 +83,12 @@ To overcome aggregation of small hydrophobic molecules at high concentration (1 
 Luckily for us, OpenMM is flexible enough to make the addition of this repulsive potential between fragments effortless (for you). The addition of centroids in fragments and the repulsive potential to the `System` holds in one line using the `add_repulsive_centroid_force` function. Thus making the integration very easy in existing OpenMM protocols. In this example, a mixture of benzene (`BEN`) and propane (`PRP`) was generated at approximately 1 M in a small box of 40 x 40 x 40 Angstrom (see `data` directory). The MD simulation will be run in NPT condition at 300 K during 100 ps using periodic boundary conditions.
 
 ```python
+from sys import stdout
+
 from parmed.openmm import NetCDFReporter
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
-from sys import stdout
 
 from cosolvkit import utils
 
