@@ -111,23 +111,48 @@ def _water_is_in_box(wat_xyzs, box_origin, box_size):
     return all_in
 
 
-def _protein_in_box(receptor_data, box_origin, box_size, truncate_buffer=5., ignore_peptide_size=2):
-    fragments = []
-    resids_to_keep = []
+def _protein_in_box(receptor_data, box_origin, box_size, truncate_buffer=5., ignore_peptide_size=4):
+    data = []
+    protein_terminus = {}
+    peptides_terminus = {}
 
     all_in = _is_in_box(receptor_data['xyz'], box_origin, box_size + (2 * truncate_buffer))
-    resids_in_box = np.unique(receptor_data["resid"][all_in])
-    
-    # Get continuous peptide             
-    for k, g in itertools.groupby(enumerate(resids_in_box), lambda x: x[0] - x[1]):
-        group = list(map(itemgetter(1), g))
+    residues_in_box = np.unique(receptor_data[["resid", "chain"]][all_in], axis=0)
+    chain_ids = np.unique(residues_in_box["chain"])
 
-        if not len(group) < ignore_peptide_size:
-            resids_to_keep.extend(group)
-        else:
-            print("Warning: peptide %s will be ignored (minimal size allowed: %d)." % (group, ignore_peptide_size))
+    for chain_id in chain_ids:
+        resids_to_keep = []
+        peptides_terminus[chain_id] = []
 
-    return receptor_data[np.isin(receptor_data["resid"], resids_to_keep)]
+        resids = residues_in_box[residues_in_box["chain"] == chain_id]["resid"]
+        # we need that information to know where to put the charged patchs
+        protein_terminus[chain_id] = (resids[0], resids[-1])
+
+        # Get continuous peptide             
+        for k, g in itertools.groupby(enumerate(resids), lambda x: x[0] - x[1]):
+            peptide_terminus = [None, None]
+            peptide_resids = list(map(itemgetter(1), g))
+
+            if not len(peptide_resids) < ignore_peptide_size:
+                resids_to_keep.extend(peptide_resids)
+
+                # We need that information to know where to put the neutral patchs
+                if peptide_resids[0] != protein_terminus[chain_id][0]:
+                    peptide_terminus[0] = peptide_resids[0]
+                if peptide_resids[-1] != protein_terminus[chain_id][1]:
+                    peptide_terminus[1] = peptide_resids[-1]
+
+                peptides_terminus[chain_id].append(peptide_terminus)
+            else:
+                print("Warning: peptide %s will be ignored (minimal size allowed: %d)." % (peptide_resids, ignore_peptide_size))
+
+        selected_residues = receptor_data[receptor_data["chain"] == chain_id]
+        selected_residues = selected_residues[np.isin(selected_residues["resid"], resids_to_keep)]
+        data.append(selected_residues)
+
+    data = np.concatenate(data)
+
+    return data, protein_terminus, peptides_terminus
 
 
 def _create_waterbox(box_origin, box_size, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
@@ -304,6 +329,8 @@ class CoSolventBox:
         self._watref_dims = [18.856, 18.856, 18.856]
 
         self._receptor_data = None
+        self._protein_terminus = None
+        self._peptides_terminus = None
         self._cosolvents = {}
         self._wat_xysz = None
         self._cosolv_xyzs = None
@@ -332,8 +359,9 @@ class CoSolventBox:
             self._origin = self._center - (self._gridsize / 2)
 
         if self._truncate:
-            self._receptor_data = _protein_in_box(self._receptor_data, self._origin, self._gridsize, 
-                                                  self._truncate_buffer, self._min_size_peptide)
+            results = _protein_in_box(self._receptor_data, self._origin, self._gridsize, 
+                                      self._truncate_buffer, self._min_size_peptide)
+            self._receptor_data, self._protein_terminus, self._peptides_terminus = results
 
             xmin = np.min(self._receptor_data['xyz'][:,0]) - self._cutoff
             xmax = np.max(self._receptor_data['xyz'][:,0]) + self._cutoff
@@ -345,10 +373,6 @@ class CoSolventBox:
             self._gridsize = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
             self._center = np.mean(self._receptor_data['xyz'], axis=0)
             self._origin = self._center - (self._gridsize  / 2.)
-
-            # You want <cutoff> A on each side, that's why 2 x <cutoff> and 2 x <truncate_buffer>
-            #self._gridsize += (2 * self._cutoff) + np.int((2 * self._truncate_buffer))
-            #self._origin = self._center - (self._gridsize  / 2.)
         
     def add_cosolvent(self, name, smiles, charge=0, resname=None):
         """Add cosolvent and parametrize it
