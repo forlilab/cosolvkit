@@ -39,7 +39,7 @@ def _grid_density(hist):
 
 class Analysis(AnalysisBase):
 
-    def __init__(self, atomgroup, gridsize=1., center=None, dimensions=None, **kwargs):
+    def __init__(self, atomgroup, gridsize=0.5, center=None, dimensions=None, **kwargs):
         super(Analysis, self).__init__(atomgroup.universe.trajectory, **kwargs)
         self._u = atomgroup.universe
         self._ag = atomgroup
