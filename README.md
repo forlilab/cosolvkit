@@ -21,7 +21,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n cosolvkit python=3.6
 $ conda activate cosolvkit
-$ conda install -c conda-forge -c ambermd numpy scipy mkl openbabel \
+$ conda install -c conda-forge -c ambermd -c omnia numpy scipy mkl openbabel \
 rdkit ambertools parmed mdanalysis openmm
 ```
 
