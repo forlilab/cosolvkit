@@ -62,6 +62,59 @@ def execute_command(cmd_line):
     return output, errors
 
 
+def normalize(a):
+    """
+    Return a normalized vector
+    """
+    return a / np.sqrt(np.sum(np.power(a, 2)))
+
+
+def atom_to_move(o, p):
+    """
+    Return the coordinates xyz of an atom just above acceptor/donor atom o
+    """
+    # It will not work if there is just one dimension
+    p = np.atleast_2d(p)
+    return o + normalize(-1. * vector(o, np.mean(p, axis=0)))
+
+
+def rotate_point(p, p1, p2, angle):
+    """ Rotate the point p around the axis p1-p2
+    Source: http://paulbourke.net/geometry/rotate/PointRotate.py"""
+    # Translate the point we want to rotate to the origin
+    pn = p - p1
+
+    # Get the unit vector from the axis p1-p2
+    n = p2 - p1
+    n = normalize(n)
+
+    # Setup the rotation matrix
+    c = np.cos(angle)
+    t = 1. - np.cos(angle)
+    s = np.sin(angle)
+    x, y, z = n[0], n[1], n[2]
+
+    R = np.array([[t*x**2 + c, t*x*y - s*z, t*x*z + s*y],
+                 [t*x*y + s*z, t*y**2 + c, t*y*z - s*x],
+                 [t*x*z - s*y, t*y*z + s*x, t*z**2 + c]])
+
+    # ... and apply it
+    ptr = np.dot(pn, R)
+
+    # And to finish, we put it back
+    p = ptr + p1
+
+    return p
+
+
+def resize_vector(v, length, origin=None):
+    """ Resize a vector v to a new length in regard to a origin """
+    if origin is not None:
+        return (normalize(v - origin) * length) + origin
+    else:
+        return normalize(v) * length
+
+
 def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names, 
                                  epsilon=-0.01*kilocalories_per_mole, sigma=12*angstrom):
     """Add centroid to residues and add repulsive forces between them

@@ -291,6 +291,84 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
     return wat_xyzs, cosolv_xyzs, final_concentration
 
 
+def _apply_neutral_patches(receptor_data, peptides_terminus):
+    """Apply neutral patches where the protein was truncated
+    
+    The angles (140) are a bit weird because something is off in my math or because the normals
+    are not completely straight so that might explain why the angles (between 120 and 130, which 
+    is okay-ish as a starting point for MD simulations) are different when calculated in PyMOL.
+
+    """
+    dtype = [("name", "U4"), ("resname", "U3"), ("resid", "i4"), ('chain', 'U1'), ("xyz", "f4", (3))]
+
+    for chain_id in peptides_terminus.keys():
+        for peptide in peptides_terminus[chain_id]:
+            if peptide[0] is not None:
+                selection = (receptor_data["resid"] == peptide[0]) & (receptor_data["chain"] == chain_id)
+                residue_atom_ids = np.where(selection == True)
+                residue = receptor_data[residue_atom_ids]
+                first_atom_id = np.min(residue_atom_ids)
+
+                if all(np.isin(["N", "CA", "C"], residue["name"])):
+                    n_xyz = residue[residue["name"] == "N"]["xyz"][0]
+                    ca_xyz = residue[residue["name"] == "CA"]["xyz"][0]
+                    c_xyz = residue[residue["name"] == "C"]["xyz"][0]
+
+                    # N atom
+                    ca_normal = np.cross(c_xyz - ca_xyz, n_xyz - ca_xyz)
+                    n_normal = n_xyz + ca_normal
+                    c_ace_xyz = utils.rotate_point(ca_xyz, n_xyz, n_normal, np.degrees(-140.))
+                    c_ace_xyz = utils.resize_vector(c_ace_xyz, 1.5, n_xyz)
+                    # CH3 atom and O atom
+                    c_ace_normal = c_ace_xyz + ca_normal
+                    # CH3 atom
+                    ch3_ace_xyz = utils.rotate_point(n_xyz, c_ace_xyz, c_ace_normal, np.degrees(140))
+                    ch3_ace_xyz = utils.resize_vector(ch3_ace_xyz, 1.3, c_ace_xyz)
+                    # O atom
+                    o_ace_xyz = utils.rotate_point(n_xyz, c_ace_xyz, c_ace_normal, np.degrees(-140))
+                    o_ace_xyz = utils.resize_vector(o_ace_xyz, 1.2, c_ace_xyz)
+
+                    data = [("CH3", "ACE", peptide[0] - 1, chain_id, ch3_ace_xyz),
+                            ("C", "ACE", peptide[0] - 1, chain_id, c_ace_xyz),
+                            ("O", "ACE", peptide[0] - 1, chain_id, o_ace_xyz)]
+                    ace_residue = np.array(data, dtype=dtype)
+                    
+                    receptor_data = np.insert(receptor_data, first_atom_id, ace_residue, axis=0)
+                else:
+                    print("Warning: Cannot apply neutral patch ACE on residue %d:%s" % (peptide[0], chain_id))
+
+            if peptide[1] is not None:
+                selection = (receptor_data["resid"] == peptide[1]) & (receptor_data["chain"] == chain_id)
+                residue_atom_ids = np.where(selection == True)
+                residue = receptor_data[residue_atom_ids]
+                last_atom_id = np.max(residue_atom_ids)
+
+                if all(np.isin(["CA", "C", "O"], residue["name"])):
+                    ca_xyz = residue[residue["name"] == "CA"]["xyz"][0]
+                    c_xyz = residue[residue["name"] == "C"]["xyz"][0]
+                    o_xyz = residue[residue["name"] == "O"]["xyz"][0]
+
+                    # N atom
+                    n_nme_xyz = utils.atom_to_move(c_xyz, [ca_xyz, o_xyz])
+                    n_nme_xyz = utils.resize_vector(n_nme_xyz, 1.3, c_xyz)
+                    # CH3 atom
+                    c_normal = np.cross(ca_xyz - c_xyz, o_xyz - c_xyz)
+                    n_nme_normal = n_nme_xyz + c_normal
+                    ch3_nme_xyz = utils.rotate_point(c_xyz, n_nme_xyz, n_nme_normal, np.degrees(140))
+                    ch3_nme_xyz = utils.resize_vector(ch3_nme_xyz, 1.5, n_nme_xyz)
+
+                    data = [("N", "NME", peptide[1] + 1, chain_id, n_nme_xyz),
+                            ("CH3", "NME", peptide[1] + 1, chain_id, ch3_nme_xyz)]
+                    nme_residue = np.array(data, dtype=dtype)
+
+                    # last_atom_id + 1 because we want to insert the new residue after the last atom
+                    receptor_data = np.insert(receptor_data, last_atom_id + 1, nme_residue, axis=0)
+                else:
+                    print("Warning: Cannot apply neutral patch NME on residue %d:%s" % (peptide[1], chain_id))
+
+    return receptor_data
+
+
 class CoSolventBox:
 
     def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, box_size=None,
@@ -334,7 +412,6 @@ class CoSolventBox:
 
         self._receptor_data = None
         self._atom_in_box_ids = []
-        self._protein_terminus = {}
         self._peptides_terminus = {}
         self._cosolvents = {}
         self._wat_xysz = None
@@ -357,7 +434,7 @@ class CoSolventBox:
         # Also knowing where are the true and artificial N and C terminus will be useful
         # after for adding the neutral patches
         results = _receptor_residues_in_box(self._receptor_data, self._origin, box_size, self._min_size_peptide)
-        self._atom_in_box_ids, self._protein_terminus, self._peptides_terminus = results
+        self._atom_in_box_ids, _, self._peptides_terminus = results
 
         if self._receptor_data.shape[0] != len(self._atom_in_box_ids):
             need_to_truncate = True
@@ -454,6 +531,7 @@ class CoSolventBox:
 
         if self._receptor_data is not None:
             receptor_data = self._receptor_data[self._atom_in_box_ids]
+            receptor_data = _apply_neutral_patches(receptor_data, self._peptides_terminus)
             resid_peptide = self._receptor_data[0]['resid']
         else:
             receptor_data = None
