@@ -111,12 +111,16 @@ def _water_is_in_box(wat_xyzs, box_origin, box_size):
     return all_in
 
 
-def _protein_in_box(receptor_data, box_origin, box_size, truncate_buffer=5., ignore_peptide_size=4):
-    data = []
+def _receptor_residues_in_box(receptor_data, box_origin=None, box_size=None, ignore_peptide_size=4):
+    atoms_in_box = []
     protein_terminus = {}
     peptides_terminus = {}
 
-    all_in = _is_in_box(receptor_data['xyz'], box_origin, box_size + (2 * truncate_buffer))
+    if box_origin is not None and box_size is not None:
+        all_in = _is_in_box(receptor_data['xyz'], box_origin, box_size)
+    else:
+        all_in = [True] * receptor_data.shape[0]
+
     residues_in_box = np.unique(receptor_data[["resid", "chain"]][all_in], axis=0)
     chain_ids = np.unique(residues_in_box["chain"])
 
@@ -144,15 +148,16 @@ def _protein_in_box(receptor_data, box_origin, box_size, truncate_buffer=5., ign
 
                 peptides_terminus[chain_id].append(peptide_terminus)
             else:
-                print("Warning: peptide %s will be ignored (minimal size allowed: %d)." % (peptide_resids, ignore_peptide_size))
+                print("Warning: peptide %s will be ignored (minimal size allowed: %d)." % \
+                      (peptide_resids, ignore_peptide_size))
 
-        selected_residues = receptor_data[receptor_data["chain"] == chain_id]
-        selected_residues = selected_residues[np.isin(selected_residues["resid"], resids_to_keep)]
-        data.append(selected_residues)
+        # Tag to True residues that are in box based on the chain id and the resid
+        atoms_in_box.append((receptor_data["chain"] == chain_id) & np.isin(receptor_data["resid"], resids_to_keep))
 
-    data = np.concatenate(data)
+    atoms_in_box = np.any(atoms_in_box, axis=0)
+    atom_in_box_ids = np.where(atoms_in_box == True)[0]
 
-    return data, protein_terminus, peptides_terminus
+    return atom_in_box_ids, protein_terminus, peptides_terminus
 
 
 def _create_waterbox(box_origin, box_size, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
@@ -210,8 +215,8 @@ def _volume_water(n_water):
     return ((18.856 * 18.856 * 18.856) / 216) * n_water
 
 
-def _volume_protein(n_water, gridsize):
-    vol_box = np.prod(gridsize)
+def _volume_protein(n_water, box_size):
+    vol_box = np.prod(box_size)
     vol_water = _volume_water(n_water)
 
     #assert vol_water <= vol_box, "The volume of water (%f) is superior than the whole box (%f)." % (vol_water, vol_box)
@@ -288,38 +293,37 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
 
 class CoSolventBox:
 
-    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, gridsize=None, 
-                 truncate=False, truncate_buffer=5., min_size_peptide=4):
+    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, box_size=None,
+                 box_buffer=5., min_size_peptide=4):
         """Initialize the cosolvent box
         """
         assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
 
         self._concentration = concentration
         self._cutoff = cutoff
-        self._truncate = truncate
-        self._truncate_buffer = truncate_buffer
+        self._box_buffer = box_buffer
         self._min_size_peptide = min_size_peptide
         self._box = box
 
-        if center is not None and gridsize is not None:
-            gridsize = np.array(gridsize)
+        if center is not None and box_size is not None:
+            box_size = np.array(box_size)
 
             # Check center
             assert np.ravel(center).size == 3, "Error: center should contain only (x, y, z)."
             # Check gridsize
-            assert np.ravel(gridsize).size == 3, "Error: grid size should contain only (a, b, c)."
-            assert (gridsize > 0).all(), "Error: grid size cannot contain negative numbers."
+            assert np.ravel(box_size).size == 3, "Error: grid size should contain only (a, b, c)."
+            assert (box_size > 0).all(), "Error: grid size cannot contain negative numbers."
 
             self._center = center
             # It's easier to work with integers for grid size
-            self._gridsize = np.ceil(gridsize).astype(np.int)
-            self._origin = self._center - (self._gridsize  / 2.)
-        elif (center is not None and gridsize is None) or (center is None and gridsize is not None):
+            self._box_size = np.ceil(box_size).astype(np.int)
+            self._origin = self._center - (self._box_size  / 2.)
+        elif (center is not None and box_size is None) or (center is None and box_size is not None):
             print("Error: cannot define the size of the grid without defining its center. Et vice et versa !")
             sys.exit(1)
         else:
             self._center = None
-            self._gridsize = None
+            self._box_size = None
             self._origin = None
 
         # Read the reference water box
@@ -329,8 +333,9 @@ class CoSolventBox:
         self._watref_dims = [18.856, 18.856, 18.856]
 
         self._receptor_data = None
-        self._protein_terminus = None
-        self._peptides_terminus = None
+        self._atom_in_box_ids = []
+        self._protein_terminus = {}
+        self._peptides_terminus = {}
         self._cosolvents = {}
         self._wat_xysz = None
         self._cosolv_xyzs = None
@@ -338,41 +343,46 @@ class CoSolventBox:
     def add_receptor(self, receptor_filename):
         """Add receptor
         """
+        need_to_truncate = False
         self._receptor_filename = receptor_filename
         self._receptor_data = _read_pdb(receptor_filename, ignore_hydrogen=True)
 
-        if self._center is None and self._gridsize is None:
-            xmin = np.min(self._receptor_data['xyz'][:,0]) - self._cutoff
-            xmax = np.max(self._receptor_data['xyz'][:,0]) + self._cutoff
-            ymin = np.min(self._receptor_data['xyz'][:,1]) - self._cutoff
-            ymax = np.max(self._receptor_data['xyz'][:,1]) + self._cutoff
-            zmin = np.min(self._receptor_data['xyz'][:,2]) - self._cutoff
-            zmax = np.max(self._receptor_data['xyz'][:,2]) + self._cutoff
+        if self._origin is not None:
+            # Add some extra room to the box as a safeguard. Do we really trust the user to make the right choice?
+            box_size = self._box_size + int((2 * self._box_buffer))
+        else:
+            box_size = self._box_size
 
+        # We want to identify all the atoms (per residue) that are in the box.
+        # Also knowing where are the true and artificial N and C terminus will be useful
+        # after for adding the neutral patches
+        results = _receptor_residues_in_box(self._receptor_data, self._origin, box_size, self._min_size_peptide)
+        self._atom_in_box_ids, self._protein_terminus, self._peptides_terminus = results
+
+        if self._receptor_data.shape[0] != len(self._atom_in_box_ids):
+            need_to_truncate = True
+
+        atoms_in_box = self._receptor_data[self._atom_in_box_ids]
+        xmin = np.min(atoms_in_box['xyz'][:, 0]) - self._cutoff
+        xmax = np.max(atoms_in_box['xyz'][:, 0]) + self._cutoff
+        ymin = np.min(atoms_in_box['xyz'][:, 1]) - self._cutoff
+        ymax = np.max(atoms_in_box['xyz'][:, 1]) + self._cutoff
+        zmin = np.min(atoms_in_box['xyz'][:, 2]) - self._cutoff
+        zmax = np.max(atoms_in_box['xyz'][:, 2]) + self._cutoff
+
+        # _origin is instanciated only when _center and _box_size are also instanciated
+        # That's why we just have to verify that _origin is None
+        # If we need to truncate the protein, we have to redefine the box
+        # definition to fit the truncated protein
+        if self._origin is None or need_to_truncate:
             if self._box == "orthorombic":
-                self._gridsize = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
+                self._box_size = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
             else:
                 lmax = np.max([xmax - xmin, ymax - ymin, zmax - zmin])
-                self._gridsize = np.ceil(np.array([lmax, lmax, lmax])).astype(np.int)
+                self._box_size = np.ceil(np.array([lmax, lmax, lmax])).astype(np.int)
 
-            self._center = np.mean(self._receptor_data['xyz'], axis=0)
-            self._origin = self._center - (self._gridsize / 2)
-
-        if self._truncate:
-            results = _protein_in_box(self._receptor_data, self._origin, self._gridsize, 
-                                      self._truncate_buffer, self._min_size_peptide)
-            self._receptor_data, self._protein_terminus, self._peptides_terminus = results
-
-            xmin = np.min(self._receptor_data['xyz'][:,0]) - self._cutoff
-            xmax = np.max(self._receptor_data['xyz'][:,0]) + self._cutoff
-            ymin = np.min(self._receptor_data['xyz'][:,1]) - self._cutoff
-            ymax = np.max(self._receptor_data['xyz'][:,1]) + self._cutoff
-            zmin = np.min(self._receptor_data['xyz'][:,2]) - self._cutoff
-            zmax = np.max(self._receptor_data['xyz'][:,2]) + self._cutoff
-
-            self._gridsize = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
-            self._center = np.mean(self._receptor_data['xyz'], axis=0)
-            self._origin = self._center - (self._gridsize  / 2.)
+            self._center = np.mean(atoms_in_box['xyz'], axis=0)
+            self._origin = self._center - (self._box_size / 2)
         
     def add_cosolvent(self, name, smiles, charge=0, resname=None):
         """Add cosolvent and parametrize it
@@ -385,16 +395,16 @@ class CoSolventBox:
         """
         if self._origin is not None:
             if self._receptor_data is not None:
-                receptor_xyzs = self._receptor_data['xyz']
+                receptor_xyzs = self._receptor_data[self._atom_in_box_ids]['xyz']
             else:
                 receptor_xyzs = None
 
-            self._wat_xyzs = _create_waterbox(self._origin, self._gridsize, receptor_xyzs,
+            self._wat_xyzs = _create_waterbox(self._origin, self._box_size, receptor_xyzs,
                                               self._watref_xyzs, self._watref_dims)
 
             n_water = np.int(self._wat_xyzs.shape[0] / 3)
             self._volume = _volume_water(n_water)
-            volume_protein = _volume_protein(n_water, self._gridsize)
+            volume_protein = _volume_protein(n_water, self._box_size)
 
             print("------------------------------------")
             print("Volume box: %10.4f A**3" % self._volume)
@@ -403,11 +413,11 @@ class CoSolventBox:
             print("Water (before cosolvent): %d" % n_water)
             print("Box type: %s" % self._box)
             print("Box center: %8.3f %8.3f %8.3f" % (self._center[0], self._center[1], self._center[2]))
-            print("Box dimensions: x %d y %d z %d (A)" % (self._gridsize[0], self._gridsize[1], self._gridsize[2]))
+            print("Box dimensions: x %d y %d z %d (A)" % (self._box_size[0], self._box_size[1], self._box_size[2]))
 
             if self._cosolvents:
                 wat_xyzs, cosolv_xyzs, conc = _add_cosolvent(self._wat_xyzs, self._cosolvents,
-                                                             self._origin, self._gridsize, self._volume,
+                                                             self._origin, self._box_size, self._volume,
                                                              receptor_xyzs, self._concentration)
 
                 self._wat_xyzs = wat_xyzs
@@ -443,8 +453,10 @@ class CoSolventBox:
         template = "%-6s%5d %-4s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
 
         if self._receptor_data is not None:
+            receptor_data = self._receptor_data[self._atom_in_box_ids]
             resid_peptide = self._receptor_data[0]['resid']
         else:
+            receptor_data = None
             resid_peptide = 0
 
         if prefix is not None:
@@ -455,8 +467,8 @@ class CoSolventBox:
         # Create system
         with open("system.pdb", 'w') as w:
             # Write protein first
-            if self._receptor_data is not None:
-                for i, atom in enumerate(self._receptor_data):
+            if receptor_data is not None:
+                for i, atom in enumerate(receptor_data):
                     x, y, z = atom['xyz']
 
                     # Special case when the atom types is 4 caracters long
@@ -470,14 +482,14 @@ class CoSolventBox:
 
                     try:
                         # We are looking for gap in the sequence, maybe due to the truncation
-                        if (atom['resid'] != self._receptor_data[i + 1]['resid']) and \
-                           (atom['resid'] + 1 != self._receptor_data[i + 1]['resid']):
+                        if (atom['resid'] != receptor_data[i + 1]['resid']) and \
+                           (atom['resid'] + 1 != receptor_data[i + 1]['resid']):
                             w.write("TER\n")
 
                             if (atom['resid'] - resid_peptide + 1) < 14:
                                 print("Warning: Isolated short peptide of length %d, resid %d to %d." % \
                                       (atom['resid'] - resid_peptide + 1, resid_peptide, atom['resid']))
-                                resid_peptide = self._receptor_data[i + 1]['resid']
+                                resid_peptide = receptor_data[i + 1]['resid']
                     except:
                         continue
 
@@ -535,7 +547,7 @@ class CoSolventBox:
         TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
         TLEAP_TEMPLATE += "addIonsRand m Na+ 0\n"
         TLEAP_TEMPLATE += "check m\n"
-        TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._gridsize[0], self._gridsize[1], self._gridsize[2])
+        TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._box_size[0], self._box_size[1], self._box_size[2])
         TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
         TLEAP_TEMPLATE += "savepdb m %s\n" % (pdb_filename)
         TLEAP_TEMPLATE += "quit\n"
