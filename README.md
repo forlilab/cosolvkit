@@ -103,7 +103,7 @@ system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * angstrom,
 
 # This is where the magic is happening!
 # Add centroids and repulsive forces between benzene and propane fragments
-n_particles, _, force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names=["BEN", "PRP"])
+n_particles, _, force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, ["BEN", "PRP"])
 # The magic ends here.
 
 # NPT
