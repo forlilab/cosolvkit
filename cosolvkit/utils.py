@@ -19,6 +19,7 @@ else:
     import imp
 
 import numpy as np
+import mdtraj
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import kilocalories_per_mole, angstrom
@@ -115,6 +116,42 @@ def resize_vector(v, length, origin=None):
         return normalize(v) * length
 
 
+def add_harmonic_constraints(prmtop, inpcrd, system, atom_selection, k=1.0*kilocalories_per_mole/angstrom**2):
+    """Add harmonic constraints to the system.
+
+    Args:
+        prmtop (AmberPrmtopFile): Amber topology object
+        inpcrd (AmberInpcrdFile): Amber coordinates object
+        system (System): OpenMM system object created from the Amber topology object
+        atom_selection (str): Atom selection (see MDTraj documentation)
+        k (Quantity): harmonic force constraint (default: 1 * kilocalories_per_mole/angstrom**2)
+
+    Returns:
+        (list, int): list of all the atom ids on which am harmonic force is applied, index with the System of the force that was added
+
+    """
+
+    mdtop = mdtraj.Topology.from_openmm(prmtop.topology)
+    atom_idxs = mdtop.select(atom_selection)
+
+    if atom_idxs.size == 0:
+        print("Warning: no atoms selected using: %s" % atom_selection)
+        return ([], None)
+
+    force = CustomExternalForce("k * ((x-x0)^2 + (y-y0)^2 + (z-z0)^2)")
+    force.addGlobalParameter("k", k)
+    force.addPerParticleParameter("x0")
+    force.addPerParticleParameter("y0")
+    force.addPerParticleParameter("z0")
+
+    for atom_idx in atom_idxs:
+        force.addParticle(int(atom_idx), inpcrd.positions[atom_idx])
+
+    harmonic_force_idx = system.addForce(force)
+
+    return atom_idxs, harmonic_force_idx
+
+
 def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names, 
                                  epsilon=-0.01*kilocalories_per_mole, sigma=12*angstrom):
     """Add centroid to residues and add repulsive forces between them
@@ -128,10 +165,11 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names,
         sigma (Quantity): inter-particle distance (default: 12 * angstrom)
 
     Returns:
-        (list, int): list of all the virtual sites index, index within the System of the force that was added
+        (int, list, int): original number of particles, list of all the virtual sites index, index within the System of the force that was added
 
     """
     virtual_site_idxs = []
+    n_particles = system.getNumParticles()
 
     if not isinstance(residue_names, (list, tuple)) and isinstance(residue_names, str):
         residue_names = [residue_names]
@@ -175,7 +213,7 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names,
 
     if not virtual_site_idxs:
         print("Warning: no centroids were added to the system (residue names: %s)" % residue_names)
-        return ([], None)
+        return (None, [], None)
 
     # Add repulsive potential between centroids
     repulsive_force = CustomBondForce('epsilon * ((sigma / r)^12 - 2 * (sigma / r)^6)')
@@ -190,7 +228,7 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names,
 
     repulsive_force_id = system.addForce(repulsive_force)
 
-    return virtual_site_idxs, repulsive_force_id
+    return n_particles, virtual_site_idxs, repulsive_force_id
 
 
 def write_pdb(pdb_filename, prmtop, inpcrd):
