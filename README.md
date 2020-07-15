@@ -122,7 +122,8 @@ simulation.step(5000)
 
 # MD simulations - production (100 ps, of course it has to be much more!)
 # Write every atoms except centroids
-simulation.reporters.append(NetCDFReporter('cosolv_repulsive.nc', 100, atomSubset=range(n_particles)))
+simulation.reporters.append(NetCDFReporter('cosolv_repulsive.nc', 100, 
+                                           atomSubset=range(n_particles)))
 simulation.reporters.append(StateDataReporter(stdout, 500, step=True, time=True, 
                                               potentialEnergy=True, kineticEnergy=True, 
                                               totalEnergy=True, temperature=True, volume=True, 
