@@ -13,6 +13,7 @@ You need, at a minimum (requirements):
 * ambertools
 * parmed
 * MDAnalysis
+* MDTraj
 * openbabel
 * OpenMM (for centroid repulsive potentials)
 
@@ -22,7 +23,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 $ conda create -n cosolvkit python=3.6
 $ conda activate cosolvkit
 $ conda install -c conda-forge -c ambermd -c omnia numpy scipy mkl openbabel \
-rdkit ambertools parmed mdanalysis openmm
+rdkit ambertools parmed mdanalysis openmm mdtraj
 ```
 
 Finally, we can install the `CoSolvKit` package
@@ -85,7 +86,7 @@ Luckily for us, OpenMM is flexible enough to make the addition of this repulsive
 ```python
 from sys import stdout
 
-from parmed.openmm import NetCDFReporter
+from mdtraj.reporters import NetCDFReporter
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
@@ -98,20 +99,19 @@ prmtop = AmberPrmtopFile('cosolv_ben_prp_system.prmtop')
 inpcrd = AmberInpcrdFile('cosolv_ben_prp_system.inpcrd')
 
 # Configuration system
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=9 * angstrom, constraints=HBonds)
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * angstrom, constraints=HBonds)
 
 # This is where the magic is happening!
 # Add centroids and repulsive forces between benzene and propane fragments
-vs_index, force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, ["BEN", "PRP"])
-# Write pdb file with centroids
-utils.write_pdb("cosolv_ben_prp_system_centroid.pdb", prmtop, inpcrd)
+n_particles, _, force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names=["BEN", "PRP"])
 # The magic ends here.
 
 # NPT
-platform = Platform.getPlatformByName('GPU')
+properties = {"Precision": "mixed"}
+platform = Platform.getPlatformByName('CUDA')
 system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
 integrator = LangevinIntegrator(300 * kelvin, 1 / picosecond, 0.002 * picoseconds)
-simulation = Simulation(prmtop.topology, system, integrator, platform)
+simulation = Simulation(prmtop.topology, system, integrator, platform, properties)
 simulation.context.setPositions(inpcrd.positions)
 
 # Energy minimization
@@ -121,7 +121,8 @@ simulation.minimizeEnergy()
 simulation.step(5000)
 
 # MD simulations - production (100 ps, of course it has to be much more!)
-simulation.reporters.append(NetCDFReporter('cosolv_repulsive.nc', 100, crds=True))
+# Write every atoms except centroids
+simulation.reporters.append(NetCDFReporter('cosolv_repulsive.nc', 100, atomSubset=range(n_particles)))
 simulation.reporters.append(StateDataReporter(stdout, 500, step=True, time=True, 
                                               potentialEnergy=True, kineticEnergy=True, 
                                               totalEnergy=True, temperature=True, volume=True, 
