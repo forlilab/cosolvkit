@@ -36,7 +36,6 @@ leap_template = """
 x = loadpdb {input_pdb}
 {box_info}
 {more_leap_cmds}
-set default PBradii mbondi3
 set default nocenter on
 saveAmberParm x {prmtop} {rst7}
 quit
