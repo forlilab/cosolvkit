@@ -22,6 +22,7 @@ import numpy as np
 import mdtraj
 from simtk.openmm.app import *
 from simtk.openmm import *
+import simtk.unit as units
 from simtk.unit import kilocalories_per_mole, angstrom
 
 
@@ -61,6 +62,13 @@ def execute_command(cmd_line):
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     output, errors = p.communicate()
     return output, errors
+
+
+def vector(a, b):
+    """
+    Return the vector between a and b
+    """
+    return b - a
 
 
 def normalize(a):
@@ -116,7 +124,7 @@ def resize_vector(v, length, origin=None):
         return normalize(v) * length
 
 
-def add_harmonic_constraints(prmtop, inpcrd, system, atom_selection, k=1.0*kilocalories_per_mole/angstrom**2):
+def add_harmonic_constraints(prmtop, inpcrd, system, atom_selection, k=1.0):
     """Add harmonic constraints to the system.
 
     Args:
@@ -124,36 +132,73 @@ def add_harmonic_constraints(prmtop, inpcrd, system, atom_selection, k=1.0*kiloc
         inpcrd (AmberInpcrdFile): Amber coordinates object
         system (System): OpenMM system object created from the Amber topology object
         atom_selection (str): Atom selection (see MDTraj documentation)
-        k (Quantity): harmonic force constraint (default: 1 * kilocalories_per_mole/angstrom**2)
+        k (float): harmonic force constraint in kcal/mol/A**2 (default: 1 kcal/mol/A**2)
 
     Returns:
         (list, int): list of all the atom ids on which am harmonic force is applied, index with the System of the force that was added
 
     """
-
     mdtop = mdtraj.Topology.from_openmm(prmtop.topology)
     atom_idxs = mdtop.select(atom_selection)
+    positions = inpcrd.positions
+
+    # Tranform constant to the right unit
+    k = k * units.kilocalories_per_mole / units.angstrom**2
+    k = k.value_in_unit_system(units.md_unit_system)
 
     if atom_idxs.size == 0:
         print("Warning: no atoms selected using: %s" % atom_selection)
         return ([], None)
 
-    force = CustomExternalForce("k * ((x-x0)^2 + (y-y0)^2 + (z-z0)^2)")
+    # Take into accoun the periodic condition
+    # http://docs.openmm.org/latest/api-python/generated/simtk.openmm.openmm.CustomExternalForce.html
+    force = CustomExternalForce("k * periodicdistance(x, y, z, x0, y0, z0)^2")
     force.addGlobalParameter("k", k)
     force.addPerParticleParameter("x0")
     force.addPerParticleParameter("y0")
     force.addPerParticleParameter("z0")
 
     for atom_idx in atom_idxs:
-        force.addParticle(int(atom_idx), inpcrd.positions[atom_idx])
+        #print(atom_idx, positions[atom_idx].value_in_unit_system(units.md_unit_system))
+        force.addParticle(int(atom_idx), positions[atom_idx].value_in_unit_system(units.md_unit_system))
 
     harmonic_force_idx = system.addForce(force)
 
-    return atom_idxs, harmonic_force_idx
+    return harmonic_force_idx, atom_idxs
 
 
-def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names, 
-                                 epsilon=-0.01*kilocalories_per_mole, sigma=12*angstrom):
+def update_harmonic_contraints(simulation, harmonic_force_idx, k=1.0):
+    """Update harmonic constraints force
+    
+    Args:
+        simulation (Simulation): OpenMM simulation object
+        harmoic_force_idx (int): index of the harmonic custom force
+        k (float): new harmonic force constraint in kcal/mol/A**2 (default: 1 kcal/mol/A**2)
+
+    """
+    system = simulation.context.getSystem()
+    force = system.getForce(harmonic_force_idx)
+    positions = simulation.context.getState(getPositions=True, enforcePeriodicBox=True).getPositions()
+    velocities = simulation.context.getState(getVelocities=True, enforcePeriodicBox=True).getVelocities()
+
+    # Tranform constant to the right unit
+    k = k * units.kilocalories_per_mole / units.angstrom**2
+    k = k.value_in_unit_system(units.md_unit_system)
+
+    force.setGlobalParameterDefaultValue(0, k)
+
+    for i in range(force.getNumParticles()):
+        j, params = force.getParticleParameters(i)
+        force.setParticleParameters(i, j, positions[j])
+
+    force.updateParametersInContext(simulation.context)
+    # We need to force the context to take into account all the changes
+    simulation.context.reinitialize()
+    simulation.context.setPositions(positions)
+    simulation.context.setVelocities(velocities)
+
+
+def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names, epsilon=-0.01, sigma=12):
     """Add centroid to residues and add repulsive forces between them
     
     Args:
@@ -161,8 +206,8 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names,
         inpcrd (AmberInpcrdFile): Amber coordinates object
         system (System): OpenMM system object created from the Amber topology object
         residue_names (list): list of residue names to which centroids will be attached (ex: BEN)
-        epsilon (Quantity): depth of the potential well (default: -0.01 * kilocalories_per_mole)
-        sigma (Quantity): inter-particle distance (default: 12 * angstrom)
+        epsilon (float): depth of the potential well in kcal/mol (default: -0.01 kcal/mol)
+        sigma (float): inter-particle distance in Angstrom (default: 12 A)
 
     Returns:
         (int, list, int): original number of particles, list of all the virtual sites index, index within the System of the force that was added
@@ -171,11 +216,16 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names,
     virtual_site_idxs = []
     n_particles = system.getNumParticles()
 
+    # Tranform constants to the right unit
+    epsilon = np.sqrt(epsilon * epsilon) * units.kilocalories_per_mole
+    epsilon = epsilon.value_in_unit_system(units.md_unit_system)
+    sigma = sigma * units.angstrom
+    sigma = sigma.value_in_unit_system(units.md_unit_system)
+
     if not isinstance(residue_names, (list, tuple)) and isinstance(residue_names, str):
         residue_names = [residue_names]
 
     element = Element(0, "EP", "EP", 0)
-    epsilon = (epsilon * epsilon).sqrt()
 
     # Select NonBondedForce
     for i in range(system.getNumForces()):
@@ -194,7 +244,7 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names,
         assert virtual_site_index == nonbonded_site_index
 
         # Compute centroid based on the heavy atoms
-        xyzs = [inpcrd.positions[a.index].in_units_of(angstrom) for a in residue._atoms if not "H" in a.name]
+        xyzs = [inpcrd.positions[a.index] * angstrom for a in residue._atoms if not "H" in a.name]
         idxs = [a.index for a in residue._atoms if not "H" in a.name]
         o_weights = np.ones(len(idxs)) / len(idxs)
         x_weights = np.zeros(len(idxs))
