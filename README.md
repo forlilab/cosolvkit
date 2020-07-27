@@ -39,7 +39,7 @@ $ python setup.py build install
 ```python
 from cosolvkit import CoSolventBox
 
-cosolv = CoSolventBox(concentration=0.25, cutoff=12, box='cubic') # 0.25 M concentration
+cosolv = CoSolventBox(concentration=1.0, cutoff=12, box='cubic') # 1 M concentration
 cosolv.add_receptor("protein.pdb")
 cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
 cosolv.add_cosolvent(name='methanol', smiles='CO', resname="MEH")
@@ -84,12 +84,14 @@ To overcome aggregation of small hydrophobic molecules at high concentration (1 
 Luckily for us, OpenMM is flexible enough to make the addition of this repulsive potential between fragments effortless (for you). The addition of centroids in fragments and the repulsive potential to the `System` holds in one line using the `add_repulsive_centroid_force` function. Thus making the integration very easy in existing OpenMM protocols. In this example, a mixture of benzene (`BEN`) and propane (`PRP`) was generated at approximately 1 M in a small box of 40 x 40 x 40 Angstrom (see `data` directory). The MD simulation will be run in NPT condition at 300 K during 100 ps using periodic boundary conditions.
 
 ```python
-from sys import stdout
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
 
-from mdtraj.reporters import NetCDFReporter
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
+from mdtraj.reporters import DCDReporter
 
 from cosolvkit import utils
 
@@ -99,18 +101,23 @@ prmtop = AmberPrmtopFile('cosolv_ben_prp_system.prmtop')
 inpcrd = AmberInpcrdFile('cosolv_ben_prp_system.inpcrd')
 
 # Configuration system
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * angstrom, constraints=HBonds)
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * angstrom, constraints=HBonds, hydrogenMass=3 * amu)
 
 # This is where the magic is happening!
-# Add centroids and repulsive forces between benzene and propane fragments
-n_particles, _, force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, ["BEN", "PRP"])
+# Add harmonic constraints on protein if present
+#harmonic_force_id, atom_idxs = utils.add_harmonic_constraints(prmtop, inpcrd, system, "protein and not element H", 2.5)
+#print('Number of particles constrainted: %d' % len(atom_idxs))
+# Add centroids and repulsive forces
+n_particles, virtual_site_idxs, repulsive_force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names=["BEN", "PRP"])
+print("Number of particles before adding centroids: %d" % n_particles)
+print('Number of centroids added: %d' % len(virtual_site_idxs))
 # The magic ends here.
 
 # NPT
 properties = {"Precision": "mixed"}
-platform = Platform.getPlatformByName('CUDA')
+platform = Platform.getPlatformByName('OpenCL')
 system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
-integrator = LangevinIntegrator(300 * kelvin, 1 / picosecond, 0.002 * picoseconds)
+integrator = LangevinIntegrator(300 * kelvin, 1 / picosecond, 4 * femtoseconds)
 simulation = Simulation(prmtop.topology, system, integrator, platform, properties)
 simulation.context.setPositions(inpcrd.positions)
 
@@ -120,11 +127,11 @@ simulation.minimizeEnergy()
 # MD simulations - equilibration(10 ps)
 simulation.step(5000)
 
-# MD simulations - production (100 ps, of course it has to be much more!)
+# MD simulations - production (200 ps, of course it has to be much more!)
 # Write every atoms except centroids
-simulation.reporters.append(NetCDFReporter('cosolv_repulsive.nc', 100, 
-                                           atomSubset=range(n_particles)))
-simulation.reporters.append(StateDataReporter(stdout, 500, step=True, time=True, 
+simulation.reporters.append(DCDReporter('cosolv_repulsive.dcd', 250, atomSubset=range(n_particles)))
+simulation.reporters.append(CheckpointReporter('cosolv_repulsive.chk', 2500))
+simulation.reporters.append(StateDataReporter("openmm.log" 250, step=True, time=True, 
                                               potentialEnergy=True, kineticEnergy=True, 
                                               totalEnergy=True, temperature=True, volume=True, 
                                               density=True, speed=True))
