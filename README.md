@@ -69,12 +69,14 @@ temperature = 300. # K
 a = Analysis(u.select_atoms("(resname BEN or resname PRP)"), verbose=True)
 a.run()
 a.atomic_grid_free_energy(volume, temperature)
-a.agfe.export("map_agfe_hydrophobe.dx")
+a.export_density("map_density_hydrophobe.dx")
+a.export_atomic_grid_free_energy("map_agfe_hydrophobe.dx")
 
 a = Analysis(u.select_atoms("(resname MEH or resname ACM) and name O*"), verbose=True)
 a.run()
 a.atomic_grid_free_energy(volume, temperature)
-a.agfe.export("map_agfe_O.dx")
+a.export_density("map_density_O.dx")
+a.export_atomic_grid_free_energy("map_agfe_O.dx")
 ```
 
 ## Add centroid-repulsive potential with OpenMM
