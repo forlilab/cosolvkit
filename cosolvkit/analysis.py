@@ -37,9 +37,29 @@ def _grid_density(hist):
     return (hist - np.mean(hist)) / np.std(hist)
 
 
+def _subset_grid(grid, gridsize=0.5, center=None, box_size=None):
+    center = np.array(center)
+    box_size = np.array(box_size)
+
+    # Check center and box size
+    assert np.ravel(center).size == 3, "Error: center should contain only (x, y, z)."
+    assert np.ravel(box_size).size == 3, "Error: grid size should contain only (a, b, c)."
+    assert (box_size > 0).all(), "Error: grid size cannot contain negative numbers."
+
+    x, y, z = center
+    sd = box_size / 2.
+    edges = (np.arange(x - sd[0], x + sd[0] + gridsize, gridsize), 
+             np.arange(y - sd[1], y + sd[1] + gridsize, gridsize), 
+             np.arange(z - sd[2], z + sd[2] + gridsize, gridsize))
+
+    sub_grid = grid.resample(edges)
+
+    return sub_grid
+
+
 class Analysis(AnalysisBase):
 
-    def __init__(self, atomgroup, gridsize=0.5, center=None, dimensions=None, **kwargs):
+    def __init__(self, atomgroup, gridsize=0.5, center=None, box_size=None, **kwargs):
         super(Analysis, self).__init__(atomgroup.universe.trajectory, **kwargs)
         self._u = atomgroup.universe
         self._ag = atomgroup
@@ -51,12 +71,19 @@ class Analysis(AnalysisBase):
             receptor = self._u.select_atoms("protein or nucleic")
             self._center = np.mean(receptor.positions, axis=0)
         else:
+            center = np.array(center)
+            # Check center
+            assert np.ravel(center).size == 3, "Error: center should contain only (x, y, z)."
             self._center = center
 
-        if dimensions is None:
-            self._dimensions = self._u.trajectory.ts.dimensions[:3]
+        if box_size is None:
+            self._box_size = self._u.trajectory.ts.dimensions[:3]
         else:
-            self._dimensions = dimensions
+            box_size = np.array(box_size)
+            # Check gridsize
+            assert np.ravel(box_size).size == 3, "Error: grid size should contain only (a, b, c)."
+            assert (box_size > 0).all(), "Error: grid size cannot contain negative numbers."
+            self._box_size = box_size
 
     def _prepare(self):
         self._positions = []
@@ -69,16 +96,15 @@ class Analysis(AnalysisBase):
         self._positions = np.array(self._positions, dtype=np.float32)
 
         x, y, z = self._center
-        sd = self._dimensions / 2.
+        sd = self._box_size / 2.
         self._hrange = ((x - sd[0], x + sd[0]), (y - sd[1], y + sd[1]), (z - sd[2], z + sd[2]))
-        self._hbins = np.round(self._dimensions / self._gridsize).astype(np.int)
+        self._hbins = np.round(self._box_size / self._gridsize).astype(np.int)
 
         positions = self._get_positions()
         hist, edges = np.histogramdd(positions, bins=self._hbins, range=self._hrange)
 
-        origin = (edges[0][0], edges[1][0], edges[2][0])
-        self.histogram = Grid(hist, origin=origin, delta=self._gridsize)
-        self.density = Grid(_grid_density(hist), origin=origin, delta=self._gridsize)
+        self._histogram = Grid(hist, edges=edges)
+        self._density = Grid(_grid_density(hist), edges=edges)
 
     def _get_positions(self, start=0, stop=None):
         positions = self._positions[start:stop,:,:]
@@ -89,8 +115,44 @@ class Analysis(AnalysisBase):
     def atomic_grid_free_energy(self, volume, temperature=300.):
         """Compute grid free energy.
         """
-        agfe = _grid_free_energy(self.histogram.grid, volume, self._gridsize, self._n_atoms, self._nframes, temperature)
-        self.agfe = Grid(agfe, origin=self.histogram.origin, delta=self._gridsize)
+        agfe = _grid_free_energy(self._histogram.grid, volume, self._gridsize, self._n_atoms, self._nframes, temperature)
+        self._agfe = Grid(agfe, edges=self._histogram.edges)
+
+    def export_histogram(self, fname, gridsize=0.5, center=None, box_size=None):
+        """ Export density maps
+        """
+        if center is None:
+            center = self._center
+
+        if box_size is None:
+            box_size = self._box_size
+
+        sub_grid = _subset_grid(self._histogram, gridsize, center, box_size)
+        sub_grid.export(fname)
+
+    def export_density(self, fname, gridsize=0.5, center=None, box_size=None):
+        """ Export density maps
+        """
+        if center is None:
+            center = self._center
+
+        if box_size is None:
+            box_size = self._box_size
+
+        sub_grid = _subset_grid(self._density, gridsize, center, box_size)
+        sub_grid.export(fname)
+
+    def export_atomic_grid_free_energy(self, fname, gridsize=0.5, center=None, box_size=None):
+        """ Export atomic grid free energy
+        """
+        if center is None:
+            center = self._center
+
+        if box_size is None:
+            box_size = self._box_size
+
+        sub_grid = _subset_grid(self._agfe, gridsize, center, box_size)
+        sub_grid.export(fname)
 
     def convergence_density(self, sigma=20, n_steps=10):
         """Compute convergence of the density
