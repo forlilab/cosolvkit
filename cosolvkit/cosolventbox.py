@@ -185,10 +185,6 @@ def _create_waterbox(box_origin, box_size, receptor_xyzs=None, watref_xyzs=None,
     # Cut everything that goes outside the box
     in_box = _water_is_in_box(wat_xyzs, box_origin, box_size)
     wat_xyzs = wat_xyzs[in_box]
-
-    # Remove water molecules that are too close from the edges of the box
-    too_close_edge = _is_water_close_to_edge(wat_xyzs, 3., box_origin, box_size)
-    wat_xyzs = wat_xyzs[~too_close_edge]
     
     # Remove water molecules that are too close from the receptor
     if receptor_xyzs is not None:
@@ -220,6 +216,13 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
     """
     cosolv_xyzs = {name: [] for name in cosolvents}
     cosolv_names = cosolvents.keys()
+
+    # Put aside water molecules that are next to the edges because we don't
+    # them to be replaced by cosolvent, otherwise they will go out the box
+    too_close_edge = _is_water_close_to_edge(wat_xyzs, 3., box_origin, box_size)
+    to_keep_wat_xyzs = wat_xyzs[too_close_edge]
+    # We will work on those ones
+    wat_xyzs = wat_xyzs[~too_close_edge]
 
     for i, cosolv_name in enumerate(itertools.cycle(cosolv_names)):
         # Update kdtree
@@ -253,13 +256,16 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
         # We compute the concentration only after 
         # placing the same number of cosolvent molecules
         if (i + 1) % len(cosolvents) == 0:
-            n_water = (wat_xyzs.shape[0]) / 3
+            n_water = (to_keep_wat_xyzs.shape[0] + wat_xyzs.shape[0]) / 3
             # 1 cosolvent molecule per 55 waters correspond
             # to a concentration of 1 M
             final_concentration = 55. / (n_water / (i + 1))
 
             if final_concentration >= concentration:
                 break
+
+    # Add back water molecules we put aside at the beginning
+    wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs))
 
     return wat_xyzs, cosolv_xyzs, final_concentration
 
