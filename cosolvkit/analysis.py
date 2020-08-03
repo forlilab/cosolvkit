@@ -44,10 +44,8 @@ def _grid_free_energy(hist, volume_water, gridsize, n_atoms, n_frames, temperatu
     n_voxel = volume_water / volume_voxel
     # Probability of the solute in the bulk (without protein)
     N_o = n_atoms / n_voxel
-    print(N_o)
     # Probability of the solute (with the protein)
     N = hist / n_frames
-    print(np.min(N), np.max(N), np.mean(N), np.std(N))
     # Atomic grid free energy
     gfe = -(BOLTZMANN_CONSTANT_KB * temperature) * np.log(N / N_o)
 
@@ -145,10 +143,8 @@ class Analysis(AnalysisBase):
 
         positions = self._get_positions()
         hist, edges = np.histogramdd(positions, bins=self._hbins, range=self._hrange)
-        print("HIST ", np.min(hist), np.max(hist))
 
         self._histogram = Grid(hist, edges=edges)
-        print("HOST GRID ", np.min(self._histogram.grid), np.max(self._histogram.grid))
         self._density = Grid(_grid_density(hist), edges=edges)
 
     def _get_positions(self, start=0, stop=None):
