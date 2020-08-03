@@ -9,6 +9,7 @@
 import numpy as np
 from scipy import spatial
 from scipy.ndimage import gaussian_filter
+from scipy.interpolate import RegularGridInterpolator
 from gridData import Grid
 from MDAnalysis import Universe
 from MDAnalysis.analysis.base import AnalysisBase
@@ -58,15 +59,24 @@ def _grid_density(hist):
 
 
 def _subset_grid(grid, gridsize=0.5, center=None, box_size=None):
+    # Create grid interpolator
+    x, y, z = grid.midpoints
+    grid_interpn = RegularGridInterpolator((x, y, z), grid.grid)
+
+    # Create sub grid coordinates
     x, y, z = center
     sd = box_size / 2.
-    edges = (np.arange(x - sd[0], x + sd[0] + gridsize, gridsize), 
-             np.arange(y - sd[1], y + sd[1] + gridsize, gridsize), 
-             np.arange(z - sd[2], z + sd[2] + gridsize, gridsize))
+    x = np.arange(x - sd[0], x + sd[0] + gridsize, gridsize) 
+    y = np.arange(y - sd[1], y + sd[1] + gridsize, gridsize)
+    z = np.arange(z - sd[2], z + sd[2] + gridsize, gridsize)
+    X, Y, Z = np.meshgrid(x, y, z)
+    xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
 
-    sub_grid = grid.resample(edges)
-    print("GRID ", np.min(grid.grid), np.max(grid.grid))
-    print("SUB GRID ", np.min(sub_grid.grid), np.max(sub_grid.grid))
+    # Do interpolation
+    sub_grid_values = grid_interpn(xyzs)
+    sub_grid_values = sub_grid_values.reshape((x.shape[0], y.shape[0], z.shape[0]))
+    sub_grid_values = np.swapaxes(sub_grid_values, 0, 1)
+    sub_grid = Grid(sub_grid_values, origin=xyzs[0], delta=gridsize)
 
     return sub_grid
 
