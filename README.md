@@ -52,7 +52,7 @@ cosolv.export(prefix="cosolv")
 
 2. **Run MD simulations**
 ```
-See Amber input files in the data/amber_protocol directory.
+See Amber/OpenMM input files in the data/amber_protocol and data/openmm_protocol directory.
 ```
 
 3. **Analysis**
