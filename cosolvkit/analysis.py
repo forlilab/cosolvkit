@@ -56,7 +56,7 @@ def _grid_density(hist):
     return (hist - np.mean(hist)) / np.std(hist)
 
 
-def _subset_grid(grid, gridsize=0.5, center=None, box_size=None):
+def _subset_grid(grid, center, box_size, gridsize=0.5):
     # Create grid interpolator
     x, y, z = grid.midpoints
     grid_interpn = RegularGridInterpolator((x, y, z), grid.grid)
@@ -93,7 +93,7 @@ def _export(fname, grid, gridsize=0.5, center=None, box_size=None):
         assert np.ravel(box_size).size == 3, "Error: grid size should contain only (a, b, c)."
         assert (box_size > 0).all(), "Error: grid size cannot contain negative numbers."
 
-        sub_grid = _subset_grid(grid, gridsize, center, box_size)
+        sub_grid = _subset_grid(grid, center, box_size, gridsize)
         sub_grid.export(fname)
 
 
@@ -159,7 +159,7 @@ class Analysis(AnalysisBase):
         agfe = _grid_free_energy(self._histogram.grid, volume, self._gridsize, self._n_atoms, self._nframes, temperature)
 
         if smoothing:
-            agfe = _smooth_grid_free_energy(agfe)
+            agfe = _smooth_grid_free_energy(agfe, 1.4/3.)
 
         self._agfe = Grid(agfe, edges=self._histogram.edges)
 
