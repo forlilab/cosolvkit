@@ -1,0 +1,4 @@
+parm system.prmtop
+trajin system_aligned.dcd 70000 100000
+gist gridspacn 0.375 gridcntr 10 0 -12 griddim 65 65 65
+go

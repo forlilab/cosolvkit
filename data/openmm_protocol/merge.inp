@@ -1,0 +1,10 @@
+parm system.prmtop
+parm system.prmtop [ref]
+reference system.pdb parm [ref]
+trajin system.dcd
+autoimage
+center :1-80 mass origin
+image origin center familiar
+rms reference :1-80@CA,C,O,N norotate
+trajout system_aligned.dcd
+go
