@@ -20,18 +20,24 @@ from . import utils
 BOLTZMANN_CONSTANT_KB = 0.0019872041
 
 
+def _normalization(data, a=0, b=0):
+    min_data = np.min(data)
+    max_data = np.max(data)
+    return a + ((data - min_data) * (b - a)) / (max_data - min_data)
+
+
 def _smooth_grid_free_energy(gfe, sigma=1):
     """ Empirical grid free energy smoothing
     """
     # We keep only the favorable spots with energy < 0 kcal/mol
-    gfe[gfe > 0.] = 0.
+    gfe_fav = np.copy(gfe)
+    gfe_fav[gfe > 0.] = 0.
     # We smooth the energy a bit
-    min_gfe = np.min(gfe)
-    gfe = gaussian_filter(gfe, sigma=sigma)
-    # We renormalize the data between the original energy minima value and 0
-    gfe = min_gfe + ((gfe - np.min(gfe)) * (0. - min_gfe)) / (np.max(gfe) - np.min(gfe))
-    # And we remove the bulk noise up to 4 sigmas (99.9 %)
-    gfe[gfe >= (np.mean(gfe) - (4. * np.std(gfe)))] = 0.
+    gfe_fav_smooth = gaussian_filter(gfe_fav, sigma=sigma)
+    # Normalize data between the original energy minima value and 0
+    gfe_smooth_norm = _normalization(gfe_fav_smooth, np.min(gfe_fav), np.max(gfe_fav))
+    # Put the favorable smoothed data in the original grid
+    gfe[gfe_smooth_norm < 0] = gfe_smooth_norm[gfe_smooth_norm < 0]
 
     return gfe
 
@@ -153,13 +159,14 @@ class Analysis(AnalysisBase):
         positions = positions.reshape(new_shape)
         return positions
 
-    def atomic_grid_free_energy(self, volume, temperature=300., smoothing=True):
+    def atomic_grid_free_energy(self, volume, temperature=300., atom_radius=1.4, smoothing=True):
         """Compute grid free energy.
         """
         agfe = _grid_free_energy(self._histogram.grid, volume, self._gridsize, self._n_atoms, self._nframes, temperature)
 
         if smoothing:
-            agfe = _smooth_grid_free_energy(agfe, 1.4/3.)
+            # We divide by 3 in order to have radius == 3 sigma
+            agfe = _smooth_grid_free_energy(agfe, atom_radius / 3.)
 
         self._agfe = Grid(agfe, edges=self._histogram.edges)
 
