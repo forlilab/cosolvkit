@@ -160,6 +160,8 @@ class CoSolvent:
     def write_mol2(self, fname):
         """Write mol2 file
         """
+        write_flag = True
+
         sio = StringIO()
         w = Chem.SDWriter(sio)
         w.write(self._RDmol)
@@ -170,7 +172,21 @@ class CoSolvent:
         obConversion = ob.OBConversion()
         obConversion.SetInAndOutFormats("mol", "mol2")
         obConversion.ReadString(OBMol, mol_string)
-        obConversion.WriteFile(OBMol, fname)
+        mol2_string = obConversion.WriteString(OBMol)
+
+        # We have to ignore the UNITY_ATOM_ATTR info
+        # because it does not work with charges fragmentd (acetate, methylammonium..)
+        with open(fname, "w") as w:
+            for line in mol2_string.splitlines():
+                if '@<TRIPOS>UNITY_ATOM_ATTR' in line:
+                    write_flag = False
+
+                if '@<TRIPOS>BOND' in line:
+                    write_flag = True
+                    w.write(line + '\n')
+
+                if write_flag:
+                    w.write(line + '\n')
 
     def atom_types_from_mol2(self, mol2_filename):
         """Get atom names using OpenBabel. 
