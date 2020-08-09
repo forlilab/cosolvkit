@@ -44,7 +44,7 @@ def path_module(module_name):
 
 
 @contextlib.contextmanager
-def temporary_directory(suffix=None, prefix=None, dir=None):
+def temporary_directory(suffix=None, prefix=None, dir=None, clean=True):
     """Create and enter a temporary directory; used as context manager."""
     temp_dir = tempfile.mkdtemp(suffix, prefix, dir)
     cwd = os.getcwd()
@@ -53,7 +53,8 @@ def temporary_directory(suffix=None, prefix=None, dir=None):
         yield temp_dir
     finally:
         os.chdir(cwd)
-        shutil.rmtree(temp_dir)
+        if clean:
+            shutil.rmtree(temp_dir)
 
 
 def execute_command(cmd_line):
