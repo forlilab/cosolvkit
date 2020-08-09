@@ -441,10 +441,10 @@ class CoSolventBox:
             self._center = np.mean(atoms_in_box['xyz'], axis=0)
             self._origin = self._center - (self._box_size / 2)
         
-    def add_cosolvent(self, name, smiles, charge=0, resname=None):
+    def add_cosolvent(self, name, smiles=None, mol2_filename=None, lib_filename=None, frcmod_filename=None, charge=0, resname=None):
         """Add cosolvent and parametrize it
         """
-        c = CoSolvent(name, smiles, charge, resname)
+        c = CoSolvent(name, smiles, mol2_filename, lib_filename, frcmod_filename, charge, resname)
         self._cosolvents[name] = c
     
     def build(self):
