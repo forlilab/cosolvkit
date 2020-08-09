@@ -128,6 +128,7 @@ def write_pdbqt_file(output_name, molecule):
         resname = atom.residue.name
         resid = atom.residue.idx + 1
 
+        # OpenBabel does not like atom types starting with a number
         if atom.type[0].isdigit():
             atom_type = atom.type[::-1]
         else:
@@ -231,7 +232,7 @@ def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb,
     more_leap_cmds = ''
     if gaplist:
         for d, res1, resid1, res2, resid2 in gaplist:
-            more_leap_cmds += 'deleteBond x.%d.C x.%d.N\n' % (resid1, resid2)
+            more_leap_cmds += 'deleteBond x.%d.C x.%d.N\n' % (resid1 + 1, resid2 + 1)
 
     #  process sslist
     if sslist:
@@ -340,7 +341,7 @@ def cmd_lineparser():
     parser.add_argument("-i", "--in", required=True,
         dest="pdbin", help="PDB input file (default: stdin)",
         default='stdin')
-    parser.add_argument("-o", "--out", default='protein',
+    parser.add_argument("-o", "--out", default='protein_prepared',
         dest="out_filename", help="output filename (default: protein)")
     parser.add_argument("-y", "--nohyd", action="store_true", default=False,
         dest="nohyd", help="remove all hydrogen atoms (default: no)")
