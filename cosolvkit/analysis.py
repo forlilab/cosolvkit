@@ -6,6 +6,8 @@
 # Class to analyze cosolvent MD
 #
 
+import sys
+
 import numpy as np
 from scipy import spatial
 from scipy.ndimage import gaussian_filter
@@ -107,6 +109,11 @@ class Analysis(AnalysisBase):
 
     def __init__(self, atomgroup, gridsize=0.5, center=None, box_size=None, **kwargs):
         super(Analysis, self).__init__(atomgroup.universe.trajectory, **kwargs)
+
+        if atomgroup.n_atoms == 0:
+            print("Error: no atoms were selected.")
+            sys.exit(1)
+
         self._u = atomgroup.universe
         self._ag = atomgroup
         self._gridsize = gridsize
@@ -123,8 +130,7 @@ class Analysis(AnalysisBase):
             self._center = center
 
         if box_size is None:
-            self._box_size = self._u.trajectory.dimensions[:3]
-            self._box_size = np.mean([self._u.trajectory.dimensions for t in self._u.trajectory], axis=0)[:3]
+            self._box_size = np.mean([self._u.dimensions[:3] for t in self._u.trajectory], axis=0)
         else:
             box_size = np.array(box_size)
             # Check gridsize
