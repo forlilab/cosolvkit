@@ -66,23 +66,33 @@ def _grid_density(hist):
 
 def _subset_grid(grid, center, box_size, gridsize=0.5):
     # Create grid interpolator
-    x, y, z = grid.midpoints
-    grid_interpn = RegularGridInterpolator((x, y, z), grid.grid)
+    # Number of midpoints is equal to the number of grid points
+    grid_interpn = RegularGridInterpolator(grid.midpoints, grid.grid)
 
     # Create sub grid coordinates
+    # We get first the edges of the grid box, and after the midpoints
+    # So this we are sure (I guess) that the sub grid is well centered on center
+    # There might be a better way of doing this... Actually I tried, but didn't worked very well.
     x, y, z = center
     sd = box_size / 2.
-    x = np.arange(x - sd[0], x + sd[0] + gridsize, gridsize) 
-    y = np.arange(y - sd[1], y + sd[1] + gridsize, gridsize)
-    z = np.arange(z - sd[2], z + sd[2] + gridsize, gridsize)
-    X, Y, Z = np.meshgrid(x, y, z)
+    hbins = np.round(box_size / gridsize).astype(np.int)
+    edges = (np.linspace(0, box_size[0], num=hbins[0] + 1, endpoint=True) + (x - sd[0]),
+             np.linspace(0, box_size[1], num=hbins[1] + 1, endpoint=True) + (y - sd[1]),
+             np.linspace(0, box_size[2], num=hbins[2] + 1, endpoint=True) + (z - sd[2]))
+    midpoints = (edges[0][:-1] + np.diff(edges[0]) / 2.,
+                 edges[1][:-1] + np.diff(edges[1]) / 2.,
+                 edges[2][:-1] + np.diff(edges[2]) / 2.)
+    X, Y, Z = np.meshgrid(midpoints[0], midpoints[1], midpoints[2])
     xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+    # Configuration of the sub grid
+    origin_subgrid = (midpoints[0][0], midpoints[1][0], midpoints[2][0])
+    shape_subgrid = (midpoints[0].shape[0], midpoints[1].shape[0], midpoints[2].shape[0])
 
     # Do interpolation
     sub_grid_values = grid_interpn(xyzs)
-    sub_grid_values = sub_grid_values.reshape((x.shape[0], y.shape[0], z.shape[0]))
+    sub_grid_values = sub_grid_values.reshape(shape_subgrid)
     sub_grid_values = np.swapaxes(sub_grid_values, 0, 1)
-    sub_grid = Grid(sub_grid_values, origin=xyzs[0], delta=gridsize)
+    sub_grid = Grid(sub_grid_values, origin=origin_subgrid, delta=gridsize)
 
     return sub_grid
 
@@ -107,7 +117,7 @@ def _export(fname, grid, gridsize=0.5, center=None, box_size=None):
 
 class Analysis(AnalysisBase):
 
-    def __init__(self, atomgroup, gridsize=0.5, center=None, box_size=None, **kwargs):
+    def __init__(self, atomgroup, gridsize=0.5, **kwargs):
         super(Analysis, self).__init__(atomgroup.universe.trajectory, **kwargs)
 
         if atomgroup.n_atoms == 0:
@@ -119,45 +129,40 @@ class Analysis(AnalysisBase):
         self._gridsize = gridsize
         self._nframes = 0
         self._n_atoms = atomgroup.n_atoms
-
-        if center is None:
-            receptor = self._u.select_atoms("protein or nucleic")
-            self._center = np.mean(receptor.positions, axis=0)
-        else:
-            center = np.array(center)
-            # Check center
-            assert np.ravel(center).size == 3, "Error: center should contain only (x, y, z)."
-            self._center = center
-
-        if box_size is None:
-            self._box_size = np.mean([self._u.dimensions[:3] for t in self._u.trajectory], axis=0)
-        else:
-            box_size = np.array(box_size)
-            # Check gridsize
-            assert np.ravel(box_size).size == 3, "Error: grid size should contain only (a, b, c)."
-            assert (box_size > 0).all(), "Error: grid size cannot contain negative numbers."
-            self._box_size = box_size
+        self._center = None
+        self._box_size = None
 
     def _prepare(self):
         self._positions = []
+        self._centers = []
+        self._dimensions = []
 
     def _single_frame(self):
         self._positions.append(self._ag.atoms.positions.astype(np.float))
+        self._dimensions.append(self._u.dimensions[:3])
+        self._centers.append(self._u.atoms.center_of_geometry())
         self._nframes += 1
 
     def _conclude(self):
         self._positions = np.array(self._positions, dtype=np.float)
+        self._box_size = np.mean(self._dimensions, axis=0)
+        self._center = np.mean(self._centers, axis=0)
 
+        # Get all the positions
+        positions = self._get_positions()
+
+        # Get grid edges and origin
         x, y, z = self._center
         sd = self._box_size / 2.
-        self._hrange = ((x - sd[0], x + sd[0]), (y - sd[1], y + sd[1]), (z - sd[2], z + sd[2]))
-        self._hbins = np.round(self._box_size / self._gridsize).astype(np.int)
+        hbins = np.round(self._box_size / self._gridsize).astype(np.int)
+        self._edges = (np.linspace(0, self._box_size[0], num=hbins[0] + 1, endpoint=True) + (x - sd[0]),
+                       np.linspace(0, self._box_size[1], num=hbins[1] + 1, endpoint=True) + (y - sd[1]),
+                       np.linspace(0, self._box_size[2], num=hbins[2] + 1, endpoint=True) + (z - sd[2]))
+        origin = (self._edges[0][0], self._edges[1][0], self._edges[2][0])
 
-        positions = self._get_positions()
-        hist, edges = np.histogramdd(positions, bins=self._hbins, range=self._hrange)
-
-        self._histogram = Grid(hist, edges=edges)
-        self._density = Grid(_grid_density(hist), edges=edges)
+        hist, edges = np.histogramdd(positions, bins=self._edges)
+        self._histogram = Grid(hist, origin=origin, delta=self._gridsize)
+        self._density = Grid(_grid_density(hist), origin=origin, delta=self._gridsize)
 
     def _get_positions(self, start=0, stop=None):
         positions = self._positions[start:stop,:,:]
