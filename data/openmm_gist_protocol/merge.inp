@@ -1,10 +1,10 @@
-parm system.prmtop
-parm system.prmtop [ref]
-reference system.pdb parm [ref]
-trajin system.dcd
+parm gist_system.prmtop
+parm gist_system.prmtop [ref]
+reference gist_system.pdb parm [ref]
+trajin gist_system.dcd
 autoimage
-center :1-80 mass origin
+center :1-80 mass origin # Change to select only the protein, look into gist_system.pdb for last protein resid
 image origin center familiar
-rms reference :1-80@CA,C,O,N norotate
-trajout system_aligned.dcd
+rms reference :1-80@CA,C,O,N norotate # Same here
+trajout gist_system_aligned.dcd
 go

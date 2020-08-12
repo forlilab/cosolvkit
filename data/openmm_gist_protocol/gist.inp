@@ -1,4 +1,5 @@
-parm system.prmtop
-trajin system_aligned.dcd 70000 100000
-gist gridspacn 0.375 gridcntr 10 0 -12 griddim 65 65 65
+parm gist_system.prmtop
+trajin gist_system_aligned.dcd 70000 100000 # Take only the last 30 ns
+gist gridspacn 0.5 gridcntr 10 0 -12 griddim 60 60 60 # Box of 30x30x30 A
 go
+quit
