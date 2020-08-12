@@ -7,15 +7,16 @@ The python package for creating cosolvent box
 
 You need, at a minimum (requirements):
 * python 3
-* RDKit
 * numpy 
 * scipy
+* RDKit
+* openbabel
 * ambertools
 * parmed
 * MDAnalysis
+* griddataformats
 * MDTraj
-* openbabel
-* OpenMM (for centroid repulsive potentials)
+* OpenMM
 
 ## Installation
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
@@ -23,7 +24,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 $ conda create -n cosolvkit python=3.6
 $ conda activate cosolvkit
 $ conda install -c conda-forge -c ambermd -c omnia numpy scipy mkl openbabel \
-rdkit ambertools parmed mdanalysis openmm mdtraj
+rdkit ambertools parmed mdanalysis griddataformats openmm mdtraj
 ```
 
 Finally, we can install the `CoSolvKit` package
