@@ -438,9 +438,9 @@ class CoSolventBox:
                 lmax = np.max([xmax - xmin, ymax - ymin, zmax - zmin])
                 self._box_size = np.ceil(np.array([lmax, lmax, lmax])).astype(np.int)
 
-            self._center = np.mean(atoms_in_box['xyz'], axis=0)
+            self._center = np.mean([[xmin, ymin, zmin], [xmax, ymax, zmax]], axis=0)
             self._origin = self._center - (self._box_size / 2)
-        
+                
     def add_cosolvent(self, name, smiles=None, mol2_filename=None, lib_filename=None, frcmod_filename=None, charge=0, resname=None):
         """Add cosolvent and parametrize it
         """
