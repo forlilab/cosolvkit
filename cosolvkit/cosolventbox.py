@@ -83,15 +83,15 @@ def _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance=3.):
     return close_to
 
 
-def _is_in_box(xyzs, box_origin, box_size, box_buffer=0):
+def _is_in_box(xyzs, box_origin, box_size):
     """Is in the box or not?
     """
     xyzs = np.atleast_2d(xyzs)
     x, y, z = xyzs[:, 0], xyzs[:, 1], xyzs[:, 2]
 
-    xmin, xmax = box_origin[0] - box_buffer, box_origin[0] + box_size[0] + box_buffer
-    ymin, ymax = box_origin[1] - box_buffer, box_origin[1] + box_size[1] + box_buffer
-    zmin, zmax = box_origin[2] - box_buffer, box_origin[2] + box_size[2] + box_buffer
+    xmin, xmax = box_origin[0], box_origin[0] + box_size[0]
+    ymin, ymax = box_origin[1], box_origin[1] + box_size[1]
+    zmin, zmax = box_origin[2], box_origin[2] + box_size[2]
 
     x_in = np.logical_and(xmin <= x, x <= xmax)
     y_in = np.logical_and(ymin <= y, y <= ymax)
@@ -104,7 +104,7 @@ def _is_in_box(xyzs, box_origin, box_size, box_buffer=0):
 def _water_is_in_box(wat_xyzs, box_origin, box_size):
     """Check if the water is in the box or not.
     """
-    all_in = _is_in_box(wat_xyzs, box_origin, box_size, 1.)
+    all_in = _is_in_box(wat_xyzs, box_origin, box_size)
 
     for i in range(0, wat_xyzs.shape[0], 3):
         all_in[[i, i + 1, i + 2]] = [np.all(all_in[[i, i + 1, i + 2]])] * 3
@@ -351,15 +351,13 @@ def _apply_neutral_patches(receptor_data, peptides_terminus):
 
 class CoSolventBox:
 
-    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, box_size=None,
-                 box_buffer=5., min_size_peptide=4):
+    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, box_size=None, min_size_peptide=4):
         """Initialize the cosolvent box
         """
         assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
 
         self._concentration = concentration
         self._cutoff = cutoff
-        self._box_buffer = box_buffer
         self._min_size_peptide = min_size_peptide
         self._box = box
 
@@ -404,22 +402,17 @@ class CoSolventBox:
         self._receptor_filename = receptor_filename
         self._receptor_data = _read_pdb(receptor_filename, ignore_hydrogen=True)
 
-        if self._origin is not None:
-            # Add some extra room to the box as a safeguard. Do we really trust the user to make the right choice?
-            box_size = self._box_size + int((2 * self._box_buffer))
-        else:
-            box_size = self._box_size
-
         # We want to identify all the atoms (per residue) that are in the box.
         # Also knowing where are the true and artificial N and C terminus will be useful
         # after for adding the neutral patches
-        results = _receptor_residues_in_box(self._receptor_data, self._origin, box_size, self._min_size_peptide)
+        results = _receptor_residues_in_box(self._receptor_data, self._origin, self._box_size, self._min_size_peptide)
         self._atom_in_box_ids, _, self._peptides_terminus = results
 
         if self._receptor_data.shape[0] != len(self._atom_in_box_ids):
             need_to_truncate = True
 
         atoms_in_box = self._receptor_data[self._atom_in_box_ids]
+        #print(atoms_in_box)
         xmin = np.min(atoms_in_box['xyz'][:, 0]) - self._cutoff
         xmax = np.max(atoms_in_box['xyz'][:, 0]) + self._cutoff
         ymin = np.min(atoms_in_box['xyz'][:, 1]) - self._cutoff
