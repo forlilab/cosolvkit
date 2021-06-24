@@ -392,7 +392,7 @@ class CoSolventBox:
         self._atom_in_box_ids = []
         self._peptides_terminus = {}
         self._cosolvents = {}
-        self._wat_xysz = None
+        self._wat_xyzs = None
         self._cosolv_xyzs = None
 
     def add_receptor(self, receptor_filename):
@@ -498,7 +498,6 @@ class CoSolventBox:
         prmtop_filename = "system.prmtop"
         inpcrd_filename = "system.inpcrd"
         pdb_filename = "system.pdb"
-        water_atom_names = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
         # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
         template = "%-6s%5d %-4s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
 
@@ -563,22 +562,27 @@ class CoSolventBox:
 
                     w.write("TER\n")
 
-            # And water molecules at the end
-            for wat_xyz, atom_name in zip(self._wat_xyzs, water_atom_names):
-                x, y, z = wat_xyz
-                w.write(template % ("ATOM", n_atom, atom_name, " ", 'WAT', n_residue, " ", x, y, z, 0., 0.))
+            # Write water molecules
+            if self._wat_xyzs is not None:
+                water_atom_names = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
 
-                if n_atom_water % 3 == 0:
-                    n_residue += 1
+                # And water molecules at the end
+                for wat_xyz, atom_name in zip(self._wat_xyzs, water_atom_names):
+                    x, y, z = wat_xyz
+                    w.write(template % ("ATOM", n_atom, atom_name, " ", 'WAT', n_residue, " ", x, y, z, 0., 0.))
 
-                n_atom_water += 1
-                n_atom += 1
+                    if n_atom_water % 3 == 0:
+                        n_residue += 1
 
-            w.write("TER\n")
+                    n_atom_water += 1
+                    n_atom += 1
+
+                w.write("TER\n")
+
             w.write("END\n")
 
         # Create tleap template
-        TLEAP_TEMPLATE = ("source leaprc.protein.ff19SB\n"
+        TLEAP_TEMPLATE = ("source leaprc.protein.ff14SB\n"
                           "source leaprc.DNA.bsc1\n"
                           "source leaprc.water.tip3p\n"
                           "source leaprc.gaff2\n"
@@ -594,10 +598,11 @@ class CoSolventBox:
 
         TLEAP_TEMPLATE += "set default nocenter on\n"
         TLEAP_TEMPLATE += "m = loadpdb system.pdb\n"
-        TLEAP_TEMPLATE += "charge m\n"
-        TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
-        TLEAP_TEMPLATE += "addIonsRand m Na+ 0\n"
-        TLEAP_TEMPLATE += "check m\n"
+        if self._wat_xyzs is not None:
+            TLEAP_TEMPLATE += "charge m\n"
+            TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
+            TLEAP_TEMPLATE += "addIonsRand m Na+ 0\n"
+            TLEAP_TEMPLATE += "check m\n"
         TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._box_size[0], self._box_size[1], self._box_size[2])
         TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
         TLEAP_TEMPLATE += "savepdb m %s\n" % (pdb_filename)
