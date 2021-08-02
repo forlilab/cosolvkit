@@ -499,7 +499,7 @@ class CoSolventBox:
         inpcrd_filename = "system.inpcrd"
         pdb_filename = "system.pdb"
         # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
-        template = "%-6s%5d %-4s%1s%3s %5d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f              \n"
+        template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}      {:>4s}{:>2s}{:2s}\n"
 
         if self._receptor_data is not None:
             receptor_data = self._receptor_data[self._atom_in_box_ids]
@@ -527,8 +527,9 @@ class CoSolventBox:
                     else:
                         name = atom['name']
 
-                    w.write(template % ("ATOM", i + 1, name, " ", atom['resname'], atom['resid'], 
-                                        atom['chain'], x, y, z, 0., 0.))
+                    w.write(template.format("ATOM", (i + 1) % 100000, name, " ",
+                                            atom['resname'], atom['chain'], atom['resid'] % 10000,
+                                            " ", x, y, z, 0., 0., " ", atom['name'][0], " "))
 
                     try:
                         # We are looking for gap in the sequence, maybe due to the truncation
@@ -555,8 +556,9 @@ class CoSolventBox:
                     for residue_xyzs in cosolv_xyzs:
                         for atom_xyz, atom_name in zip(residue_xyzs, atom_names):
                             x, y, z = atom_xyz
-                            w.write(template % ("ATOM", n_atom, atom_name, " ", resname, n_residue, 
-                                                " ", x, y, z, 0., 0.))
+                            w.write(template.format("ATOM", n_atom % 100000, atom_name, " ",
+                                                    resname, " ", n_residue  % 10000,
+                                                    " ", x, y, z, 0., 0., resname, atom_name[0], " "))
                             n_atom += 1
                         n_residue += 1
 
@@ -569,7 +571,9 @@ class CoSolventBox:
                 # And water molecules at the end
                 for wat_xyz, atom_name in zip(self._wat_xyzs, water_atom_names):
                     x, y, z = wat_xyz
-                    w.write(template % ("ATOM", n_atom, atom_name, " ", 'WAT', n_residue, " ", x, y, z, 0., 0.))
+                    w.write(template.format("ATOM", n_atom % 100000, atom_name, " ",
+                                            'WAT', " ", n_residue % 10000,
+                                            " ", x, y, z, 0., 0., "WAT", atom_name[0], " "))
 
                     if n_atom_water % 3 == 0:
                         n_residue += 1
