@@ -70,7 +70,7 @@ def _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance=3.):
     """
     kdtree = spatial.cKDTree(wat_xyzs)
 
-    ids = kdtree.query_ball_point(receptor_xyzs, r=distance, p=2)
+    ids = kdtree.query_ball_point(receptor_xyzs, distance)
     # Keep the unique ids
     ids = np.unique(np.hstack(ids)).astype(np.int)
 
@@ -164,6 +164,7 @@ def _receptor_residues_in_box(receptor_data, box_origin=None, box_size=None, ign
 def _create_waterbox(box_origin, box_size, receptor_xyzs=None, watref_xyzs=None, watref_dims=None):
     """Create the water box.
     """
+    distance_from_receptor = 2.5
     wat_xyzs = []
 
     watref_xyzs = np.atleast_2d(watref_xyzs)
@@ -189,7 +190,7 @@ def _create_waterbox(box_origin, box_size, receptor_xyzs=None, watref_xyzs=None,
     
     # Remove water molecules that are too close from the receptor
     if receptor_xyzs is not None:
-        too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, 2.5)
+        too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance_from_receptor)
         wat_xyzs = wat_xyzs[~too_close_protein]
 
     return wat_xyzs
@@ -215,15 +216,25 @@ def _volume_protein(n_water, box_size):
 def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_xyzs=None, concentration=0.25):
     """Add cosolvent to the water box.
     """
+    distance_from_edges = 3.
+    distance_from_receptor = 4.5
+    distance_from_cosolvent = 1.5
+    concentration_water = 55.
     cosolv_xyzs = {name: [] for name in cosolvents}
     cosolv_names = cosolvents.keys()
 
     # Put aside water molecules that are next to the edges because we don't
     # them to be replaced by cosolvent, otherwise they will go out the box
-    too_close_edge = _is_water_close_to_edge(wat_xyzs, 3., box_origin, box_size)
+    too_close_edge = _is_water_close_to_edge(wat_xyzs, distance_from_edges, box_origin, box_size)
     to_keep_wat_xyzs = wat_xyzs[too_close_edge]
     # We will work on those ones
     wat_xyzs = wat_xyzs[~too_close_edge]
+
+    # Do the same also for water molecules too close from the receptor
+    if receptor_xyzs is not None:
+        too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance_from_receptor)
+        to_keep_wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs[too_close_protein]))
+        wat_xyzs = wat_xyzs[~too_close_protein]
 
     for i, cosolv_name in enumerate(itertools.cycle(cosolv_names)):
         # Update kdtree
@@ -241,7 +252,7 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
         cosolv_xyzs[cosolv_name].append(cosolv_xyz)
 
         # Get the ids of all the closest water atoms
-        to_be_removed = kdtree.query_ball_point(cosolv_xyz, r=1.5, p=2)
+        to_be_removed = kdtree.query_ball_point(cosolv_xyz, distance_from_cosolvent)
         # Keep the unique ids
         to_be_removed = np.unique(np.hstack(to_be_removed))
         # Get the ids of the water oxygen atoms
@@ -260,7 +271,7 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
             n_water = (to_keep_wat_xyzs.shape[0] + wat_xyzs.shape[0]) / 3
             # 1 cosolvent molecule per 55 waters correspond
             # to a concentration of 1 M
-            final_concentration = 55. / (n_water / (i + 1))
+            final_concentration = concentration_water / (n_water / (i + 1))
 
             if final_concentration >= concentration:
                 break
