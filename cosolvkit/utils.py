@@ -20,10 +20,8 @@ else:
 
 import numpy as np
 import mdtraj
-from simtk.openmm.app import *
-from simtk.openmm import *
-import simtk.unit as units
-from simtk.unit import kilocalories_per_mole, angstrom
+from openmm.app import *
+from openmm import *
 
 
 def path_module(module_name):
@@ -125,15 +123,15 @@ def resize_vector(v, length, origin=None):
         return normalize(v) * length
 
 
-def add_harmonic_constraints(prmtop, inpcrd, system, atom_selection, k=1.0):
-    """Add harmonic constraints to the system.
+def add_harmonic_restraints(prmtop, inpcrd, system, atom_selection, k=1.0):
+    """Add harmonic restraints to the system.
 
     Args:
         prmtop (AmberPrmtopFile): Amber topology object
         inpcrd (AmberInpcrdFile): Amber coordinates object
         system (System): OpenMM system object created from the Amber topology object
         atom_selection (str): Atom selection (see MDTraj documentation)
-        k (float): harmonic force constraint in kcal/mol/A**2 (default: 1 kcal/mol/A**2)
+        k (float): harmonic force restraints in kcal/mol/A**2 (default: 1 kcal/mol/A**2)
 
     Returns:
         (list, int): list of all the atom ids on which am harmonic force is applied, index with the System of the force that was added
@@ -144,8 +142,8 @@ def add_harmonic_constraints(prmtop, inpcrd, system, atom_selection, k=1.0):
     positions = inpcrd.positions
 
     # Tranform constant to the right unit
-    k = k * units.kilocalories_per_mole / units.angstrom**2
-    k = k.value_in_unit_system(units.md_unit_system)
+    k = k * unit.kilocalories_per_mole / unit.angstroms**2
+    k = k.value_in_unit_system(unit.md_unit_system)
 
     if atom_idxs.size == 0:
         print("Warning: no atoms selected using: %s" % atom_selection)
@@ -154,49 +152,35 @@ def add_harmonic_constraints(prmtop, inpcrd, system, atom_selection, k=1.0):
     # Take into accoun the periodic condition
     # http://docs.openmm.org/latest/api-python/generated/simtk.openmm.openmm.CustomExternalForce.html
     force = CustomExternalForce("k * periodicdistance(x, y, z, x0, y0, z0)^2")
+    
+    harmonic_force_idx = system.addForce(force)
+    
     force.addGlobalParameter("k", k)
+    print(force.getGlobalParameterDefaultValue(0))
     force.addPerParticleParameter("x0")
     force.addPerParticleParameter("y0")
     force.addPerParticleParameter("z0")
-
+    
     for atom_idx in atom_idxs:
         #print(atom_idx, positions[atom_idx].value_in_unit_system(units.md_unit_system))
-        force.addParticle(int(atom_idx), positions[atom_idx].value_in_unit_system(units.md_unit_system))
+        force.addParticle(int(atom_idx), positions[atom_idx].value_in_unit_system(unit.md_unit_system))
 
-    harmonic_force_idx = system.addForce(force)
-
-    return harmonic_force_idx, atom_idxs
+    return atom_idxs
 
 
-def update_harmonic_contraints(simulation, harmonic_force_idx, k=1.0):
-    """Update harmonic constraints force
+def update_harmonic_restraints(simulation, k=1.0):
+    """Update harmonic restraints force
     
     Args:
         simulation (Simulation): OpenMM simulation object
-        harmoic_force_idx (int): index of the harmonic custom force
         k (float): new harmonic force constraint in kcal/mol/A**2 (default: 1 kcal/mol/A**2)
 
     """
-    system = simulation.context.getSystem()
-    force = system.getForce(harmonic_force_idx)
-    positions = simulation.context.getState(getPositions=True, enforcePeriodicBox=True).getPositions()
-    velocities = simulation.context.getState(getVelocities=True, enforcePeriodicBox=True).getVelocities()
-
     # Tranform constant to the right unit
-    k = k * units.kilocalories_per_mole / units.angstrom**2
-    k = k.value_in_unit_system(units.md_unit_system)
-
-    force.setGlobalParameterDefaultValue(0, k)
-
-    for i in range(force.getNumParticles()):
-        j, params = force.getParticleParameters(i)
-        force.setParticleParameters(i, j, positions[j])
-
-    force.updateParametersInContext(simulation.context)
-    # We need to force the context to take into account all the changes
-    simulation.context.reinitialize()
-    simulation.context.setPositions(positions)
-    simulation.context.setVelocities(velocities)
+    k = k * unit.kilocalories_per_mole / unit.angstroms**2
+    k = k.value_in_unit_system(unit.md_unit_system)
+    
+    simulation.context.setParameter('k', k)
 
 
 def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names, epsilon=-0.01, sigma=12):
@@ -218,10 +202,10 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names, epsilon=
     n_particles = system.getNumParticles()
 
     # Tranform constants to the right unit
-    epsilon = np.sqrt(epsilon * epsilon) * units.kilocalories_per_mole
-    epsilon = epsilon.value_in_unit_system(units.md_unit_system)
-    sigma = sigma * units.angstrom
-    sigma = sigma.value_in_unit_system(units.md_unit_system)
+    epsilon = np.sqrt(epsilon * epsilon) * unit.kilocalories_per_mole
+    epsilon = epsilon.value_in_unit_system(unit.md_unit_system)
+    sigma = sigma * unit.angstroms
+    sigma = sigma.value_in_unit_system(unit.md_unit_system)
 
     if not isinstance(residue_names, (list, tuple)) and isinstance(residue_names, str):
         residue_names = [residue_names]
@@ -245,13 +229,13 @@ def add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names, epsilon=
         assert virtual_site_index == nonbonded_site_index
 
         # Compute centroid based on the heavy atoms
-        xyzs = [inpcrd.positions[a.index] * angstrom for a in residue._atoms if not "H" in a.name]
+        xyzs = [inpcrd.positions[a.index] * unit.angstroms for a in residue._atoms if not "H" in a.name]
         idxs = [a.index for a in residue._atoms if not "H" in a.name]
         o_weights = np.ones(len(idxs)) / len(idxs)
         x_weights = np.zeros(len(idxs))
         y_weights = np.zeros(len(idxs))
         x, y, z = np.mean(xyzs, axis=0)
-        centroid = Vec3(x._value, y._value, z._value) * angstrom
+        centroid = Vec3(x._value, y._value, z._value) * unit.angstroms
 
         # Add atom to topology and coordinates
         tmp_residue = prmtop.topology.addResidue("EP", residue.chain)

@@ -23,7 +23,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n cosolvkit python=3.7
 $ conda activate cosolvkit
-$ conda install -c conda-forge -c ambermd -c omnia numpy scipy mkl openbabel \
+$ conda install -c conda-forge numpy scipy mkl openbabel \
 rdkit ambertools parmed mdanalysis griddataformats openmm mdtraj
 ```
 
@@ -31,7 +31,7 @@ Finally, we can install the `CoSolvKit` package
 ```bash
 $ git clone https://github.com/jeeberhardt/cosolvkit
 $ cd cosolvkit
-$ python setup.py build install
+$ pip install .
 ```
 
 ## Quick tutorial
@@ -91,9 +91,8 @@ Luckily for us, OpenMM is flexible enough to make the addition of this repulsive
 # -*- coding: utf-8 -*-
 #
 
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+from openmm.app import *
+from openmm import *
 from mdtraj.reporters import DCDReporter
 
 from cosolvkit import utils
@@ -104,11 +103,11 @@ prmtop = AmberPrmtopFile('cosolv_ben_prp_system.prmtop')
 inpcrd = AmberInpcrdFile('cosolv_ben_prp_system.inpcrd')
 
 # Configuration system
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * angstrom, constraints=HBonds, hydrogenMass=3 * amu)
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * unit.angstrom, constraints=HBonds, hydrogenMass=1.5 * unit.amu)
 
 # This is where the magic is happening!
 # Add harmonic constraints on protein if present
-#harmonic_force_id, atom_idxs = utils.add_harmonic_constraints(prmtop, inpcrd, system, "protein and not element H", 2.5)
+#atom_idxs = utils.add_harmonic_restraints(prmtop, inpcrd, system, "protein and not element H", 2.5)
 #print('Number of particles constrainted: %d' % len(atom_idxs))
 # Add centroids and repulsive forces
 n_particles, virtual_site_idxs, repulsive_force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names=["BEN", "PRP"])
@@ -119,8 +118,8 @@ print('Number of centroids added: %d' % len(virtual_site_idxs))
 # NPT
 properties = {"Precision": "mixed"}
 platform = Platform.getPlatformByName('OpenCL')
-system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
-integrator = LangevinIntegrator(300 * kelvin, 1 / picosecond, 4 * femtoseconds)
+system.addForce(MonteCarloBarostat(1 * unit.bar, 300 * unit.kelvin))
+integrator = LangevinMiddleIntegrator(300 * unit.kelvin, 1 / unit.picosecond, 4 * unit.femtoseconds)
 simulation = Simulation(prmtop.topology, system, integrator, platform, properties)
 simulation.context.setPositions(inpcrd.positions)
 
