@@ -33,11 +33,12 @@ def _read_pdb(pdb_filename, ignore_hydrogen=False):
                 name = line[12:16].strip()
 
                 if (not ignore_hydrogen and name[0] == 'H') or name[0] != "H":
-                    data.append((line[12:16].strip(), 
-                                 line[17:20].strip(), 
-                                 int(line[22:26]), 
-                                 line[21:22].strip(),
-                                 [np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])]))
+                    resname = line[17:20].strip()
+                    resid = int(line[22:26])
+                    chain = line[21:22].strip()
+                    xyz = [np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])]
+ 
+                    data.append((name, resname, resid, chain, xyz))
 
     data = np.array(data, dtype=dtype)
 
@@ -371,6 +372,7 @@ class CoSolventBox:
         self._cutoff = cutoff
         self._min_size_peptide = min_size_peptide
         self._box = box
+        self._use_existing_waterbox = False
 
         if center is not None and box_size is not None:
             box_size = np.array(box_size)
@@ -396,22 +398,36 @@ class CoSolventBox:
         # Read the reference water box
         d = utils.path_module("cosolvkit")
         waterbox_filename = os.path.join(d, "data/waterbox.pdb")
-        self._watref_xyzs = _read_pdb(waterbox_filename)['xyz']
+        self._watref_xyzs = _read_pdb(waterbox_filename)['xyz'][1]
         self._watref_dims = [18.856, 18.856, 18.856]
 
         self._receptor_data = None
+        self._water_data = None
         self._atom_in_box_ids = []
         self._peptides_terminus = {}
         self._cosolvents = {}
         self._wat_xyzs = None
         self._cosolv_xyzs = None
 
-    def add_receptor(self, receptor_filename):
+
+    def add_receptor(self, receptor_filename, use_existing_waterbox=False):
         """Add receptor
         """
+        cutoff = self._cutoff
         need_to_truncate = False
+        self._use_existing_waterbox = use_existing_waterbox
+
         self._receptor_filename = receptor_filename
-        self._receptor_data = _read_pdb(receptor_filename, ignore_hydrogen=True)
+        system_data = _read_pdb(receptor_filename)
+        # Separate water molecules from the receptor (protein, ions, membrane, etc...)
+        self._receptor_data = system_data[(system_data['resname'] != 'WAT') & (system_data['resname'] != 'HOH')]
+        self._water_data = system_data[(system_data['resname'] == 'WAT') | (system_data['resname'] == 'HOH')]
+
+        if self._use_existing_waterbox:
+            assert self._center is None and self._box_size is None, 'Error: cannot define center and dimensions when using an existing waterbox.'
+            assert self._water_data.shape[0] > 0, 'Error: no water molecules present in the existing waterbox.'
+            # set cutoff to zero since we are using an existing waterbox
+            cutoff = 0
 
         # We want to identify all the atoms (per residue) that are in the box.
         # Also knowing where are the true and artificial N and C terminus will be useful
@@ -424,12 +440,12 @@ class CoSolventBox:
 
         atoms_in_box = self._receptor_data[self._atom_in_box_ids]
         #print(atoms_in_box)
-        xmin = np.min(atoms_in_box['xyz'][:, 0]) - self._cutoff
-        xmax = np.max(atoms_in_box['xyz'][:, 0]) + self._cutoff
-        ymin = np.min(atoms_in_box['xyz'][:, 1]) - self._cutoff
-        ymax = np.max(atoms_in_box['xyz'][:, 1]) + self._cutoff
-        zmin = np.min(atoms_in_box['xyz'][:, 2]) - self._cutoff
-        zmax = np.max(atoms_in_box['xyz'][:, 2]) + self._cutoff
+        xmin = np.min(atoms_in_box['xyz'][:, 0]) - cutoff
+        xmax = np.max(atoms_in_box['xyz'][:, 0]) + cutoff
+        ymin = np.min(atoms_in_box['xyz'][:, 1]) - cutoff
+        ymax = np.max(atoms_in_box['xyz'][:, 1]) + cutoff
+        zmin = np.min(atoms_in_box['xyz'][:, 2]) - cutoff
+        zmax = np.max(atoms_in_box['xyz'][:, 2]) + cutoff
 
         # _origin is instanciated only when _center and _box_size are also instanciated
         # That's why we just have to verify that _origin is None
@@ -460,8 +476,11 @@ class CoSolventBox:
             else:
                 receptor_xyzs = None
 
-            self._wat_xyzs = _create_waterbox(self._origin, self._box_size, receptor_xyzs,
-                                              self._watref_xyzs, self._watref_dims)
+            if self._use_existing_waterbox:
+                self._wat_xyzs = self._water_data['xyz']
+            else:
+                self._wat_xyzs = _create_waterbox(self._origin, self._box_size, receptor_xyzs,
+                                                  self._watref_xyzs, self._watref_dims)
 
             n_water = np.int(self._wat_xyzs.shape[0] / 3)
             self._volume = _volume_water(n_water)
@@ -597,8 +616,11 @@ class CoSolventBox:
             w.write("END\n")
 
         # Create tleap template
-        TLEAP_TEMPLATE = ("source leaprc.protein.ff14SB\n"
-                          "source leaprc.DNA.bsc1\n"
+        TLEAP_TEMPLATE = ("source leaprc.protein.ff19SB\n"
+                          "source leaprc.DNA.OL15\n"
+                          "source leaprc.RNA.OL3\n"
+                          "source leaprc.GLYCAM_06j-1\n"
+                          "source leaprc.lipid21\n"
                           "source leaprc.water.tip3p\n"
                           "source leaprc.gaff2\n"
                           )
