@@ -21,24 +21,25 @@ from . import utils
 AVOGADRO_CONSTANT_NA = 6.02214179e+23
 
 
-def _read_pdb(pdb_filename, ignore_hydrogen=False):
+def _read_pdb(pdb_filename):
     data = []
-    dtype = [("name", "U4"), ("resname", "U3"), ("resid", "i4"), ('chain', 'U1'), ("xyz", "f4", (3))]
+    dtype = [("name", "U4"), ("resname", "U3"), ("resid", "i4"), ('chain', 'U1'), ("xyz", "f4", (3)), ('is_hydrogen', '?'), ('is_ter', "?")]
 
     with open(pdb_filename) as f:
         lines = f.readlines()
 
-        for line in lines:
-            if "ATOM" in line or "HETATM" in line:
+        for i, line in enumerate(lines):
+            if line.startswith("ATOM") or line.startswith("HETATM"):
                 name = line[12:16].strip()
 
-                if (not ignore_hydrogen and name[0] == 'H') or name[0] != "H":
-                    resname = line[17:20].strip()
-                    resid = int(line[22:26])
-                    chain = line[21:22].strip()
-                    xyz = [np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])]
+                resname = line[17:20].strip()
+                resid = int(line[22:26])
+                chain = line[21:22].strip()
+                xyz = [np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])]
+                is_hydrogen = True if name[0] == 'H' else False
+                is_ter = True if lines[i + 1].startswith('TER') else False
  
-                    data.append((name, resname, resid, chain, xyz))
+                data.append((name, resname, resid, chain, xyz, is_hydrogen, is_ter))
 
     data = np.array(data, dtype=dtype)
 
@@ -452,7 +453,7 @@ class CoSolventBox:
         # If we need to truncate the protein, we have to redefine the box
         # definition to fit the truncated protein
         if self._origin is None or need_to_truncate:
-            if self._box == "orthorombic":
+            if self._box == "orthorombic" or use_existing_waterbox:
                 self._box_size = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
             else:
                 lmax = np.max([xmax - xmin, ymax - ymin, zmax - zmin])
@@ -574,7 +575,8 @@ class CoSolventBox:
                     except:
                         continue
 
-                w.write("TER\n")
+                    if atom['is_ter']:
+                        w.write('TER\n')
 
             # Write cosolvent molecules
             if self._cosolv_xyzs is not None:
@@ -592,7 +594,7 @@ class CoSolventBox:
                             n_atom += 1
                         n_residue += 1
 
-                    w.write("TER\n")
+                        w.write("TER\n")
 
             # Write water molecules
             if self._wat_xyzs is not None:
@@ -611,8 +613,7 @@ class CoSolventBox:
                     n_atom_water += 1
                     n_atom += 1
 
-                w.write("TER\n")
-
+                w.write('TER\n')
             w.write("END\n")
 
         # Create tleap template
