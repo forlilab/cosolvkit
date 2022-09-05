@@ -114,18 +114,19 @@ def _water_is_in_box(wat_xyzs, box_origin, box_size):
     return all_in
 
 
-def _receptor_residues_in_box(receptor_data, box_origin=None, box_size=None, ignore_peptide_size=4):
+def _atoms_in_box(atom_data, box_origin=None, box_size=None, ignore_peptide_size=4):
     atoms_in_box = []
-    protein_terminus = {}
-    peptides_terminus = {}
 
     if box_origin is not None and box_size is not None:
-        all_in = _is_in_box(receptor_data['xyz'], box_origin, box_size)
+        all_in = _is_in_box(atom_data['xyz'], box_origin, box_size)
     else:
-        all_in = [True] * receptor_data.shape[0]
+        all_in = [True] * atom_data.shape[0]
 
-    residues_in_box = np.unique(receptor_data[["resid", "chain"]][all_in], axis=0)
-    chain_ids = np.unique(residues_in_box["chain"])
+    residues_in_box = np.unique(atom_data[["resid", "chain"]][all_in], axis=0)
+
+    # We want to keep the same chain order as it appears in the pdb file
+    _, idx = np.unique(residues_in_box["chain"], return_index=True)
+    chain_ids = residues_in_box["chain"][np.sort(idx)]
 
     for chain_id in chain_ids:
         resids_to_keep = []
@@ -151,11 +152,11 @@ def _receptor_residues_in_box(receptor_data, box_origin=None, box_size=None, ign
 
                 peptides_terminus[chain_id].append(peptide_terminus)
             else:
-                print("Warning: peptide %s will be ignored (minimal size allowed: %d)." % \
-                      (peptide_resids, ignore_peptide_size))
+                warning_msg = "Warning: peptide %s will be ignored (minimal size allowed: %d)."
+                print(warning_msg % (peptide_resids, ignore_peptide_size))
 
         # Tag to True residues that are in box based on the chain id and the resid
-        atoms_in_box.append((receptor_data["chain"] == chain_id) & np.isin(receptor_data["resid"], resids_to_keep))
+        atoms_in_box.append((atom_data["chain"] == chain_id) & np.isin(atom_data["resid"], resids_to_keep))
 
     atoms_in_box = np.any(atoms_in_box, axis=0)
     atom_in_box_ids = np.where(atoms_in_box == True)[0]
@@ -374,6 +375,14 @@ class CoSolventBox:
         self._min_size_peptide = min_size_peptide
         self._box = box
         self._use_existing_waterbox = False
+        self._receptor_data = None
+        self._water_data = None
+        self._receptor_atom_in_box_ids = []
+        self._peptides_terminus = {}
+        self._cosolvents = {}
+        self._wat_xyzs = None
+        self._cosolv_xyzs = None
+        self._pdb_filename = None
 
         if center is not None and box_size is not None:
             box_size = np.array(box_size)
@@ -402,23 +411,14 @@ class CoSolventBox:
         self._watref_xyzs = _read_pdb(waterbox_filename)['xyz'][1]
         self._watref_dims = [18.856, 18.856, 18.856]
 
-        self._receptor_data = None
-        self._water_data = None
-        self._atom_in_box_ids = []
-        self._peptides_terminus = {}
-        self._cosolvents = {}
-        self._wat_xyzs = None
-        self._cosolv_xyzs = None
-
-
     def add_receptor(self, receptor_filename, use_existing_waterbox=False):
         """Add receptor
         """
         cutoff = self._cutoff
         need_to_truncate = False
         self._use_existing_waterbox = use_existing_waterbox
-
         self._receptor_filename = receptor_filename
+
         system_data = _read_pdb(receptor_filename)
         # Separate water molecules from the receptor (protein, ions, membrane, etc...)
         self._receptor_data = system_data[(system_data['resname'] != 'WAT') & (system_data['resname'] != 'HOH')]
@@ -427,26 +427,38 @@ class CoSolventBox:
         if self._use_existing_waterbox:
             assert self._center is None and self._box_size is None, 'Error: cannot define center and dimensions when using an existing waterbox.'
             assert self._water_data.shape[0] > 0, 'Error: no water molecules present in the existing waterbox.'
-            # set cutoff to zero since we are using an existing waterbox
-            cutoff = 0
 
-        # We want to identify all the atoms (per residue) that are in the box.
-        # Also knowing where are the true and artificial N and C terminus will be useful
-        # after for adding the neutral patches
-        results = _receptor_residues_in_box(self._receptor_data, self._origin, self._box_size, self._min_size_peptide)
-        self._atom_in_box_ids, _, self._peptides_terminus = results
+            # If we have an existing waterbox, it is more accurate to use water molecules (only oxygen) to 
+            # get the right box dimensions. In the presence of a lipid membrane we can have lipids sticking out the box.
+            water_oxygen = self._water_data[(self._water_data['is_hydrogen'] == False)]
 
-        if self._receptor_data.shape[0] != len(self._atom_in_box_ids):
-            need_to_truncate = True
+            # We assume that all the receptor atoms are in the box when using a pre-existing waterbox
+            self._receptor_atom_in_box_ids = list(range(self._receptor_data.shape[0]))
 
-        atoms_in_box = self._receptor_data[self._atom_in_box_ids]
-        #print(atoms_in_box)
-        xmin = np.min(atoms_in_box['xyz'][:, 0]) - cutoff
-        xmax = np.max(atoms_in_box['xyz'][:, 0]) + cutoff
-        ymin = np.min(atoms_in_box['xyz'][:, 1]) - cutoff
-        ymax = np.max(atoms_in_box['xyz'][:, 1]) + cutoff
-        zmin = np.min(atoms_in_box['xyz'][:, 2]) - cutoff
-        zmax = np.max(atoms_in_box['xyz'][:, 2]) + cutoff
+            xmin = np.min(water_oxygen['xyz'][:, 0])
+            xmax = np.max(water_oxygen['xyz'][:, 0])
+            ymin = np.min(water_oxygen['xyz'][:, 1])
+            ymax = np.max(water_oxygen['xyz'][:, 1])
+            zmin = np.min(water_oxygen['xyz'][:, 2])
+            zmax = np.max(water_oxygen['xyz'][:, 2])
+        else:
+            # We want to identify all the atoms (per residue) that are in the box.
+            # Also knowing where are the true and artificial N and C terminus will be useful
+            # after for adding the neutral patches
+            results = _atoms_in_box(self._receptor_data, self._origin, self._box_size, self._min_size_peptide)
+            self._receptor_atom_in_box_ids, _, self._peptides_terminus = results
+
+            if self._receptor_data.shape[0] != len(self._receptor_atom_in_box_ids):
+                need_to_truncate = True
+
+            atoms_in_box = self._receptor_data[self._receptor_atom_in_box_ids]
+
+            xmin = np.min(atoms_in_box['xyz'][:, 0]) - cutoff
+            xmax = np.max(atoms_in_box['xyz'][:, 0]) + cutoff
+            ymin = np.min(atoms_in_box['xyz'][:, 1]) - cutoff
+            ymax = np.max(atoms_in_box['xyz'][:, 1]) + cutoff
+            zmin = np.min(atoms_in_box['xyz'][:, 2]) - cutoff
+            zmax = np.max(atoms_in_box['xyz'][:, 2]) + cutoff
 
         # _origin is instanciated only when _center and _box_size are also instanciated
         # That's why we just have to verify that _origin is None
@@ -473,7 +485,7 @@ class CoSolventBox:
         """
         if self._origin is not None:
             if self._receptor_data is not None:
-                receptor_xyzs = self._receptor_data[self._atom_in_box_ids]['xyz']
+                receptor_xyzs = self._receptor_data[self._receptor_atom_in_box_ids]['xyz']
             else:
                 receptor_xyzs = None
 
@@ -497,9 +509,9 @@ class CoSolventBox:
             print("Box dimensions: x %d y %d z %d (A)" % (self._box_size[0], self._box_size[1], self._box_size[2]))
 
             if self._cosolvents:
-                wat_xyzs, cosolv_xyzs, conc = _add_cosolvent(self._wat_xyzs, self._cosolvents,
-                                                             self._origin, self._box_size, self._volume,
-                                                             receptor_xyzs, self._concentration)
+                wat_xyzs, cosolv_xyzs, final_concentration = _add_cosolvent(self._wat_xyzs, self._cosolvents,
+                                                                            self._origin, self._box_size, self._volume,
+                                                                            receptor_xyzs, self._concentration)
 
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
@@ -507,7 +519,7 @@ class CoSolventBox:
 
                 print("")
                 print("Target concentration (M): %5.3f" % self._concentration)
-                print("Final concentration (M): %5.3f" % conc)
+                print("Final concentration (M): %5.3f" % final_concentration)
                 print("Water (WAT): %3d" % (n_water))
                 for cosolv_name in self._cosolvents:
                     print("%s (%s): %3d" % (cosolv_name.capitalize(), 
@@ -520,33 +532,26 @@ class CoSolventBox:
 
         print("------------------------------------")
 
-    def export(self, prefix=None):
+    def export_pdb(self, filename='cosolv_system.pdb'):
         """Export pdb file for tleap
         """
         n_atom = 0
         n_residue = 1
         n_atom_water = 1
-        prmtop_filename = "system.prmtop"
-        inpcrd_filename = "system.inpcrd"
-        pdb_filename = "system.pdb"
+        self._pdb_filename = filename
         # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
         template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}      {:>4s}{:>2s}{:2s}\n"
 
         if self._receptor_data is not None:
-            receptor_data = self._receptor_data[self._atom_in_box_ids]
+            receptor_data = self._receptor_data[self._receptor_atom_in_box_ids]
             receptor_data = _apply_neutral_patches(receptor_data, self._peptides_terminus)
             resid_peptide = self._receptor_data[0]['resid']
         else:
             receptor_data = None
             resid_peptide = 0
 
-        if prefix is not None:
-            prmtop_filename = prefix + "_" + prmtop_filename
-            inpcrd_filename = prefix + "_" + inpcrd_filename
-            pdb_filename = prefix + "_" + pdb_filename
-
-        # Create system
-        with open("system.pdb", 'w') as w:
+        # Write pdb file
+        with open(self._pdb_filename, 'w') as w:
             # Write protein first
             if receptor_data is not None:
                 for i, atom in enumerate(receptor_data):
@@ -564,13 +569,13 @@ class CoSolventBox:
 
                     try:
                         # We are looking for gap in the sequence, maybe due to the truncation
-                        if (atom['resid'] != receptor_data[i + 1]['resid']) and \
-                           (atom['resid'] + 1 != receptor_data[i + 1]['resid']):
+                        if (atom['resid'] != receptor_data[i + 1]['resid']) and (atom['resid'] + 1 != receptor_data[i + 1]['resid']):
                             w.write("TER\n")
 
                             if (atom['resid'] - resid_peptide + 1) < 14:
-                                print("Warning: Isolated short peptide of length %d, resid %d to %d." % \
-                                      (atom['resid'] - resid_peptide + 1, resid_peptide, atom['resid']))
+                                warning_msg = "Warning: Isolated short peptide of length %d, resid %d to %d."
+                                print(warning_msg % (atom['resid'] - resid_peptide + 1, resid_peptide, atom['resid']))
+
                                 resid_peptide = receptor_data[i + 1]['resid']
                     except:
                         continue
@@ -614,17 +619,22 @@ class CoSolventBox:
                     n_atom += 1
 
                 w.write('TER\n')
+
             w.write("END\n")
 
+    def write_tleap_input(self, filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop', 
+                          inpcrd_filename='cosolv_system.inpcrd', protein_ff='ff19SB', dna_ff='OL15', rna_ff='OL3',
+                          glycam_ff='GLYCAM_06j-1', lipid_ff='lipid21', water_ff='tip3p', gaff='gaff2'):
+
         # Create tleap template
-        TLEAP_TEMPLATE = ("source leaprc.protein.ff19SB\n"
-                          "source leaprc.DNA.OL15\n"
-                          "source leaprc.RNA.OL3\n"
-                          "source leaprc.GLYCAM_06j-1\n"
-                          "source leaprc.lipid21\n"
-                          "source leaprc.water.tip3p\n"
-                          "source leaprc.gaff2\n"
-                          )
+        TLEAP_TEMPLATE = ("source leaprc.protein.%s\n"
+                          "source leaprc.DNA.%s\n"
+                          "source leaprc.RNA.%s\n"
+                          "source leaprc.%s\n"
+                          "source leaprc.%s\n"
+                          "source leaprc.water.%s\n"
+                          "source leaprc.%s\n")
+        TLEAP_TEMPLATE = TLEAP_TEMPLATE % (protein_ff, dna_ff, rna_ff, glycam_ff, lipid_ff, water_ff, gaff)
 
         if self._cosolvents is not None:
             for name in self._cosolvents:
@@ -635,7 +645,7 @@ class CoSolventBox:
                 TLEAP_TEMPLATE += "loadoff %s\n" % lib_filename
 
         TLEAP_TEMPLATE += "set default nocenter on\n"
-        TLEAP_TEMPLATE += "m = loadpdb system.pdb\n"
+        TLEAP_TEMPLATE += "m = loadpdb %s\n" % self._pdb_filename
         if self._wat_xyzs is not None:
             TLEAP_TEMPLATE += "charge m\n"
             TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
@@ -643,11 +653,10 @@ class CoSolventBox:
             TLEAP_TEMPLATE += "check m\n"
         TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._box_size[0], self._box_size[1], self._box_size[2])
         TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
-        TLEAP_TEMPLATE += "savepdb m %s\n" % (pdb_filename)
         TLEAP_TEMPLATE += "quit\n"
 
-        with open("tleap.cmd", 'w') as w:
+        with open(filename, 'w') as w:
             w.write(TLEAP_TEMPLATE)
 
-        cmd = 'tleap -f tleap.cmd'
-        outputs, errors = utils.execute_command(cmd)
+        # cmd = 'tleap -f tleap.cmd'
+        # outputs, errors = utils.execute_command(cmd)
