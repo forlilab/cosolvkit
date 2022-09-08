@@ -408,7 +408,7 @@ class CoSolventBox:
         # Read the reference water box
         d = utils.path_module("cosolvkit")
         waterbox_filename = os.path.join(d, "data/waterbox.pdb")
-        self._watref_xyzs = _read_pdb(waterbox_filename)['xyz'][1]
+        self._watref_xyzs = _read_pdb(waterbox_filename)['xyz']
         self._watref_dims = [18.856, 18.856, 18.856]
 
     def add_receptor(self, receptor_filename, use_existing_waterbox=False):
@@ -504,7 +504,10 @@ class CoSolventBox:
             if self._receptor_data is not None:
                 print("Volume protein (box - water): %10.4f A**3" % volume_protein)
             print("Water (before cosolvent): %d" % n_water)
-            print("Box type: %s" % self._box)
+            if self._use_existing_waterbox:
+                print("Box type: pre-existing")
+            else:
+                print("Box type: %s" % self._box)
             print("Box center: %8.3f %8.3f %8.3f" % (self._center[0], self._center[1], self._center[2]))
             print("Box dimensions: x %d y %d z %d (A)" % (self._box_size[0], self._box_size[1], self._box_size[2]))
 
