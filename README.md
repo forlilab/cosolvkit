@@ -10,7 +10,6 @@ You need, at a minimum (requirements):
 * numpy 
 * scipy
 * RDKit
-* openbabel
 * ambertools
 * parmed
 * MDAnalysis
@@ -23,7 +22,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n cosolvkit python=3.7
 $ conda activate cosolvkit
-$ conda install -c conda-forge numpy scipy mkl openbabel \
+$ conda install -c conda-forge numpy scipy mkl \
 rdkit ambertools parmed mdanalysis griddataformats openmm mdtraj
 ```
 
