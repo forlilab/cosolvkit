@@ -606,8 +606,6 @@ class CoSolventBox:
                     n_atom_water += 1
                     n_atom += 1
 
-                w.write('TER\n')
-
             w.write("END\n")
 
     def write_tleap_input(self, filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop', 
