@@ -86,6 +86,28 @@ a.export_density("map_density_O.dx")
 a.export_atomic_grid_free_energy("map_agfe_O.dx")
 ```
 
+## Add cosolvent molecules to pre-existing waterbox
+
+You already have your system ready and it contains a super fancy lipid membrane built with [`packmol-memgen`](https://github.com/callumjd/AMBER-Membrane_protein_tutorial)? Well, no worry you can still add cosolvent molecules to it!
+
+**Disclaimer**: You will have issue with systems prepared with CHARMM-GUI. The conversion step to the amber format using `charmmlipid2amber.py` does not produce a readable file by `tleap` (at least on my side...).
+
+```python
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+
+from cosolvkit import CoSolventBox
+
+cosolv = CoSolventBox(concentration=1.0, use_existing_waterbox=True) # 0.1 M concentration
+cosolv.add_receptor("bilayer_protein.pdb")
+cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1', resname="BEN")
+cosolv.build()
+cosolv.export_pdb(filename='cosolv_system.pdb')
+cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
+                         inpcrd_filename='cosolv_system.inpcrd')
+```
+
 ## Add centroid-repulsive potential with OpenMM
 
 To overcome aggregation of small hydrophobic molecules at high concentration (1 M), a repulsive interaction energy between fragments can be added, insuring a faster sampling. This repulsive potential is applied only to the selected fragments, without perturbing the interactions between fragments and the protein. The repulsive potential is implemented by adding a virtual site (massless particle) at the geometric center of each fragment, and the energy is described using a Lennard-Jones potential (epsilon = -0.01 kcal/mol and sigma = 12 Angstrom).
@@ -145,28 +167,6 @@ simulation.reporters.append(StateDataReporter("openmm.log" 250, step=True, time=
                                               totalEnergy=True, temperature=True, volume=True, 
                                               density=True, speed=True))
 simulation.step(25000)
-```
-
-## Add cosolvent molecules to pre-existing watwrbox
-
-You already have your system ready and it contains a super fancy lipid membrane built with [`packmol-memgen`](https://github.com/callumjd/AMBER-Membrane_protein_tutorial)? Well, no worry you can still add cosolvent molecules to it!
-
-**Disclaimer**: You will have issue with systems prepared with CHARMM-GUI. The conversion step to the amber format using `charmmlipid2amber.py` does not produce a readable file by `tleap` (at least on my side...).
-
-```python
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-
-from cosolvkit import CoSolventBox
-
-cosolv = CoSolventBox(concentration=1.0, use_existing_waterbox=True) # 0.1 M concentration
-cosolv.add_receptor("bilayer_protein.pdb")
-cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1', resname="BEN")
-cosolv.build()
-cosolv.export_pdb(filename='cosolv_system.pdb')
-cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
-                         inpcrd_filename='cosolv_system.inpcrd')
 ```
 
 ## List of cosolvent molecules
