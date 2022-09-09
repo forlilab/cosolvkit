@@ -47,15 +47,22 @@ cosolv.add_cosolvent(name='propane', smiles='CCC', resname="PRP")
 cosolv.add_cosolvent(name='imidazole', smiles='C1=CN=CN1')
 cosolv.add_cosolvent(name='acetamide', smiles='CC(=O)NC', resname="ACM")
 cosolv.build()
-cosolv.export(prefix="cosolv")
+cosolv.export_pdb(filename="cosolv_system.pdb")
+cosolv.write_tleap_input(filename="tleap.cmd", prmtop_filename="cosolv_system.prmtop", 
+                         inpcrd_filename="cosolv_system.inpcrd")
 ```
 
-2. **Run MD simulations**
+2. **Run tleap to create Amber topology and coordinates files**
+```bash
+tleap -s -f tleap.cmd # Here you can specify disulfide bridges, salt concentration, etc...
+```
+
+3. **Run MD simulations**
 ```
 See Amber/OpenMM input files in the data/amber_protocol and data/openmm_protocol directory.
 ```
 
-3. **Analysis**
+4. **Analysis**
 ```python
 from MDAnalysis import Universe
 
@@ -102,12 +109,13 @@ prmtop = AmberPrmtopFile('cosolv_ben_prp_system.prmtop')
 inpcrd = AmberInpcrdFile('cosolv_ben_prp_system.inpcrd')
 
 # Configuration system
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * unit.angstrom, constraints=HBonds, hydrogenMass=1.5 * unit.amu)
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * unit.angstrom, constraints=HBonds, hydrogenMass=3 * unit.amu)
 
 # This is where the magic is happening!
 # Add harmonic constraints on protein if present
 #atom_idxs = utils.add_harmonic_restraints(prmtop, inpcrd, system, "protein and not element H", 2.5)
 #print('Number of particles constrainted: %d' % len(atom_idxs))
+
 # Add centroids and repulsive forces
 n_particles, virtual_site_idxs, repulsive_force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names=["BEN", "PRP"])
 print("Number of particles before adding centroids: %d" % n_particles)
@@ -126,7 +134,7 @@ simulation.context.setPositions(inpcrd.positions)
 simulation.minimizeEnergy()
 
 # MD simulations - equilibration(10 ps)
-simulation.step(5000)
+simulation.step(2500)
 
 # MD simulations - production (200 ps, of course it has to be much more!)
 # Write every atoms except centroids
@@ -136,7 +144,7 @@ simulation.reporters.append(StateDataReporter("openmm.log" 250, step=True, time=
                                               potentialEnergy=True, kineticEnergy=True, 
                                               totalEnergy=True, temperature=True, volume=True, 
                                               density=True, speed=True))
-simulation.step(50000)
+simulation.step(25000)
 ```
 
 ## List of cosolvent molecules
