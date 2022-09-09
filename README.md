@@ -93,10 +93,6 @@ You already have your system ready and it contains a super fancy lipid membrane 
 **Disclaimer**: You will have issue with systems prepared with CHARMM-GUI. The conversion step to the amber format using `charmmlipid2amber.py` does not produce a readable file by `tleap` (at least on my side...).
 
 ```python
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-
 from cosolvkit import CoSolventBox
 
 cosolv = CoSolventBox(concentration=1.0, use_existing_waterbox=True) # 0.1 M concentration
