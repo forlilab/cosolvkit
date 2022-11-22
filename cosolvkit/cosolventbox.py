@@ -29,7 +29,7 @@ def _read_pdb(pdb_filename, ignore_hydrogen=False):
         lines = f.readlines()
 
         for line in lines:
-            if "ATOM" in line or "HETATM" in line:
+            if line.startswith("ATOM") or line.startswith("HETATM"):
                 name = line[12:16].strip()
 
                 if (not ignore_hydrogen and name[0] == 'H') or name[0] != "H":
