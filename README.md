@@ -1,4 +1,4 @@
-[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE) [![PyPI version fury.io](https://img.shields.io/badge/version-0.1-green.svg)](https://pypi.python.org/pypi/ansicolortags/)
+[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE)
 
 # CoSolvKit
 The python package for creating cosolvent box
@@ -41,14 +41,14 @@ from cosolvkit import CoSolventBox
 
 cosolv = CoSolventBox(concentration=1.0, cutoff=12, box='cubic') # 1 M concentration
 cosolv.add_receptor("protein.pdb")
-cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1')
+cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1', resname="BEN")
 cosolv.add_cosolvent(name='methanol', smiles='CO', resname="MEH")
 cosolv.add_cosolvent(name='propane', smiles='CCC', resname="PRP")
 cosolv.add_cosolvent(name='imidazole', smiles='C1=CN=CN1')
 cosolv.add_cosolvent(name='acetamide', smiles='CC(=O)NC', resname="ACM")
 cosolv.build()
 cosolv.export_pdb(filename="cosolv_system.pdb")
-cosolv.write_tleap_input(filename="tleap.cmd", prmtop_filename="cosolv_system.prmtop", 
+cosolv.write_tleap_input(filename="tleap.cmd", prmtop_filename="cosolv_system.prmtop",
                          inpcrd_filename="cosolv_system.inpcrd")
 ```
 
@@ -84,6 +84,24 @@ a.run()
 a.atomic_grid_free_energy(volume, temperature)
 a.export_density("map_density_O.dx")
 a.export_atomic_grid_free_energy("map_agfe_O.dx")
+```
+
+## Add cosolvent molecules to pre-existing waterbox
+
+You already have your system ready and it contains a super fancy lipid membrane built with [`packmol-memgen`](https://github.com/callumjd/AMBER-Membrane_protein_tutorial)? Well, no worry you can still add cosolvent molecules to it!
+
+**Disclaimer**: You will have issue with systems prepared with CHARMM-GUI. The conversion step to the amber format using `charmmlipid2amber.py` does not produce a readable file by `tleap` (at least on my side...).
+
+```python
+from cosolvkit import CoSolventBox
+
+cosolv = CoSolventBox(concentration=1.0, use_existing_waterbox=True) # 0.1 M concentration
+cosolv.add_receptor("bilayer_protein.pdb")
+cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1', resname="BEN")
+cosolv.build()
+cosolv.export_pdb(filename='cosolv_system.pdb')
+cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
+                         inpcrd_filename='cosolv_system.inpcrd')
 ```
 
 ## Add centroid-repulsive potential with OpenMM
@@ -161,3 +179,4 @@ Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and re
 
 ## Citations
 * Ustach, Vincent D., et al. "Optimization and Evaluation of Site-Identification by Ligand Competitive Saturation (SILCS) as a Tool for Target-Based Ligand Optimization." Journal of chemical information and modeling 59.6 (2019): 3018-3035.
+* Schott-Verdugo, S., & Gohlke, H. (2019). PACKMOL-memgen: a simple-to-use, generalized workflow for membrane-protein–lipid-bilayer system building. Journal of chemical information and modeling, 59(6), 2522-2528.
