@@ -20,10 +20,9 @@ You need, at a minimum (requirements):
 ## Installation
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda create -n cosolvkit python=3.7
-$ conda activate cosolvkit
-$ conda install -c conda-forge numpy scipy mkl \
+$ conda create -n cosolvkit -c conda-forge python=3 numpy scipy mkl \
 rdkit ambertools parmed mdanalysis griddataformats openmm mdtraj
+$ conda activate cosolvkit
 ```
 
 Finally, we can install the `CoSolvKit` package
