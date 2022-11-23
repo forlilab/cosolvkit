@@ -104,6 +104,22 @@ cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.pr
                          inpcrd_filename='cosolv_system.inpcrd')
 ```
 
+## Keep existing water molecules
+
+You already placed water molecules at some very strategic positions around a ligand, for example, and you want to keep them. That's also easy to do!
+
+```python
+from cosolvkit import CoSolventBox
+
+cosolv = CoSolventBox(cutoff=12, box='orthorombic', keep_existing_water=True)
+cosolv.add_receptor("complex_protein_ligand.pdb")
+cosolv.build()
+cosolv.export_pdb(filename='system.pdb')
+# Don't forget to modify the tleap input script to add the Amber lib/frcmod parameter files for your ligand
+cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
+                         inpcrd_filename='cosolv_system.inpcrd')
+```
+
 ## Add centroid-repulsive potential with OpenMM
 
 To overcome aggregation of small hydrophobic molecules at high concentration (1 M), a repulsive interaction energy between fragments can be added, insuring a faster sampling. This repulsive potential is applied only to the selected fragments, without perturbing the interactions between fragments and the protein. The repulsive potential is implemented by adding a virtual site (massless particle) at the geometric center of each fragment, and the energy is described using a Lennard-Jones potential (epsilon = -0.01 kcal/mol and sigma = 12 Angstrom).
