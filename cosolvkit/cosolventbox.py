@@ -375,17 +375,22 @@ def _apply_neutral_patches(receptor_data, peptides_terminus):
 
 class CoSolventBox:
 
-    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, box_size=None, use_existing_waterbox=False, min_size_peptide=10):
+    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, box_size=None,
+                 keep_existing_water=False, use_existing_waterbox=False, min_size_peptide=10):
         """Initialize the cosolvent box
         """
         if not use_existing_waterbox:
             assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
+
+        error_msg = "Error: both keep_existing_water and use_existing_waterbox arguments cannot be set to True"
+        assert not(keep_existing_water is True and use_existing_waterbox is True), error_msg
 
         self._concentration = concentration
         self._cutoff = cutoff
         self._min_size_peptide = min_size_peptide
         self._box = box
         self._use_existing_waterbox = use_existing_waterbox
+        self._keep_existing_water = keep_existing_water
         self._receptor_data = None
         self._water_data = None
         self._cosolvents = {}
@@ -427,8 +432,14 @@ class CoSolventBox:
         receptor_truncated = False
 
         system_data = _read_pdb(receptor_filename)
+
         # Separate water molecules from the receptor (protein, ions, membrane, etc...)
-        self._receptor_data = system_data[(system_data['resname'] != 'WAT') & (system_data['resname'] != 'HOH')]
+        # except if we decided to keep the water molecules already present
+        if self._keep_existing_water:
+            self._receptor_data = system_data.copy()
+        else:
+            self._receptor_data = system_data[(system_data['resname'] != 'WAT') & (system_data['resname'] != 'HOH')]
+
         self._water_data = system_data[(system_data['resname'] == 'WAT') | (system_data['resname'] == 'HOH')]
 
         if self._use_existing_waterbox:
