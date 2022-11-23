@@ -115,7 +115,7 @@ cosolv = CoSolventBox(cutoff=12, box='orthorombic', keep_existing_water=True)
 cosolv.add_receptor("complex_protein_ligand.pdb")
 cosolv.build()
 cosolv.export_pdb(filename='system.pdb')
-# Don't forget to modify the tleap script to add the Amber lib/frcmod parameter files for your ligand
+# Don't forget to add the Amber lib/frcmod parameter files in the tleap input for the ligand
 cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
                          inpcrd_filename='cosolv_system.inpcrd')
 ```
