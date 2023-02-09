@@ -75,7 +75,7 @@ def _subset_grid(grid, center, box_size, gridsize=0.5):
     # There might be a better way of doing this... Actually I tried, but didn't worked very well.
     x, y, z = center
     sd = box_size / 2.
-    hbins = np.round(box_size / gridsize).astype(np.int)
+    hbins = np.round(box_size / gridsize).astype(int)
     edges = (np.linspace(0, box_size[0], num=hbins[0] + 1, endpoint=True) + (x - sd[0]),
              np.linspace(0, box_size[1], num=hbins[1] + 1, endpoint=True) + (y - sd[1]),
              np.linspace(0, box_size[2], num=hbins[2] + 1, endpoint=True) + (z - sd[2]))
@@ -138,13 +138,13 @@ class Analysis(AnalysisBase):
         self._dimensions = []
 
     def _single_frame(self):
-        self._positions.append(self._ag.atoms.positions.astype(np.float))
+        self._positions.append(self._ag.atoms.positions.astype(float))
         self._dimensions.append(self._u.dimensions[:3])
         self._centers.append(self._u.atoms.center_of_geometry())
         self._nframes += 1
 
     def _conclude(self):
-        self._positions = np.array(self._positions, dtype=np.float)
+        self._positions = np.array(self._positions, dtype=float)
         self._box_size = np.mean(self._dimensions, axis=0)
         self._center = np.mean(self._centers, axis=0)
 
@@ -154,7 +154,7 @@ class Analysis(AnalysisBase):
         # Get grid edges and origin
         x, y, z = self._center
         sd = self._box_size / 2.
-        hbins = np.round(self._box_size / self._gridsize).astype(np.int)
+        hbins = np.round(self._box_size / self._gridsize).astype(int)
         self._edges = (np.linspace(0, self._box_size[0], num=hbins[0] + 1, endpoint=True) + (x - sd[0]),
                        np.linspace(0, self._box_size[1], num=hbins[1] + 1, endpoint=True) + (y - sd[1]),
                        np.linspace(0, self._box_size[2], num=hbins[2] + 1, endpoint=True) + (z - sd[2]))
@@ -200,7 +200,7 @@ class Analysis(AnalysisBase):
         """Compute convergence of the density
         """
         overlap_coefficents = []
-        n_frames = np.linspace(int(self._nframes / n_steps), self._nframes, n_steps, dtype=np.int)
+        n_frames = np.linspace(int(self._nframes / n_steps), self._nframes, n_steps, dtype=int)
 
         # Initialize the first density as reference
         positions = self._get_positions(stop=n_frames[0])
@@ -237,7 +237,7 @@ class Analysis(AnalysisBase):
         """Compute convergence of the grid free energy
         """
         grid_free_energies = []
-        n_frames = np.linspace(int(self._nframes / n_steps), self._nframes, n_steps, dtype=np.int)
+        n_frames = np.linspace(int(self._nframes / n_steps), self._nframes, n_steps, dtype=int)
 
         for n_frame in n_frames:
             # Get the position of the first n_frame

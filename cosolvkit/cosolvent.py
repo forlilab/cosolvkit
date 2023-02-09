@@ -80,7 +80,7 @@ def _read_coordinates_from_mol2(mol2_filename):
             if '@<TRIPOS>ATOM' in line:
                 coordinate_flag = True
 
-    positions = np.array(positions).astype(np.float)
+    positions = np.array(positions).astype(float)
 
     return positions
 
@@ -104,7 +104,7 @@ def _transfer_coordinates_from_pdb_to_mol2(pdb_filename, mol2_filename, new_mol2
             z = line[47:54].strip()
             pdb_coordinates.append([x, y, z])
 
-    pdb_coordinates = np.array(pdb_coordinates, dtype=np.float)
+    pdb_coordinates = np.array(pdb_coordinates, dtype=float)
 
     # We read the mol2 file and modify each atom line
     with open(mol2_filename) as f:
