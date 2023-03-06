@@ -84,8 +84,8 @@ def _write_pdb_file(output_name, molecule, overwrite=True, **kwargs):
 
     '''
     i = 0
-    pdb_str = '%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00           %-2s\n'
-    ter_str = '%-6s%5d %-4s %3s %s%4d\n'
+    pdb_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}      {:>4s}{:>2s}{:2s}\n"
+    ter_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}\n"
     output_str = ''
 
     for residue in molecule.residues:
@@ -106,13 +106,14 @@ def _write_pdb_file(output_name, molecule, overwrite=True, **kwargs):
             else:
                 atype = 'ATOM'
 
-            output_str += pdb_str % (atype, i + 1, name, resname, chain_id, resid,
-                                     atom.xx, atom.xy, atom.xz, atom_type)
+            output_str += pdb_template.format(atype, i + 1, name, " ", resname, chain_id, resid,
+                                              " ",  atom.xx, atom.xy, atom.xz, 1.0, 1.0, " ", 
+                                              atom_type, " ")
 
             i += 1
 
         if residue.ter:
-            output_str += ter_str % ('TER', i + 1, name, resname, chain_id, resid)
+            output_str += ter_template.format('TER', i + 1, name, " ", resname, chain_id, resid)
             i += 1
 
     output_str += 'END\n'
@@ -130,8 +131,8 @@ def _write_pdbqt_file(output_name, molecule):
 
     '''
     i = 0
-    pdbqt_str = '%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n'
-    ter_str = '%-6s%5d %-4s %3s %s%4d\n'
+    pdb_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}{:4s}{:6.3f} {:2s} \n"
+    ter_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}\n"
     output_str = ''
 
     for residue in molecule.residues:
@@ -159,13 +160,14 @@ def _write_pdbqt_file(output_name, molecule):
             else:
                 atype = 'ATOM'
 
-            output_str += pdbqt_str % (atype, i + 1, name, resname, chain_id, resid,
-                                       atom.xx, atom.xy, atom.xz, atom.charge, atom_type)
+            output_str += pdb_template.format(atype, i + 1, name, " ", resname, chain_id, resid,
+                                              " ",  atom.xx, atom.xy, atom.xz, 1.0, 1.0, " ",
+                                              atom.charge, atom_type)
 
             i += 1
 
         if residue.ter:
-            output_str += ter_str % ('TER', i + 1, name, resname, chain_id, resid)
+            output_str += ter_template.format('TER', i + 1, name, " ", resname, chain_id, resid)
             i += 1
 
     output_str += 'END\n'
@@ -220,7 +222,6 @@ def _convert_amber_to_autodock_types(molecule):
         'Mn': 'Mn',
         'XC': 'C',
         'br': 'Br',
-        'br': 'BR',
         'c' : 'C',
         'c1': 'C',
         'c2': 'C',
@@ -231,7 +232,6 @@ def _convert_amber_to_autodock_types(molecule):
         'ce': 'C',
         'cf': 'C',
         'cl': 'Cl',
-        'cl': 'CL',
         'cp': 'A',
         'cq': 'A',
         'cu': 'C',
@@ -377,7 +377,7 @@ def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb,
     #  process sslist
     if sslist:
         for resid1, resid2 in sslist:
-            more_leap_cmds += 'bond x.%d.SG x.%d.SG\n' % (resid1+1, resid2+1)
+            more_leap_cmds += 'bond x.%d.SG x.%d.SG\n' % (resid1 + 1, resid2 + 1)
 
     leap_string = leap_template.format(
         force_fields=default_force_field,
@@ -414,6 +414,13 @@ def _generate_resids_and_chainids(molecule):
             resid = 1
 
     return resids, chainids
+
+
+def _generate_resids_chainids_for_tleap(molecule):
+    resids = list(range(1, len(molecule.residues) + 1))
+    chainids = [" "] * len(resids)
+    return resids, chainids
+
 
 def _ter_flags(molecule):
     return [True if residue.ter else False for residue in molecule.residues]
@@ -484,8 +491,7 @@ def _find_gaps(molecule, resprot, fill_gaps=False):
             c_atom = [atom for atom in residue.atoms if atom.name == 'C'][0]
             n_atom = [atom for atom in next_residue.atoms if atom.name == 'N'][0]
         except:
-            gaprecord = (9999.999, c_atom.residue.name, residue.number, 
-                         n_atom.residue.name, molecule.residues[i + 1].number)
+            gaprecord = (9999.999, c_atom.residue.name, i + 1, n_atom.residue.name, i + 2)
             gaplist.append(gaprecord)
 
             if fill_gaps:
@@ -499,8 +505,7 @@ def _find_gaps(molecule, resprot, fill_gaps=False):
         gap = math.sqrt(dx * dx + dy * dy + dz * dz)
 
         if gap > max_distance:
-            gaprecord = (gap, c_atom.residue.name, residue.number, 
-                         n_atom.residue.name, molecule.residues[i + 1].number)
+            gaprecord = (gap, c_atom.residue.name, i + 1, n_atom.residue.name, i + 2)
             gaplist.append(gaprecord)
 
             if fill_gaps:
@@ -525,9 +530,22 @@ def _fix_isoleucine_cd_atom_name(molecule):
 def _find_histidine(molecule):
     his_found = []
 
+    amber_his_names = set(['HID', 'HIE' 'HIP'])
+    charmm_his_names = set(['HSD', 'HSE', 'HSP'])
+    possible_names = set(['HIS', ]) | amber_his_names | charmm_his_names
+
     for residue in molecule.residues:
-        if residue.name == 'HIS':
-            his_found.append(('HIS', residue.number))
+        if residue.name in possible_names:
+            atom_name_set = sorted(set(atom.name for atom in residue.atoms if atom.atomic_number == 1))
+
+            if set(['HD1', 'HE1', 'HE2']).issubset(atom_name_set):
+                residue.name = 'HIP'
+            elif 'HD1' in atom_name_set:
+                residue.name = 'HID'
+            else:
+                residue.name = 'HIE'
+
+            his_found.append((residue.name, residue.number))
 
     return his_found
 
@@ -603,7 +621,9 @@ class PrepareReceptor:
         pdb_clean_filename = 'tmp.pdb'
         prmtop_filename = 'tmp.prmtop'
         rst7_filename = 'tmp.rst7'
-        nonstandard_resnames = []
+        nonstandard_resnames = tuple()
+        local_lib_files = None
+        local_frcmod_files = None
 
         logger = logging.getLogger('WaterKit receptor preparation')
         logging.basicConfig(level=os.environ.get('LOGLEVEL', 'INFO'))
@@ -664,7 +684,7 @@ class PrepareReceptor:
             gap_msg = ''
             gap_str = ' - gap of %8.3f A between %s %d and %s %d\n'
             for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
-                gap_msg += gap_str % (d, resname0, resid0 + 1, resname1, resid1 + 1)
+                gap_msg += gap_str % (d, resname0, resid0, resname1, resid1)
             
             if self._fill_gaps:
                 warning_msg = 'Gaps were ignore between residues (automatically added TER records): \n'
@@ -694,7 +714,7 @@ class PrepareReceptor:
             sslist, cys_cys_atomidx_set = pdbfixer.find_disulfide()
             if sslist:
                 pdbfixer.rename_cys_to_cyx(sslist)
-                resids_str = ', '.join(['%s-%s' % (ss[0], ss[1]) for ss in sslist])
+                resids_str = ', '.join(['%s-%s' % (ss[0] + 1, ss[1] + 1) for ss in sslist])
                 logger.info('Found disulfide bridges between residues %s' % resids_str)
         else:
             sslist = None
@@ -705,18 +725,19 @@ class PrepareReceptor:
             if alt_residues:
                 logger.info('Removed all alternatives residue sidechains')
 
-        # Write cleaned PDB file
-        final_coordinates = pdbfixer.parm.get_coordinates()[self._use_model - 1]
-        write_kwargs = dict(coordinates=final_coordinates)
-        write_kwargs['increase_tercount'] = False # so CONECT record can work properly
-        write_kwargs['altlocs'] = 'occupancy'
-
+        # Renumbers resids (starting from 1) and renames chainids (starting from A)
         if self._renumbering:
             new_resids, new_chainids = _generate_resids_and_chainids(pdbfixer.parm)
             _replace_resids_and_chainids(pdbfixer.parm, new_resids, new_chainids)
         else:
             new_resids = [residue.number for residue in pdbfixer.parm.residues]
             new_chainids = [residue.chain for residue in pdbfixer.parm.residues]
+
+        # Take the first model only
+        final_coordinates = pdbfixer.parm.get_coordinates()[self._use_model - 1]
+        write_kwargs = dict(coordinates=final_coordinates)
+        write_kwargs['increase_tercount'] = False # so CONECT record can work properly
+        write_kwargs['altlocs'] = 'occupancy'
 
         if lib_files is not None:
             original_lib_files = [os.path.abspath(lib_file) for lib_file in lib_files]
@@ -733,6 +754,9 @@ class PrepareReceptor:
 
             if frcmod_files is not None:
                 [shutil.copy2(ofrc_file, lfrc_file) for ofrc_file, lfrc_file in zip(original_frcmod_files, local_frcmod_files)]
+
+            tleap_resids, tleap_chainids = _generate_resids_chainids_for_tleap(pdbfixer.parm)
+            _replace_resids_and_chainids(pdbfixer.parm, tleap_resids, tleap_chainids)
 
             try:
                 _write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
