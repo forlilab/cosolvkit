@@ -35,7 +35,7 @@ def _read_pdb(pdb_filename):
                 resname = line[17:20].strip()
                 resid = int(line[22:26])
                 chain = line[21:22].strip()
-                xyz = [np.float(line[30:38]), np.float(line[38:47]), np.float(line[47:55])]
+                xyz = [float(line[30:38]), float(line[38:47]), float(line[47:55])]
                 is_hydrogen = True if name[0] == 'H' else False
                 is_ter = True if lines[i + 1].startswith('TER') else False
  
@@ -74,9 +74,9 @@ def _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance=3.):
 
     ids = kdtree.query_ball_point(receptor_xyzs, distance)
     # Keep the unique ids
-    ids = np.unique(np.hstack(ids)).astype(np.int)
+    ids = np.unique(np.hstack(ids)).astype(int)
 
-    close_to = np.zeros(len(wat_xyzs), np.bool)
+    close_to = np.zeros(len(wat_xyzs), bool)
     close_to[ids] = True
 
     for i in range(0, wat_xyzs.shape[0], 3):
@@ -266,7 +266,7 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
         to_be_removed = [[r, r + 1, r + 2]  for r in to_be_removed]
         to_be_removed = np.hstack(to_be_removed).astype(int)
         # Remove those water molecules
-        mask = np.ones(len(wat_xyzs), np.bool)
+        mask = np.ones(len(wat_xyzs), bool)
         mask[to_be_removed] = 0
         wat_xyzs = wat_xyzs[mask]
 
@@ -410,7 +410,7 @@ class CoSolventBox:
 
             self._center = center
             # It's easier to work with integers for grid size
-            self._box_size = np.ceil(box_size).astype(np.int)
+            self._box_size = np.ceil(box_size).astype(int)
             self._origin = self._center - (self._box_size  / 2.)
         elif (center is not None and box_size is None) or (center is None and box_size is not None):
             print("Error: cannot define the size of the grid without defining its center. Et vice et versa !")
@@ -482,10 +482,10 @@ class CoSolventBox:
         # definition to fit the truncated protein
         if self._origin is None or receptor_truncated:
             if self._box == "orthorombic" or self._use_existing_waterbox:
-                self._box_size = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(np.int)
+                self._box_size = np.ceil(np.array([xmax - xmin, ymax - ymin, zmax - zmin])).astype(int)
             else:
                 lmax = np.max([xmax - xmin, ymax - ymin, zmax - zmin])
-                self._box_size = np.ceil(np.array([lmax, lmax, lmax])).astype(np.int)
+                self._box_size = np.ceil(np.array([lmax, lmax, lmax])).astype(int)
 
             self._center = np.mean([[xmin, ymin, zmin], [xmax, ymax, zmax]], axis=0)
             self._origin = self._center - (self._box_size / 2)
@@ -511,7 +511,7 @@ class CoSolventBox:
                 self._wat_xyzs = _create_waterbox(self._origin, self._box_size, receptor_xyzs,
                                                   self._watref_xyzs, self._watref_dims)
 
-            n_water = np.int(self._wat_xyzs.shape[0] / 3)
+            n_water = int(self._wat_xyzs.shape[0] / 3)
             self._volume = _volume_water(n_water)
             volume_protein = _volume_protein(n_water, self._box_size)
 
@@ -534,7 +534,7 @@ class CoSolventBox:
 
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
-                n_water = np.int(self._wat_xyzs.shape[0] / 3)
+                n_water = int(self._wat_xyzs.shape[0] / 3)
 
                 print("")
                 print("Target concentration (M)     : %5.3f" % self._concentration)
