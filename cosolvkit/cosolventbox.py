@@ -35,7 +35,7 @@ def _read_pdb(pdb_filename):
                 resname = line[17:20].strip()
                 resid = int(line[22:26])
                 chain = line[21:22].strip()
-                xyz = [float(line[30:38]), float(line[38:47]), float(line[47:55])]
+                xyz = [float(line[30:38]), float(line[38:46]), float(line[46:54])]
                 is_hydrogen = True if name[0] == 'H' else False
                 is_ter = True if lines[i + 1].startswith('TER') else False
  
