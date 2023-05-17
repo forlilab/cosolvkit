@@ -643,12 +643,19 @@ class CoSolventBox:
 
         TLEAP_TEMPLATE += "set default nocenter on\n"
         TLEAP_TEMPLATE += "m = loadpdb %s\n" % self._pdb_filename
-        TLEAP_TEMPLATE += "#bond m.XX.SG m.XX.SG # Template for disulfide bridge\n"
+
+        # Add all disulfide bridges based on the CYX resname
+        cyx_cyx_pairs = utils.find_disulfide_bridges(self._pdb_filename)
+        if cyx_cyx_pairs:
+            for cyx_cyx_pair in cyx_cyx_pairs:
+                TLEAP_TEMPLATE += 'bond m.%d.SG m.%d.SG\n' % (cyx_cyx_pair[0], cyx_cyx_pair[1])
+
         if self._wat_xyzs is not None:
             TLEAP_TEMPLATE += "charge m\n"
             TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
             TLEAP_TEMPLATE += "addIonsRand m K+ 0\n"
             TLEAP_TEMPLATE += "check m\n"
+
         TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._box_size[0], self._box_size[1], self._box_size[2])
         TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
         TLEAP_TEMPLATE += "quit\n"

@@ -20,6 +20,7 @@ else:
 
 import numpy as np
 import mdtraj
+from MDAnalysis import Universe
 from openmm.app import *
 from openmm import *
 
@@ -276,3 +277,31 @@ def write_pdb(pdb_filename, prmtop, inpcrd):
 
     """
     PDBFile.writeFile(prmtop.topology, inpcrd.getPositions(), open(pdb_filename, 'w'))
+
+
+def find_disulfide_bridges(pdb_filename):
+    """ Find disulfide bridges based on CYX resnames.
+    
+    Args:
+        pdb_filename (str): input pdb filename
+
+    """
+    cyx_cyx_pairs = set()
+
+    u = Universe(pdb_filename)
+
+    cyx_sg_atoms = u.select_atoms('resname CYX and name SG')
+
+    resid_first_residue = u.residues[0].resid
+
+    for cyx_sg_atom in cyx_sg_atoms:
+        sg_x, sg_y, sg_z = cyx_sg_atom.position
+        sel_str = '(resname CYX and name SG and not id %d) and point %f %f %f 2.5' % (cyx_sg_atom.id, sg_x, sg_y, sg_z)
+        paired_cyx_residue = u.select_atoms(sel_str)[0]
+
+        pair = (resid_first_residue + cyx_sg_atom.residue.ix, resid_first_residue + paired_cyx_residue.residue.ix)
+        cyx_cyx_pairs.add(tuple(sorted(pair)))
+
+    cyx_cyx_pairs = sorted(list(cyx_cyx_pairs))
+
+    return cyx_cyx_pairs
