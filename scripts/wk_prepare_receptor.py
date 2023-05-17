@@ -527,27 +527,29 @@ def _fix_isoleucine_cd_atom_name(molecule):
     return ile_fixed
 
 
-def _find_histidine(molecule):
-    his_found = []
-
-    amber_his_names = set(['HID', 'HIE' 'HIP'])
-    charmm_his_names = set(['HSD', 'HSE', 'HSP'])
-    possible_names = set(['HIS', ]) | amber_his_names | charmm_his_names
+def _assign_histidine(molecule):
+    assigned_states = []
+    undefined_state = set(['HIS'])
 
     for residue in molecule.residues:
-        if residue.name in possible_names:
-            atom_name_set = sorted(set(atom.name for atom in residue.atoms if atom.atomic_number == 1))
+        if residue.name in undefined_state:
+            hydrogen_name_set = sorted(set(atom.name for atom in residue.atoms if atom.atomic_number == 1))
 
-            if set(['HD1', 'HE1', 'HE2']).issubset(atom_name_set):
+            # if the HIS is in an undefined state, we look at
+            # the presence of hydrogen atoms connected to NE1 or
+            # ND1 (or both) to assign the protonation states
+            # Those hydrogen atoms will be present if the user
+            # used REDUCE to add hydrogen atoms before.
+            if set(['HD1', 'HE1', 'HE2']).issubset(hydrogen_name_set):
                 residue.name = 'HIP'
-            elif 'HD1' in atom_name_set:
+            elif 'HD1' in hydrogen_name_set:
                 residue.name = 'HID'
             else:
                 residue.name = 'HIE'
+            
+            assigned_states.append((residue.name, residue.number))
 
-            his_found.append((residue.name, residue.number))
-
-    return his_found
+    return assigned_states
 
 
 def _fix_charmm_histidine_to_amber(molecule):
@@ -640,7 +642,7 @@ class PrepareReceptor:
         # Get resnames from lib files
         if lib_files is not None:
             nonstandard_resnames = tuple([_read_resname_from_lib_file(lib_file) for lib_file in lib_files])
-            logger.info('Amber lib parameter files for residue(s): %s' % nonstandard_resnames)
+            logger.info('Amber lib parameter files for residue(s): %s' % ', '.join(nonstandard_resnames))
 
         # Remove box and symmetry
         pdbfixer.parm.box = None
@@ -701,13 +703,10 @@ class PrepareReceptor:
                 logger.error(error_msg)
                 raise RuntimeError(error_msg)
 
-        his_found = _find_histidine(pdbfixer.parm)
-        if his_found:
-            warning_msg = 'Histidine protonation will be automatically assigned to HIE: %s'
-            logger.warning(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in his_found))
-
-        # Assign histidine protonations
-        pdbfixer.assign_histidine()
+        assigned_states = _assign_histidine(pdbfixer.parm)
+        if assigned_states:
+            warning_msg = 'Histidine protonation states were automatically set to: %s'
+            logger.info(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in assigned_states))
 
         # Find all the disulfide bonds
         if not self._no_difsulfide:
