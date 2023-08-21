@@ -218,15 +218,47 @@ def _volume_protein(n_water, box_size):
     return vol_box - vol_water
 
 
-def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_xyzs=None, concentration=0.25):
-    """Add cosolvent to the water box.
+def _add_cosolvent_as_concentrations(wat_xyzs, cosolvents, box_origin, box_size, target_concentrations, receptor_xyzs=None):
+    """Add cosolvent to the water box based on the target concentrations.
+
+    Parameters
+    ----------
+    wat_xyzs : np.ndarray
+        Coordinates of the water molecules.
+    cosolvents : dict
+        Dictionary of cosolvents. The keys are the names of the cosolvents and
+        the values are the coordinates of the cosolvent molecules.
+    box_origin : np.ndarray
+        Coordinates of the origin of the box.
+    box_size : np.ndarray
+        Size of the box.
+    target_concentrations : dict
+        Dictionary of target concentrations. The keys are the names of the cosolvents
+        and the values are the target concentrations.
+    receptor_xyzs : np.ndarray
+        Coordinates of the receptor.
+
+    Returns
+    -------
+    wat_xyzs : np.ndarray
+        Coordinates of the water molecules.
+    cosolv_xyzs : dict
+        Dictionary of cosolvent molecules. The keys are the names of the cosolvents
+        and the values are the coordinates of the cosolvent molecules.
+    final_concentrations : dict
+        Dictionary of final concentrations. The keys are the names of the cosolvents
+        and the values are the final concentrations.
+
     """
     distance_from_edges = 3.
     distance_from_receptor = 4.5
-    distance_from_cosolvent = 1.5
+    distance_from_cosolvent = 2.5
     concentration_water = 55.
     cosolv_xyzs = {name: [] for name in cosolvents}
     cosolv_names = cosolvents.keys()
+    current_number_copies = {}
+    final_number_copies = {}
+    final_concentrations = {}
 
     # Put aside water molecules that are next to the edges because we don't
     # them to be replaced by cosolvent, otherwise they will go out the box
@@ -241,21 +273,144 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
         to_keep_wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs[too_close_protein]))
         wat_xyzs = wat_xyzs[~too_close_protein]
 
-    for i, cosolv_name in enumerate(itertools.cycle(cosolv_names)):
+    # Calculate the number of copies of each cosolvent according to the target concentration
+    n_water = wat_xyzs.shape[0] / 3
+    for cosolv_name in cosolv_names:
+        current_number_copies[cosolv_name] = 0
+        final_concentrations[cosolv_name] = 0
+        # 1 cosolvent molecule per 55 waters correspond to a concentration of 1 M
+        final_number_copies[cosolv_name] = int((target_concentrations[cosolv_name] / concentration_water) * n_water)
+
+    # Generate a random placement order of cosolvents
+    placement_order = []
+    for cosolv_name, n in final_number_copies.items():
+        placement_order += [cosolv_name] * n
+    np.random.shuffle(placement_order)
+
+    for cosolv_name in itertools.cycle(placement_order):
         # Update kdtree
         kdtree = spatial.cKDTree(wat_xyzs)
 
-        # Choose a random water molecule
-        wat_o = wat_xyzs[::3]
-        wat_id = np.random.choice(range(0, wat_o.shape[0]))
-        wat_xyz = wat_o[wat_id]
+        if final_concentrations[cosolv_name] <= target_concentrations[cosolv_name]:
+            # Choose a random water molecule
+            wat_o = wat_xyzs[::3]
+            wat_id = np.random.choice(range(0, wat_o.shape[0]))
+            wat_xyz = wat_o[wat_id]
 
-        # Translate fragment on the top of the selected water molecule
-        cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
+            # Translate fragment on the top of the selected water molecule
+            cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
+
+            # Add fragment to list
+            cosolv_xyzs[cosolv_name].append(cosolv_xyz)
+            
+            # Get the ids of all the closest water atoms
+            to_be_removed = kdtree.query_ball_point(cosolv_xyz, distance_from_cosolvent)
+            # Keep the unique ids
+            to_be_removed = np.unique(np.hstack(to_be_removed))
+            # Get the ids of the water oxygen atoms
+            to_be_removed = np.unique(to_be_removed - (to_be_removed % 3.))
+            # Complete with the ids of the hydrogen atoms
+            to_be_removed = [[r, r + 1, r + 2]  for r in to_be_removed]
+            to_be_removed = np.hstack(to_be_removed).astype(int)
+            # Remove those water molecules
+            mask = np.ones(len(wat_xyzs), bool)
+            mask[to_be_removed] = 0
+            wat_xyzs = wat_xyzs[mask]
+
+            # Compute the new concentration for that cosolvent
+            n_water = (to_keep_wat_xyzs.shape[0] + wat_xyzs.shape[0]) / 3
+            current_number_copies[cosolv_name] += 1
+            final_concentrations[cosolv_name] = concentration_water / (n_water / (current_number_copies[cosolv_name]))
+
+        # Stop when the target concentration is reached for all cosolvents
+        if all([final_concentrations[cosolv_name] >= target_concentrations[cosolv_name] for cosolv_name in cosolv_names]):
+            break
+
+    # Add back water molecules we put aside at the beginning
+    wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs))
+
+    return wat_xyzs, cosolv_xyzs, final_concentrations
+
+
+def _add_cosolvent_as_copies(wat_xyzs, cosolvents, box_origin, box_size, target_number_copies, center_positions=None, receptor_xyzs=None):
+    """Add cosolvent to the water box based on the number of copies requested.
+
+    Parameters
+    ----------
+    wat_xyzs : np.ndarray
+        Coordinates of the water molecules.
+    cosolvents : dict
+        Dictionary of cosolvents. The keys are the names of the cosolvents and
+        the values are the coordinates of the cosolvent molecules.
+    box_origin : np.ndarray
+        Coordinates of the origin of the box.
+    box_size : np.ndarray
+        Size of the box.
+    target_number_copies : dict
+        Dictionary of target number of copies. The keys are the names of the cosolvents
+        and the values are the target copy numbers.
+    center_positions : np.ndarray
+        Coordinates of the center of each cosolvent to be added.
+    receptor_xyzs : np.ndarray
+        Coordinates of the receptor.
+
+    Returns
+    -------
+    wat_xyzs : np.ndarray
+        Coordinates of the water molecules.
+    cosolv_xyzs : dict
+        Dictionary of cosolvent molecules. The keys are the names of the cosolvents
+        and the values are the coordinates of the cosolvent molecules.
+    final_number_copies : dict
+        Dictionary of final number of copies. The keys are the names of the cosolvents
+        and the values are the final copy numbers that was added.
+
+    """
+    distance_from_edges = 3.
+    distance_from_receptor = 4.5
+    distance_from_cosolvent = 2.5
+    cosolv_xyzs = {name: [] for name in cosolvents}
+    final_number_copies = {}
+
+    # Put aside water molecules that are next to the edges because we don't
+    # them to be replaced by cosolvent, otherwise they will go out the box
+    too_close_edge = _is_water_close_to_edge(wat_xyzs, distance_from_edges, box_origin, box_size)
+    to_keep_wat_xyzs = wat_xyzs[too_close_edge]
+    # We will work on those ones
+    wat_xyzs = wat_xyzs[~too_close_edge]
+
+    # Do the same also for water molecules too close from the receptor
+    if receptor_xyzs is not None:
+        too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance_from_receptor)
+        to_keep_wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs[too_close_protein]))
+        wat_xyzs = wat_xyzs[~too_close_protein]
+
+    # Generate a random placement order of cosolvents
+    placement_order = []
+    for cosolv_name, n in target_number_copies.items():
+        final_number_copies[cosolv_name] = 0
+        placement_order += [cosolv_name] * n
+    np.random.shuffle(placement_order)
+
+    for cosolv_name in placement_order:
+        # Update kdtree
+        kdtree = spatial.cKDTree(wat_xyzs)
+
+        if center_positions[cosolv_name] is None:
+            # Choose a random water molecule
+            wat_o = wat_xyzs[::3]
+            wat_id = np.random.choice(range(0, wat_o.shape[0]))
+            wat_xyz = wat_o[wat_id]
+
+            # Translate fragment on the top of the selected water molecule
+            cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
+        else:
+            center = center_positions[cosolv_name][final_number_copies[cosolv_name]]
+            cosolv_xyz = cosolvents[cosolv_name].positions + center
 
         # Add fragment to list
         cosolv_xyzs[cosolv_name].append(cosolv_xyz)
-
+        
         # Get the ids of all the closest water atoms
         to_be_removed = kdtree.query_ball_point(cosolv_xyz, distance_from_cosolvent)
         # Keep the unique ids
@@ -270,21 +425,13 @@ def _add_cosolvent(wat_xyzs, cosolvents, box_origin, box_size, volume, receptor_
         mask[to_be_removed] = 0
         wat_xyzs = wat_xyzs[mask]
 
-        # We compute the concentration only after 
-        # placing the same number of cosolvent molecules
-        if (i + 1) % len(cosolvents) == 0:
-            n_water = (to_keep_wat_xyzs.shape[0] + wat_xyzs.shape[0]) / 3
-            # 1 cosolvent molecule per 55 waters correspond
-            # to a concentration of 1 M
-            final_concentration = concentration_water / (n_water / (i + 1))
-
-            if final_concentration >= concentration:
-                break
+        # Increment current number of copies of that cosolvent
+        final_number_copies[cosolv_name] += 1
 
     # Add back water molecules we put aside at the beginning
     wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs))
 
-    return wat_xyzs, cosolv_xyzs, final_concentration
+    return wat_xyzs, cosolv_xyzs, final_number_copies
 
 
 def _apply_neutral_patches(receptor_data, peptides_terminus):
@@ -375,9 +522,35 @@ def _apply_neutral_patches(receptor_data, peptides_terminus):
 
 class CoSolventBox:
 
-    def __init__(self, concentration=0.25, cutoff=12, box="cubic", center=None, box_size=None,
+    def __init__(self, box="cubic", cutoff=12, center=None, box_size=None,
                  keep_existing_water=False, use_existing_waterbox=False, min_size_peptide=10):
         """Initialize the cosolvent box
+
+        Parameters
+        ----------
+        box : str
+            The type of box to use. Can be either "cubic" or "orthorombic"
+        cutoff : float
+            The cutoff distance in Angstroms to define the cosolvent box
+        center : np.ndarray
+            The center of the box in Angstroms
+        box_size : np.ndarray
+            The size of the box in Angstroms
+        keep_existing_water : bool
+            If True, the water molecules in the receptor will be kept
+        use_existing_waterbox : bool
+            If True, the water molecules in the receptor will be kept and the box will be defined
+            by the receptor water molecules
+        min_size_peptide : int
+            The minimum number of residues in the peptide to keep the water molecules
+
+        Raises
+        ------
+        AssertionError
+            If the box is not "cubic" or "orthorombic"
+        AssertionError
+            If both keep_existing_water and use_existing_waterbox arguments are set to True
+
         """
         if not use_existing_waterbox:
             assert box in ["cubic", "orthorombic"], "Error: the water box can be only cubic or orthorombic."
@@ -385,7 +558,6 @@ class CoSolventBox:
         error_msg = "Error: both keep_existing_water and use_existing_waterbox arguments cannot be set to True"
         assert not(keep_existing_water is True and use_existing_waterbox is True), error_msg
 
-        self._concentration = concentration
         self._cutoff = cutoff
         self._min_size_peptide = min_size_peptide
         self._box = box
@@ -394,8 +566,13 @@ class CoSolventBox:
         self._receptor_data = None
         self._water_data = None
         self._cosolvents = {}
+        self._concentrations = {}
+        self._copies = {}
+        self._center_positions = {}
+        self._added_as_concentrations = []
+        self._added_as_copies = []
         self._wat_xyzs = None
-        self._cosolv_xyzs = None
+        self._cosolv_xyzs = {}
         self._pdb_filename = None
 
         if center is not None and box_size is not None:
@@ -428,6 +605,12 @@ class CoSolventBox:
 
     def add_receptor(self, receptor_filename):
         """Add receptor
+
+        Parameters
+        ----------
+        receptor_filename : str
+            PDB filename of the receptor
+
         """
         receptor_truncated = False
 
@@ -490,14 +673,65 @@ class CoSolventBox:
             self._center = np.mean([[xmin, ymin, zmin], [xmax, ymax, zmax]], axis=0)
             self._origin = self._center - (self._box_size / 2)
                 
-    def add_cosolvent(self, name, smiles=None, mol2_filename=None, lib_filename=None, frcmod_filename=None, charge=0, resname=None):
+    def add_cosolvent(self, name, concentration=None, copies=None, center_positions=None,
+                      smiles=None, mol_filename=None, lib_filename=None, frcmod_filename=None, charge=0, resname=None):
         """Add cosolvent and parametrize it
+
+        Parameters
+        ----------
+        name : str
+            Name of the cosolvent
+        concentration : float, optional
+            Concentration of the cosolvent in M
+        copies : int, optional
+            Number of copies of the cosolvent to add
+        center_positions : np.ndarray, optional
+            Center positions of each cosolvent molecule added
+        smiles : str, optional
+            SMILES string of the cosolvent
+        mol_filename : str, optional
+            Name of the mol2 file containing the cosolvent
+        lib_filename : str, optional
+            Name of the lib file containing the cosolvent
+        frcmod_filename : str, optional
+            Name of the frcmod file containing the cosolvent
+        charge : int, optional
+            Charge of the cosolvent
+        resname : str, optional
+            Residue name of the cosolvent
+
         """
-        c = CoSolvent(name, smiles, mol2_filename, lib_filename, frcmod_filename, charge, resname)
+        assert concentration is not None or copies is not None, 'Either concentration or copies must be defined.'
+        assert not all([concentration is not None, copies is not None]), 'Either concentration or copies must be defined, not both.'
+
+        if concentration is not None:
+            assert concentration > 0, 'Concentration must be positive.'
+
+        if copies is not None:
+            assert copies > 0, 'Number of copies must be positive.'
+
+        if copies is not None and center_positions is not None:
+            center_positions = np.asarray(center_positions)
+            assert copies == center_positions.shape[0], 'Copies and positions must have the same length.'
+            assert center_positions.shape[1] == 3, 'Center positions must be 3D.'
+
+        c = CoSolvent(name, smiles, mol_filename, lib_filename, frcmod_filename, charge, resname)
         self._cosolvents[name] = c
+
+        if concentration is not None:
+            self._added_as_concentrations.append(name)
+            copies = 0
+        else:
+            self._added_as_copies.append(name)
+            concentration = 0
+        
+        self._concentrations[name] = concentration
+        self._copies[name] = copies
+        self._center_positions[name] = center_positions
     
     def build(self):
         """Build the cosolvent box
+
         """
         if self._origin is not None:
             if self._receptor_data is not None:
@@ -512,37 +746,72 @@ class CoSolventBox:
                                                   self._watref_xyzs, self._watref_dims)
 
             n_water = int(self._wat_xyzs.shape[0] / 3)
-            self._volume = _volume_water(n_water)
+            self._water_volume = _volume_water(n_water)
             volume_protein = _volume_protein(n_water, self._box_size)
 
             print("----------------------------------------------")
-            print("Volume box                   : %10.4f A**3" % self._volume)
+            print("Volume box                   : %10.3f A**3" % (self._box_size[0] * self._box_size[1] * self._box_size[2]))
+            print("Volume water                 : %10.3f A**3" % self._water_volume)
             if self._receptor_data is not None:
-                print("Volume protein (box - water) : %10.4f A**3" % volume_protein)
+                print("Volume protein (box - water) : %10.3f A**3" % volume_protein)
             print("Water (before cosolvent)     : %d" % n_water)
             if self._use_existing_waterbox:
                 print("Box type                     : pre-existing")
             else:
                 print("Box type                     : %s" % self._box)
-            print("Box center                   : %8.3f %8.3f %8.3f" % (self._center[0], self._center[1], self._center[2]))
-            print("Box dimensions               : x %d y %d z %d (A)" % (self._box_size[0], self._box_size[1], self._box_size[2]))
+            print("Box center                   : x %8.3f y %8.3f z %8.3f (A)" % (self._center[0], self._center[1], self._center[2]))
+            print("Box dimensions               : x %8d y %8d z %8d (A)" % (self._box_size[0], self._box_size[1], self._box_size[2]))
 
-            if self._cosolvents:
-                wat_xyzs, cosolv_xyzs, final_concentration = _add_cosolvent(self._wat_xyzs, self._cosolvents,
-                                                                            self._origin, self._box_size, self._volume,
-                                                                            receptor_xyzs, self._concentration)
-
+            if self._cosolvents and self._added_as_copies:
+                # Select only cosolvents that are added as copies
+                cosolvents = {k: v for k, v in self._cosolvents.items() if k in self._added_as_copies}
+                # Add copies of cosolvents
+                wat_xyzs, cosolv_xyzs, final_copies = _add_cosolvent_as_copies(self._wat_xyzs, cosolvents,
+                                                              self._origin, self._box_size, self._copies, self._center_positions,
+                                                              receptor_xyzs)
+                
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
-                n_water = int(self._wat_xyzs.shape[0] / 3)
 
                 print("")
-                print("Target concentration (M)     : %5.3f" % self._concentration)
-                print("Final concentration (M)      : %5.3f" % final_concentration)
-                print("Final composition            :")
-                print("WAT - %10d" % (n_water))
+                print("Target number of copies      :")
                 for cosolv_name in self._cosolvents:
-                    print("%3s - %10d" % (self._cosolvents[cosolv_name].resname, len(self._cosolv_xyzs[cosolv_name])))
+                    if self._copies[cosolv_name] > 0:
+                        print("%3s - %10d" % (self._cosolvents[cosolv_name].resname, self._copies[cosolv_name]))
+                print("Final number of copies       :")
+                for cosolv_name in self._cosolvents:
+                    if self._copies[cosolv_name] > 0:
+                        print("%3s - %10d" % (self._cosolvents[cosolv_name].resname, final_copies[cosolv_name]))
+
+            if self._cosolvents and self._added_as_concentrations:
+                # Select only cosolvents that are added as concentrations
+                cosolvents = {k: v for k, v in self._cosolvents.items() if k in self._added_as_concentrations}
+                # Add cosolvents to reach target concentrations
+                wat_xyzs, cosolv_xyzs, final_concentrations = _add_cosolvent_as_concentrations(self._wat_xyzs, cosolvents,
+                                                                            self._origin, self._box_size, self._concentrations,
+                                                                            receptor_xyzs)
+
+                self._wat_xyzs = wat_xyzs
+                # We update the cosolvent xyzs with the new ones
+                self._cosolv_xyzs.update(cosolv_xyzs)
+
+                print("")
+                print("Target concentration (M)     :")
+                for cosolv_name in self._cosolvents:
+                    if self._concentrations[cosolv_name] > 0:
+                        print("%3s - %10.3f" % (self._cosolvents[cosolv_name].resname, self._concentrations[cosolv_name]))
+                print("Final concentration (M)      :")
+                for cosolv_name in self._cosolvents:
+                    if self._concentrations[cosolv_name] > 0:
+                        print("%3s - %10.3f" % (self._cosolvents[cosolv_name].resname, final_concentrations[cosolv_name]))
+
+            n_water = int(self._wat_xyzs.shape[0] / 3)
+
+            print("")
+            print("Final composition            :")
+            print("WAT - %10d" % (n_water))
+            for cosolv_name in self._cosolvents:
+                print("%3s - %10d" % (self._cosolvents[cosolv_name].resname, len(self._cosolv_xyzs[cosolv_name])))
 
         else:
             print("Error                            : box dimensions were not defined.")
@@ -552,6 +821,12 @@ class CoSolventBox:
 
     def export_pdb(self, filename='cosolv_system.pdb'):
         """Export pdb file for tleap
+
+        Parameters
+        ----------
+        filename : str, default='cosolv_system.pdb'
+            Name of the pdb file
+
         """
         n_atom = 0
         n_residue = 1
@@ -622,7 +897,32 @@ class CoSolventBox:
     def write_tleap_input(self, filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop', 
                           inpcrd_filename='cosolv_system.inpcrd', protein_ff='ff19SB', dna_ff='OL15', rna_ff='OL3',
                           glycam_ff='GLYCAM_06j-1', lipid_ff='lipid21', water_ff='tip3p', gaff='gaff2'):
+        """Write tleap input file
 
+        Parameters
+        ----------
+        filename : str, default='tleap.cmd'
+            Name of the tleap input file
+        prmtop_filename : str, default='cosolv_system.prmtop'
+            Name of the prmtop file
+        inpcrd_filename : str, default='cosolv_system.inpcrd'
+            Name of the inpcrd file
+        protein_ff : str, default='ff19SB'
+            Name of the protein force field
+        dna_ff : str, default='OL15'
+            Name of the DNA force field
+        rna_ff : str, default='OL3'
+            Name of the RNA force field
+        glycam_ff : str, default='GLYCAM_06j-1'
+            Name of the glycam force field
+        lipid_ff : str, default='lipid21'
+            Name of the lipid force field
+        water_ff : str, default='tip3p'
+            Name of the water force field
+        gaff : str, default='gaff2'
+            Name of the gaff force field
+
+        """
         # Create tleap template
         TLEAP_TEMPLATE = ("source leaprc.protein.%s\n"
                           "source leaprc.DNA.%s\n"
@@ -643,19 +943,12 @@ class CoSolventBox:
 
         TLEAP_TEMPLATE += "set default nocenter on\n"
         TLEAP_TEMPLATE += "m = loadpdb %s\n" % self._pdb_filename
-
-        # Add all disulfide bridges based on the CYX resname
-        cyx_cyx_pairs = utils.find_disulfide_bridges(self._pdb_filename)
-        if cyx_cyx_pairs:
-            for cyx_cyx_pair in cyx_cyx_pairs:
-                TLEAP_TEMPLATE += 'bond m.%d.SG m.%d.SG\n' % (cyx_cyx_pair[0], cyx_cyx_pair[1])
-
+        TLEAP_TEMPLATE += "#bond m.XX.SG m.XX.SG # Template for disulfide bridge\n"
         if self._wat_xyzs is not None:
             TLEAP_TEMPLATE += "charge m\n"
             TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
             TLEAP_TEMPLATE += "addIonsRand m K+ 0\n"
             TLEAP_TEMPLATE += "check m\n"
-
         TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._box_size[0], self._box_size[1], self._box_size[2])
         TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
         TLEAP_TEMPLATE += "quit\n"

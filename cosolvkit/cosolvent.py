@@ -32,29 +32,46 @@ quit
 """
 
 
-def _atom_types_from_mol2(mol2_filename):
-    """Get atom names using OpenBabel. 
-    Because RDKit does not know how to read a mol2 file...
+def _atom_names_from_lib(lib_filename):
+    """Get atom names from a lib file.
+    
+    Parameters
+    ----------
+    lib_filename : str
+        Path to the lib file.
+
+    Returns
+    -------
+    list
+        List of atom names.
     """
     atom_names = []
     read_flag = False
-    
-    with open(mol2_filename) as f:
+
+    with open(lib_filename) as f:
         lines = f.readlines()
 
         for line in lines:
-            if '@<TRIPOS>BOND' in line:
+            if '.unit.atomspertinfo' in line:
                 read_flag = False
                 break
 
             if read_flag:
                 sline = line.split()
-                atom_names.append(sline[1])
+                atom_names.append(sline[0].replace('"', ''))
 
-            if '@<TRIPOS>ATOM' in line:
+            if '.unit.atoms' in line:
                 read_flag = True
 
     return atom_names
+
+
+def _read_coordinates_from_mol(mol_filename):
+    mol = Chem.MolFromMolFile(mol_filename, removeHs=False)
+    positions = mol.GetConformer().GetPositions()
+    positions = np.array(positions)
+
+    return positions
 
 
 def _read_coordinates_from_mol2(mol2_filename):
@@ -155,6 +172,7 @@ def _run_antechamber(mol_filename, molecule_name, resname, charge=0, charge_meth
         # We output a mol2 (and not a mol file) because the mol2 contains the GAFF atom types (instead of SYBYL)
         cmd = "antechamber -i %s -fi mdl -o out.mol2 -fo mol2 -s 2 -at %s -c %s -nc %d -rn %s"
         cmd = cmd % (local_mol_filename, gaff_version, charge_method, charge, resname)
+        print(cmd)
         ante_outputs, ante_errors = utils.execute_command(cmd)
 
         # Run parmchk2 for the additional force field file
@@ -197,6 +215,26 @@ def _run_antechamber(mol_filename, molecule_name, resname, charge=0, charge_meth
 class CoSolvent:
 
     def __init__(self, name, smiles=None, mol_filename=None, lib_filename=None, frcmod_filename=None, charge=0, resname=None):
+        """Create a CoSolvent object.
+
+        Parameters
+        ----------
+        name : str
+            Name of the molecule.
+        smiles : str, default=None
+            SMILES string of the molecule.
+        mol_filename : str, default=None
+            MOL/SDF filename of the molecule.
+        lib_filename : str, default=None
+            AMBER library filename of the molecule.
+        frcmod_filename : str, default=None
+            AMBER frcmod filename of the molecule.
+        charge : int, default=0
+            Charge of the molecule.
+        resname : str, default=None
+            Residue name of the molecule.
+
+        """
         if resname is None:
             self.resname = name[:3].upper()
         else:
@@ -213,39 +251,77 @@ class CoSolvent:
         self.name = name
         self.charge = charge
         self.positions = None
-        self._mol2_filename = None
         self._frcmod_filename = None
         self._lib_filename = None
 
         # We use mol file as input for antechamber instead of mol2
         # because of multiple issues I had in the past with that format...
         if mol_filename is None:
+            # RDKit parameters for the ETKDGv3 conformational search
+            params = AllChem.ETKDGv3()
+            params.enforceChirality = True
+            params.useSmallRingTorsions = True
+            params.useMacrocycleTorsions = True
+            params.forceTransAmides = True
+            params.useExpTorsionAnglePrefs = True
+            params.useBasicKnowledge = True
+            # Not a mistake, it's 2 not 3
+            # https://www.rdkit.org/docs/RDKit_Book.html#parameters-controlling-conformer-generation
+            params.ETVersion = 2
+
             mol_filename = '%s.mol' % self.name
             # Setup rdkit molecule
             RDmol = Chem.MolFromSmiles(smiles)
             RDmol.SetProp("_Name", name)
             RDMol = Chem.AddHs(RDmol)
-            AllChem.EmbedMolecule(RDMol)
+            AllChem.EmbedMolecule(RDMol, params=params)
+            AllChem.MMFFOptimizeMolecule(RDMol)
             with Chem.SDWriter(mol_filename) as w:
                 w.write(RDMol)
 
         if lib_filename is None and frcmod_filename is None:
             mol2_filename, frcmod_filename, lib_filename = self.parametrize(mol_filename, self.name, self.resname, self.charge)
+            positions = _read_coordinates_from_mol2(mol2_filename)
+        else:
+            positions = _read_coordinates_from_mol(mol_filename)
 
-        positions = _read_coordinates_from_mol2(mol2_filename)
         # We make sure the cosolvent is centered, especially if it was provided by the user
         # And honestly, never trust the user!
         positions = positions - np.mean(positions, axis=0)
         self.positions = positions
 
-        self.atom_names = _atom_types_from_mol2(mol2_filename)
+        self.atom_names = _atom_names_from_lib(lib_filename)
 
-        self._mol2_filename = mol2_filename
         self._lib_filename = lib_filename
         self._frcmod_filename = frcmod_filename
 
     def parametrize(self, mol_filename, molecule_name, resname, charge, charge_method="bcc", gaff_version="gaff2"):
         """Run antechamber for the small parametrization.
+
+        Parameters
+        ----------
+        mol_filename : str
+            MOL/SDF filename of the molecule.
+        molecule_name : str
+            Name of the molecule.
+        resname : str
+            Residue name of the molecule.
+        charge : int
+            Charge of the molecule.
+        charge_method : str, default="bcc"
+            Charge method to use for antechamber.
+        gaff_version : str, default="gaff2"
+            GAFF version to use for antechamber.
+
+        Returns
+        -------
+        mol2_filename : str
+            MOL2 filename of the molecule.
+        frcmod_filename : str
+            FRCMOD filename of the molecule.
+        lib_filename : str
+            LIB filename of the molecule.
+
         """
         mol2_filename, frcmod_filename, lib_filename = _run_antechamber(mol_filename, molecule_name, resname,
                                                                         charge, charge_method, gaff_version)

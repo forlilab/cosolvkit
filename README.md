@@ -27,9 +27,9 @@ $ conda activate cosolvkit
 
 Finally, we can install the `CoSolvKit` package
 ```bash
-$ git clone https://github.com/jeeberhardt/cosolvkit
+$ git clone https://github.com/forlilab/cosolvkit
 $ cd cosolvkit
-$ pip install .
+$ pip install -e .
 ```
 
 ## Quick tutorial
@@ -38,13 +38,13 @@ $ pip install .
 ```python
 from cosolvkit import CoSolventBox
 
-cosolv = CoSolventBox(concentration=1.0, cutoff=12, box='cubic') # 1 M concentration
+cosolv = CoSolventBox(box='cubic', cutoff=12)
 cosolv.add_receptor("protein.pdb")
-cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1', resname="BEN")
-cosolv.add_cosolvent(name='methanol', smiles='CO', resname="MEH")
-cosolv.add_cosolvent(name='propane', smiles='CCC', resname="PRP")
-cosolv.add_cosolvent(name='imidazole', smiles='C1=CN=CN1')
-cosolv.add_cosolvent(name='acetamide', smiles='CC(=O)NC', resname="ACM")
+cosolv.add_cosolvent(name='benzene', concentration=0.5, smiles='c1ccccc1', resname="BEN")
+cosolv.add_cosolvent(name='methanol', concentration=1.0, smiles='CO', resname="MEH")
+cosolv.add_cosolvent(name='propane', concentration=0.5, smiles='CCC', resname="PRP")
+cosolv.add_cosolvent(name='imidazole', concentration=1.0, smiles='C1=CN=CN1')
+cosolv.add_cosolvent(name='acetamide', copies=10, smiles='CC(=O)NC', resname="ACM")
 cosolv.build()
 cosolv.export_pdb(filename="cosolv_system.pdb")
 cosolv.write_tleap_input(filename="tleap.cmd", prmtop_filename="cosolv_system.prmtop",
@@ -94,9 +94,9 @@ You already have your system ready and it contains a super fancy lipid membrane 
 ```python
 from cosolvkit import CoSolventBox
 
-cosolv = CoSolventBox(concentration=1.0, use_existing_waterbox=True) # 0.1 M concentration
+cosolv = CoSolventBox(use_existing_waterbox=True)
 cosolv.add_receptor("bilayer_protein.pdb")
-cosolv.add_cosolvent(name='benzene', smiles='c1ccccc1', resname="BEN")
+cosolv.add_cosolvent(name='benzene', concentration=1.0, smiles='c1ccccc1', resname="BEN")
 cosolv.build()
 cosolv.export_pdb(filename='cosolv_system.pdb')
 cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
@@ -110,7 +110,7 @@ You already placed water molecules at some very strategic positions around a lig
 ```python
 from cosolvkit import CoSolventBox
 
-cosolv = CoSolventBox(cutoff=12, box='orthorombic', keep_existing_water=True)
+cosolv = CoSolventBox(box='orthorombic', cutoff=12, keep_existing_water=True)
 cosolv.add_receptor("complex_protein_ligand.pdb")
 cosolv.build()
 cosolv.export_pdb(filename='system.pdb')
