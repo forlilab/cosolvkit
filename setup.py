@@ -18,11 +18,11 @@ def find_files(directory):
 
 
 setup(name="cosolvkit",
-      version='0.3.2',
+      version='0.3.3',
       description="CoSolvKit",
       author="Jerome Eberhardt",
-      author_email="jerome@scripps.edu",
-      url="https://github.com/jeeberhardt/cosolvkit",
+      author_email="forli@scripps.edu",
+      url="https://github.com/forlilab/cosolvkit",
       packages=find_packages(),
       scripts=["scripts/wk_prepare_receptor.py"],
       package_data={
@@ -35,7 +35,10 @@ setup(name="cosolvkit",
       license="MIT",
       keywords=["molecular modeling", "drug design",
                 "cosolvent", "MD simulations"],
-      classifiers=["Programming Language :: Python :: 3.7",
+      classifiers=["Programming Language :: Python :: 3.8",
+                   "Programming Language :: Python :: 3.9",
+                   "Programming Language :: Python :: 3.10",
+                   "Programming Language :: Python :: 3.11",
                    "Operating System :: Unix",
                    "Operating System :: MacOS",
                    "Topic :: Scientific/Engineering"]
