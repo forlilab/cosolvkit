@@ -40,15 +40,15 @@ from cosolvkit import CoSolventBox
 
 cosolv = CoSolventBox(box='cubic', cutoff=12)
 cosolv.add_receptor("protein.pdb")
-cosolv.add_cosolvent(name='benzene', concentration=0.5, smiles='c1ccccc1', resname="BEN")
+cosolv.add_cosolvent(name='benzene', concentration=0.5, smiles='c1ccccc1')
 cosolv.add_cosolvent(name='methanol', concentration=1.0, smiles='CO', resname="MEH")
 cosolv.add_cosolvent(name='propane', concentration=0.5, smiles='CCC', resname="PRP")
 cosolv.add_cosolvent(name='imidazole', concentration=1.0, smiles='C1=CN=CN1')
 cosolv.add_cosolvent(name='acetamide', copies=10, smiles='CC(=O)NC', resname="ACM")
 cosolv.build()
 cosolv.export_pdb(filename="cosolv_system.pdb")
-cosolv.write_tleap_input(filename="tleap.cmd", prmtop_filename="cosolv_system.prmtop",
-                         inpcrd_filename="cosolv_system.inpcrd")
+cosolv.prepare_system_for_amber(filename="tleap.cmd", prmtop_filename="cosolv_system.prmtop",
+                                inpcrd_filename="cosolv_system.inpcrd")
 ```
 
 2. **Run tleap to create Amber topology and coordinates files**
@@ -96,11 +96,11 @@ from cosolvkit import CoSolventBox
 
 cosolv = CoSolventBox(use_existing_waterbox=True)
 cosolv.add_receptor("bilayer_protein.pdb")
-cosolv.add_cosolvent(name='benzene', concentration=1.0, smiles='c1ccccc1', resname="BEN")
+cosolv.add_cosolvent(name='benzene', concentration=1.0, smiles='c1ccccc1')
 cosolv.build()
 cosolv.export_pdb(filename='cosolv_system.pdb')
-cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
-                         inpcrd_filename='cosolv_system.inpcrd')
+cosolv.prepare_system_for_amber(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
+                                inpcrd_filename='cosolv_system.inpcrd')
 ```
 
 ## Keep existing water molecules
@@ -114,9 +114,8 @@ cosolv = CoSolventBox(box='orthorombic', cutoff=12, keep_existing_water=True)
 cosolv.add_receptor("complex_protein_ligand.pdb")
 cosolv.build()
 cosolv.export_pdb(filename='system.pdb')
-# Don't forget to add the Amber lib/frcmod parameter files in the tleap input for the ligand
-cosolv.write_tleap_input(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
-                         inpcrd_filename='cosolv_system.inpcrd')
+cosolv.prepare_system_for_amber(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
+                                inpcrd_filename='cosolv_system.inpcrd')
 ```
 
 ## Add centroid-repulsive potential with OpenMM

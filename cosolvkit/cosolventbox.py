@@ -192,7 +192,7 @@ def _create_waterbox(box_origin, box_size, receptor_xyzs=None, watref_xyzs=None,
     # Cut everything that goes outside the box
     in_box = _water_is_in_box(wat_xyzs, box_origin, box_size)
     wat_xyzs = wat_xyzs[in_box]
-    
+
     # Remove water molecules that are too close from the receptor
     if receptor_xyzs is not None:
         too_close_protein = _is_water_close_from_receptor(wat_xyzs, receptor_xyzs, distance_from_receptor)
@@ -302,7 +302,7 @@ def _add_cosolvent_as_concentrations(wat_xyzs, cosolvents, box_origin, box_size,
 
             # Add fragment to list
             cosolv_xyzs[cosolv_name].append(cosolv_xyz)
-            
+
             # Get the ids of all the closest water atoms
             to_be_removed = kdtree.query_ball_point(cosolv_xyz, distance_from_cosolvent)
             # Keep the unique ids
@@ -410,7 +410,7 @@ def _add_cosolvent_as_copies(wat_xyzs, cosolvents, box_origin, box_size, target_
 
         # Add fragment to list
         cosolv_xyzs[cosolv_name].append(cosolv_xyz)
-        
+
         # Get the ids of all the closest water atoms
         to_be_removed = kdtree.query_ball_point(cosolv_xyz, distance_from_cosolvent)
         # Keep the unique ids
@@ -475,7 +475,7 @@ def _apply_neutral_patches(receptor_data, peptides_terminus):
                             ("C", "ACE", peptide[0] - 1, chain_id, c_ace_xyz, False, False),
                             ("O", "ACE", peptide[0] - 1, chain_id, o_ace_xyz, False, False)]
                     ace_residue = np.array(data, dtype=dtype)
-                    
+
                     # The atom before the N-ter patch becomes automatically a TER atom
                     receptor_data[first_atom_id - 1]['is_ter'] = True
                     receptor_data = np.insert(receptor_data, first_atom_id, ace_residue, axis=0)
@@ -672,9 +672,8 @@ class CoSolventBox:
 
             self._center = np.mean([[xmin, ymin, zmin], [xmax, ymax, zmax]], axis=0)
             self._origin = self._center - (self._box_size / 2)
-                
-    def add_cosolvent(self, name, concentration=None, copies=None, center_positions=None,
-                      smiles=None, mol_filename=None, lib_filename=None, frcmod_filename=None, charge=0, resname=None):
+
+    def add_cosolvent(self, name, concentration=None, copies=None, smiles=None, mol_filename=None, center_positions=None, resname=None):
         """Add cosolvent and parametrize it
 
         Parameters
@@ -685,18 +684,12 @@ class CoSolventBox:
             Concentration of the cosolvent in M
         copies : int, optional
             Number of copies of the cosolvent to add
-        center_positions : np.ndarray, optional
-            Center positions of each cosolvent molecule added
         smiles : str, optional
             SMILES string of the cosolvent
         mol_filename : str, optional
             Name of the mol2 file containing the cosolvent
-        lib_filename : str, optional
-            Name of the lib file containing the cosolvent
-        frcmod_filename : str, optional
-            Name of the frcmod file containing the cosolvent
-        charge : int, optional
-            Charge of the cosolvent
+        center_positions : np.ndarray, optional
+            Center positions of each cosolvent molecule added
         resname : str, optional
             Residue name of the cosolvent
 
@@ -715,7 +708,7 @@ class CoSolventBox:
             assert copies == center_positions.shape[0], 'Copies and positions must have the same length.'
             assert center_positions.shape[1] == 3, 'Center positions must be 3D.'
 
-        c = CoSolvent(name, smiles, mol_filename, lib_filename, frcmod_filename, charge, resname)
+        c = CoSolvent(name, smiles, mol_filename, resname)
         self._cosolvents[name] = c
 
         if concentration is not None:
@@ -724,7 +717,7 @@ class CoSolventBox:
         else:
             self._added_as_copies.append(name)
             concentration = 0
-        
+
         self._concentrations[name] = concentration
         self._copies[name] = copies
         self._center_positions[name] = center_positions
@@ -769,7 +762,7 @@ class CoSolventBox:
                 wat_xyzs, cosolv_xyzs, final_copies = _add_cosolvent_as_copies(self._wat_xyzs, cosolvents,
                                                               self._origin, self._box_size, self._copies, self._center_positions,
                                                               receptor_xyzs)
-                
+
                 self._wat_xyzs = wat_xyzs
                 self._cosolv_xyzs = cosolv_xyzs
 
@@ -820,7 +813,7 @@ class CoSolventBox:
         print("----------------------------------------------")
 
     def export_pdb(self, filename='cosolv_system.pdb'):
-        """Export pdb file for tleap
+        """Export pdb file of the whole system
 
         Parameters
         ----------
@@ -894,67 +887,92 @@ class CoSolventBox:
 
             w.write("END\n")
 
-    def write_tleap_input(self, filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop', 
-                          inpcrd_filename='cosolv_system.inpcrd', protein_ff='ff19SB', dna_ff='OL15', rna_ff='OL3',
-                          glycam_ff='GLYCAM_06j-1', lipid_ff='lipid21', water_ff='tip3p', gaff='gaff2'):
-        """Write tleap input file
+    def prepare_system_for_amber(self, filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop', 
+                            inpcrd_filename='cosolv_system.inpcrd', pdb_filename='cosolv_system.pdb', 
+                            protein_ff='ff19SB', dna_ff='OL15', rna_ff='OL3', glycam_ff='GLYCAM_06j-1', 
+                            lipid_ff='lipid21', water_ff='tip3p', gaff='gaff2', run_tleap=False):
+            """Prepare the system for Amber forcefield. This includes parametrization of the cosolvent 
+            molecules using GAFF and the generation of the tleap input file.
 
-        Parameters
-        ----------
-        filename : str, default='tleap.cmd'
-            Name of the tleap input file
-        prmtop_filename : str, default='cosolv_system.prmtop'
-            Name of the prmtop file
-        inpcrd_filename : str, default='cosolv_system.inpcrd'
-            Name of the inpcrd file
-        protein_ff : str, default='ff19SB'
-            Name of the protein force field
-        dna_ff : str, default='OL15'
-            Name of the DNA force field
-        rna_ff : str, default='OL3'
-            Name of the RNA force field
-        glycam_ff : str, default='GLYCAM_06j-1'
-            Name of the glycam force field
-        lipid_ff : str, default='lipid21'
-            Name of the lipid force field
-        water_ff : str, default='tip3p'
-            Name of the water force field
-        gaff : str, default='gaff2'
-            Name of the gaff force field
+            This step does not automatically generate the prmtop and inpcrd files. The user has to run
+            tleap manually using the following command: tleap -s -f tleap.cmd. If you know what you are doing,
+            you can set the run_tleap argument to True and the tleap command will be executed automatically.
 
-        """
-        # Create tleap template
-        TLEAP_TEMPLATE = ("source leaprc.protein.%s\n"
-                          "source leaprc.DNA.%s\n"
-                          "source leaprc.RNA.%s\n"
-                          "source leaprc.%s\n"
-                          "source leaprc.%s\n"
-                          "source leaprc.water.%s\n"
-                          "source leaprc.%s\n")
-        TLEAP_TEMPLATE = TLEAP_TEMPLATE % (protein_ff, dna_ff, rna_ff, glycam_ff, lipid_ff, water_ff, gaff)
+            Parameters
+            ----------
+            filename : str, default='tleap.cmd'
+                Name of the tleap input file
+            prmtop_filename : str, default='cosolv_system.prmtop'
+                Name of the prmtop file
+            inpcrd_filename : str, default='cosolv_system.inpcrd'
+                Name of the inpcrd file
+            protein_ff : str, default='ff19SB'
+                Name of the protein force field
+            dna_ff : str, default='OL15'
+                Name of the DNA force field
+            rna_ff : str, default='OL3'
+                Name of the RNA force field
+            glycam_ff : str, default='GLYCAM_06j-1'
+                Name of the glycam force field
+            lipid_ff : str, default='lipid21'
+                Name of the lipid force field
+            water_ff : str, default='tip3p'
+                Name of the water force field
+            gaff : str, default='gaff2'
+                Name of the gaff force field
+            run_tleap : bool, default=False
+                If True, run tleap after generating the tleap input file. This step will generate 
+                the prmtop and inpcrd files.
 
-        if self._cosolvents is not None:
-            for name in self._cosolvents:
-                frcmod_filename = os.path.basename(self._cosolvents[name]._frcmod_filename)
-                lib_filename = os.path.basename(self._cosolvents[name]._lib_filename)
+            """
+            # Create tleap template
+            TLEAP_TEMPLATE = ("source leaprc.protein.%s\n"
+                            "source leaprc.DNA.%s\n"
+                            "source leaprc.RNA.%s\n"
+                            "source leaprc.%s\n"
+                            "source leaprc.%s\n"
+                            "source leaprc.water.%s\n"
+                            "source leaprc.%s\n")
+            TLEAP_TEMPLATE = TLEAP_TEMPLATE % (protein_ff, dna_ff, rna_ff, glycam_ff, lipid_ff, water_ff, gaff)
 
-                TLEAP_TEMPLATE += "loadamberparams %s\n" % frcmod_filename
-                TLEAP_TEMPLATE += "loadoff %s\n" % lib_filename
+            # Write system pdb file
+            if not os.path.exists(pdb_filename):
+                self.export_pdb(filename=pdb_filename)
 
-        TLEAP_TEMPLATE += "set default nocenter on\n"
-        TLEAP_TEMPLATE += "m = loadpdb %s\n" % self._pdb_filename
-        TLEAP_TEMPLATE += "#bond m.XX.SG m.XX.SG # Template for disulfide bridge\n"
-        if self._wat_xyzs is not None:
-            TLEAP_TEMPLATE += "charge m\n"
-            TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
-            TLEAP_TEMPLATE += "addIonsRand m K+ 0\n"
-            TLEAP_TEMPLATE += "check m\n"
-        TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._box_size[0], self._box_size[1], self._box_size[2])
-        TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
-        TLEAP_TEMPLATE += "quit\n"
+            # Parametrize cosolvent molecules
+            if self._cosolvents is not None:
+                for cosolvent_name, cosolvent in self._cosolvents.items():
+                    _, frcmod_filename, lib_filename = cosolvent.parametrize(charge_method="bcc", gaff_version=gaff)
 
-        with open(filename, 'w') as w:
-            w.write(TLEAP_TEMPLATE)
+                    TLEAP_TEMPLATE += "loadamberparams %s\n" % os.path.basename(frcmod_filename)
+                    TLEAP_TEMPLATE += "loadoff %s\n" % os.path.basename(lib_filename)
 
-        # cmd = 'tleap -f tleap.cmd'
-        # outputs, errors = utils.execute_command(cmd)
+            TLEAP_TEMPLATE += "set default nocenter on\n"
+            TLEAP_TEMPLATE += "m = loadpdb %s\n" % pdb_filename
+
+            # Add all disulfide bridges based on the CYX resname
+            cyx_cyx_pairs = utils.find_disulfide_bridges(pdb_filename)
+            if cyx_cyx_pairs:
+                for cyx_cyx_pair in cyx_cyx_pairs:
+                    TLEAP_TEMPLATE += 'bond m.%d.SG m.%d.SG\n' % (cyx_cyx_pair[0], cyx_cyx_pair[1])
+
+            # Add counter ions
+            if self._wat_xyzs is not None:
+                TLEAP_TEMPLATE += "charge m\n"
+                TLEAP_TEMPLATE += "addIonsRand m Cl- 0\n"
+                TLEAP_TEMPLATE += "addIonsRand m K+ 0\n"
+                TLEAP_TEMPLATE += "check m\n"
+
+            TLEAP_TEMPLATE += "set m box {%d %d %d}\n" % (self._box_size[0], self._box_size[1], self._box_size[2])
+            TLEAP_TEMPLATE += "saveamberparm m %s %s\n" % (prmtop_filename, inpcrd_filename)
+            TLEAP_TEMPLATE += "quit\n"
+
+            with open(filename, 'w') as w:
+                w.write(TLEAP_TEMPLATE)
+
+            if run_tleap:
+                cmd = 'tleap -s -f %s' % filename
+                outputs, errors = utils.execute_command(cmd)
+
+                if errors:
+                    print(errors)
