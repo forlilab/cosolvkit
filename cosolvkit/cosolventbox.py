@@ -592,15 +592,17 @@ def _generate_pdb(receptor_data=None, cosolvents=None, cosolv_xyzs=None, wat_xyz
 
     """
     n_atom = 1
-    n_residue = 1
-    n_atom_water = 1
+    receptor_n_atom = 0
     chain_alphabet = list(string.ascii_uppercase)
     pdb_string = ""
+    pdb_conects = []
     # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
     template = "{:6s}{:>5s} {:^4s}{:1s}{:3s} {:1s}{:>4s}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}      {:>4s}{:>2s}{:2s}\n"
 
     # Write protein first
     if receptor_data is not None:
+        receptor_n_atom = receptor_data.shape[0]
+
         for i, atom in enumerate(receptor_data):
             x, y, z = atom['xyz']
 
@@ -625,32 +627,43 @@ def _generate_pdb(receptor_data=None, cosolvents=None, cosolv_xyzs=None, wat_xyz
 
     # Write cosolvent molecules
     if cosolv_xyzs is not None:
+        cosolvent_n_atom = 0
+
         for name in cosolvents:
+            n_residue = 1
             selected_cosolv_xyzs = cosolv_xyzs[name]
             resname = cosolvents[name].resname
             atom_names = cosolvents[name].atom_names
+            n_atoms = len(atom_names)
+            pdb_conect = cosolvents[name].pdb_conect
 
-            for residue_xyzs in selected_cosolv_xyzs:
+            for i, residue_xyzs in enumerate(selected_cosolv_xyzs):
                 for atom_xyz, atom_name in zip(residue_xyzs, atom_names):
                     x, y, z = atom_xyz
-                    pdb_string += template.format("ATOM", hy36encode(5, n_atom), atom_name, " ",
+                    pdb_string += template.format("HETATM", hy36encode(5, n_atom), atom_name, " ",
                                                   resname, chain_alphabet[current_chain_index], hy36encode(4, n_residue),
                                                   " ", x, y, z, 0., 0., resname, atom_name[0], " ")
                     n_atom += 1
 
+                # CONECT records
+                pdb_conects.append([(c + (i * n_atoms)) + receptor_n_atom + cosolvent_n_atom for c in pdb_conect])
+
                 n_residue += 1
                 pdb_string += "TER\n"
-            
+
+            cosolvent_n_atom += len(selected_cosolv_xyzs) * n_atoms
             current_chain_index += 1
 
     # Write water molecules
     if wat_xyzs is not None:
+        n_residue = 1
+        n_atom_water = 1
         water_atom_names = ["O", "H1", "H2"] * int(wat_xyzs.shape[0] / 3)
 
         # And water molecules at the end
         for wat_xyz, atom_name in zip(wat_xyzs, water_atom_names):
             x, y, z = wat_xyz
-            pdb_string += template.format("ATOM", hy36encode(5, n_atom), atom_name, " ",
+            pdb_string += template.format("HETATM", hy36encode(5, n_atom), atom_name, " ",
                                           'WAT', chain_alphabet[current_chain_index], hy36encode(4, n_residue),
                                           " ", x, y, z, 0., 0., "WAT", atom_name[0], " ")
 
@@ -660,6 +673,11 @@ def _generate_pdb(receptor_data=None, cosolvents=None, cosolv_xyzs=None, wat_xyz
 
             n_atom_water += 1
             n_atom += 1
+    
+    if pdb_conects:
+        for pdb_conect in pdb_conects:
+            for conect in pdb_conect:
+                pdb_string += "CONECT" + "".join(["{:>5d}".format(c) for c in conect]) + "\n"
 
     pdb_string += "END\n"
 

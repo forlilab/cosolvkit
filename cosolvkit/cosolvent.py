@@ -61,6 +61,19 @@ def _generate_atom_names_from_mol(rdkit_mol):
     return atom_names
 
 
+def _get_pdb_conect(rdkit_mol):
+    conect = []
+
+    pdb_string = Chem.MolToPDBBlock(rdkit_mol)
+    pdb_lines = pdb_string.split('\n')
+
+    for i, line in enumerate(pdb_lines):
+        if 'CONECT' in line:
+            conect.append(np.array([int(n) for n in line.split()[1:]]))
+
+    return conect
+
+
 def _transfer_coordinates_from_pdb_to_mol2(pdb_filename, mol2_filename, new_mol2_filename=None):
     """ Transfer coordinates from pdb to mol2 filename. 
     I neither trust RDKit or OpenBabel for doing that...
@@ -204,6 +217,7 @@ class CoSolvent:
         self.charge = None
         self.positions = None
         self.mol_filename = None
+        self.pdb_conect = None
 
         # We use mol file as input for antechamber instead of mol2
         # because of multiple issues I had in the past with that format...
@@ -243,6 +257,7 @@ class CoSolvent:
         positions = positions - np.mean(positions, axis=0)
         self.positions = positions
         self.mol_filename = mol_filename
+        self.pdb_conect = _get_pdb_conect(mol)
 
     def parametrize(self, charge_method="bcc", gaff_version="gaff2"):
         """Run antechamber for the small parametrization.
