@@ -8,6 +8,7 @@
 
 import itertools
 import os
+import string
 import sys
 from operator import itemgetter
 
@@ -19,6 +20,49 @@ from . import utils
 
 
 AVOGADRO_CONSTANT_NA = 6.02214179e+23
+digits_upper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+digits_lower = digits_upper.lower()
+digits_upper_values = dict([pair for pair in zip(digits_upper, range(36))])
+digits_lower_values = dict([pair for pair in zip(digits_lower, range(36))])
+
+
+def encode_pure(digits, value):
+    "encodes value using the given digits"
+    assert value >= 0
+    
+    if (value == 0): return digits[0]
+    n = len(digits)
+    
+    result = []
+    
+    while (value != 0):
+        rest = value // n
+        result.append(digits[value - rest * n])
+        value = rest
+    
+    result.reverse()
+    
+    return "".join(result)
+
+
+def hy36encode(width, value):
+    "encodes value as base-10/upper-case base-36/lower-case base-36 hybrid"
+    
+    i = value
+    
+    if (i >= 1-10**(width-1)):
+        if (i < 10**width):
+            return ("%%%dd" % width) % i
+        i -= 10**width
+        if (i < 26*36**(width-1)):
+            i += 10*36**(width-1)
+            return encode_pure(digits_upper, i)
+        i -= 26*36**(width-1)
+        if (i < 26*36**(width-1)):
+            i += 10*36**(width-1)
+            return encode_pure(digits_lower, i)
+    
+    raise ValueError("value out of range.")
 
 
 def _read_pdb(pdb_filename):
@@ -520,6 +564,108 @@ def _apply_neutral_patches(receptor_data, peptides_terminus):
     return receptor_data
 
 
+def _generate_pdb(receptor_data=None, cosolvents=None, cosolv_xyzs=None, wat_xyzs=None):
+    """Generate the pdb string in hybrid-36 PDB format.
+
+    The output PDB follows the hybrid36 format in order to handle >100k atoms, which means 
+    that the atom/residue numbers are encoded in base 36. See https://cci.lbl.gov/hybrid_36/ 
+    and https://cci.lbl.gov/hybrid_36/pdb_format_evolution.pdf for more information about
+    this particular PDB format. This format is supported by MDAnalysis, OpenMM, Pymol, VMD, etc.
+
+    Parameters
+    ----------
+    receptor_data : np.ndarray
+        Coordinates of the receptor.
+    cosolvents : dict
+        Dictionary of cosolvents. The keys are the names of the cosolvents and
+        the values are the coordinates of the cosolvent molecules.
+    cosolv_xyzs : dict
+        Dictionary of cosolvent molecules. The keys are the names of the cosolvents
+        and the values are the coordinates of the cosolvent molecules.
+    wat_xyzs : np.ndarray
+        Coordinates of the water molecules.
+
+    Returns
+    -------
+    pdb_string : str
+        The output pdb string (hybrid-36 PDB format).
+
+    """
+    n_atom = 1
+    n_residue = 1
+    n_atom_water = 1
+    chain_alphabet = list(string.ascii_uppercase)
+    pdb_string = ""
+    # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
+    template = "{:6s}{:>5s} {:^4s}{:1s}{:3s} {:1s}{:>4s}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}      {:>4s}{:>2s}{:2s}\n"
+
+    # Write protein first
+    if receptor_data is not None:
+        for i, atom in enumerate(receptor_data):
+            x, y, z = atom['xyz']
+
+            # Special case when the atom types is 4 caracters long
+            if len(atom['name']) <= 3:
+                name = ' ' + atom['name']
+            else:
+                name = atom['name']
+
+            pdb_string += template.format("ATOM", hy36encode(5, n_atom), name, " ",
+                                          atom['resname'], atom['chain'], hy36encode(4, atom['resid']),
+                                          " ", x, y, z, 0., 0., " ", atom['name'][0], " ")
+
+            if atom['is_ter']:
+                pdb_string += 'TER\n'
+            
+            n_atom += 1
+    
+    # We look for the highest chain index in the receptor, in 
+    # case chains are not in alphabetical order. And we add 1.
+    current_chain_index = chain_alphabet.index(max(receptor_data['chain'])) + 1
+
+    # Write cosolvent molecules
+    if cosolv_xyzs is not None:
+        for name in cosolvents:
+            selected_cosolv_xyzs = cosolv_xyzs[name]
+            resname = cosolvents[name].resname
+            atom_names = cosolvents[name].atom_names
+
+            for residue_xyzs in selected_cosolv_xyzs:
+                for atom_xyz, atom_name in zip(residue_xyzs, atom_names):
+                    x, y, z = atom_xyz
+                    pdb_string += template.format("ATOM", hy36encode(5, n_atom), atom_name, " ",
+                                                  resname, chain_alphabet[current_chain_index], hy36encode(4, n_residue),
+                                                  " ", x, y, z, 0., 0., resname, atom_name[0], " ")
+                    n_atom += 1
+
+                n_residue += 1
+                pdb_string += "TER\n"
+            
+            current_chain_index += 1
+
+    # Write water molecules
+    if wat_xyzs is not None:
+        water_atom_names = ["O", "H1", "H2"] * int(wat_xyzs.shape[0] / 3)
+
+        # And water molecules at the end
+        for wat_xyz, atom_name in zip(wat_xyzs, water_atom_names):
+            x, y, z = wat_xyz
+            pdb_string += template.format("ATOM", hy36encode(5, n_atom), atom_name, " ",
+                                          'WAT', chain_alphabet[current_chain_index], hy36encode(4, n_residue),
+                                          " ", x, y, z, 0., 0., "WAT", atom_name[0], " ")
+
+            if n_atom_water % 3 == 0:
+                n_residue += 1
+                pdb_string += 'TER\n'
+
+            n_atom_water += 1
+            n_atom += 1
+
+    pdb_string += "END\n"
+
+    return pdb_string
+
+
 class CoSolventBox:
 
     def __init__(self, box="cubic", cutoff=12, center=None, box_size=None,
@@ -723,7 +869,10 @@ class CoSolventBox:
         self._center_positions[name] = center_positions
     
     def build(self):
-        """Build the cosolvent box
+        """Build the cosolvent box. It involves the following steps:
+
+        1. Create the water box (if not using an existing one)
+        2. Add cosolvents as copies or concentrations
 
         """
         if self._origin is not None:
@@ -813,80 +962,26 @@ class CoSolventBox:
         print("----------------------------------------------")
 
     def export_pdb(self, filename='cosolv_system.pdb'):
-        """Export pdb file of the whole system
+        """Export pdb file (hybrid-36 format) of the whole system.
+
+        The output PDB follows the hybrid36 format in order to handle >100k atoms, which means 
+        that the atom/residue numbers are encoded in base 36. See https://cci.lbl.gov/hybrid_36/ 
+        and https://cci.lbl.gov/hybrid_36/pdb_format_evolution.pdf for more information about
+        this particular PDB format. This format is supported by MDAnalysis, OpenMM, Pymol, VMD, etc.
 
         Parameters
         ----------
         filename : str, default='cosolv_system.pdb'
-            Name of the pdb file
+            Name of the output pdb file (hybrid-36 PDB format)
 
         """
-        n_atom = 0
-        n_residue = 1
-        n_atom_water = 1
-        # We get ride of the segid, otherwise the number of atoms cannot exceed 9.999
-        template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}      {:>4s}{:>2s}{:2s}\n"
-        # Needed to write the tleap script later
         self._pdb_filename = filename
+        pdb_string = _generate_pdb(self._receptor_data, self._cosolvents, self._cosolv_xyzs, self._wat_xyzs)
 
         # Write pdb file
         with open(filename, 'w') as w:
-            # Write protein first
-            if self._receptor_data is not None:
-                for i, atom in enumerate(self._receptor_data):
-                    x, y, z = atom['xyz']
-
-                    # Special case when the atom types is 4 caracters long
-                    if len(atom['name']) <= 3:
-                        name = ' ' + atom['name']
-                    else:
-                        name = atom['name']
-
-                    w.write(template.format("ATOM", (i + 1) % 100000, name, " ",
-                                            atom['resname'], atom['chain'], atom['resid'] % 10000,
-                                            " ", x, y, z, 0., 0., " ", atom['name'][0], " "))
-
-                    if atom['is_ter']:
-                        w.write('TER\n')
-
-            # Write cosolvent molecules
-            if self._cosolv_xyzs is not None:
-                for name in self._cosolvents:
-                    cosolv_xyzs = self._cosolv_xyzs[name]
-                    resname = self._cosolvents[name].resname
-                    atom_names = self._cosolvents[name].atom_names
-
-                    for residue_xyzs in cosolv_xyzs:
-                        for atom_xyz, atom_name in zip(residue_xyzs, atom_names):
-                            x, y, z = atom_xyz
-                            w.write(template.format("ATOM", n_atom % 100000, atom_name, " ",
-                                                    resname, " ", n_residue  % 10000,
-                                                    " ", x, y, z, 0., 0., resname, atom_name[0], " "))
-                            n_atom += 1
-                        n_residue += 1
-
-                        w.write("TER\n")
-
-            # Write water molecules
-            if self._wat_xyzs is not None:
-                water_atom_names = ["O", "H1", "H2"] * int(self._wat_xyzs.shape[0] / 3)
-
-                # And water molecules at the end
-                for wat_xyz, atom_name in zip(self._wat_xyzs, water_atom_names):
-                    x, y, z = wat_xyz
-                    w.write(template.format("ATOM", n_atom % 100000, atom_name, " ",
-                                            'WAT', " ", n_residue % 10000,
-                                            " ", x, y, z, 0., 0., "WAT", atom_name[0], " "))
-
-                    if n_atom_water % 3 == 0:
-                        n_residue += 1
-                        w.write('TER\n')
-
-                    n_atom_water += 1
-                    n_atom += 1
-
-            w.write("END\n")
-
+            w.write(pdb_string)
+            
     def prepare_system_for_amber(self, filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop', 
                             inpcrd_filename='cosolv_system.inpcrd', pdb_filename='cosolv_system.pdb', 
                             protein_ff='ff19SB', dna_ff='OL15', rna_ff='OL3', glycam_ff='GLYCAM_06j-1', 
@@ -903,9 +998,11 @@ class CoSolventBox:
             filename : str, default='tleap.cmd'
                 Name of the tleap input file
             prmtop_filename : str, default='cosolv_system.prmtop'
-                Name of the prmtop file
+                Name of the output prmtop file
             inpcrd_filename : str, default='cosolv_system.inpcrd'
-                Name of the inpcrd file
+                Name of the output inpcrd file
+            pdb_filename : str, default='cosolv_system.pdb'
+                Name of the output pdb file (hybrid-36 PDB format)
             protein_ff : str, default='ff19SB'
                 Name of the protein force field
             dna_ff : str, default='OL15'
@@ -936,12 +1033,11 @@ class CoSolventBox:
             TLEAP_TEMPLATE = TLEAP_TEMPLATE % (protein_ff, dna_ff, rna_ff, glycam_ff, lipid_ff, water_ff, gaff)
 
             # Write system pdb file
-            if not os.path.exists(pdb_filename):
-                self.export_pdb(filename=pdb_filename)
+            self.export_pdb(filename=pdb_filename)
 
             # Parametrize cosolvent molecules
             if self._cosolvents is not None:
-                for cosolvent_name, cosolvent in self._cosolvents.items():
+                for _, cosolvent in self._cosolvents.items():
                     _, frcmod_filename, lib_filename = cosolvent.parametrize(charge_method="bcc", gaff_version=gaff)
 
                     TLEAP_TEMPLATE += "loadamberparams %s\n" % os.path.basename(frcmod_filename)
