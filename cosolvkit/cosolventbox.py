@@ -1003,7 +1003,8 @@ class CoSolventBox:
     def prepare_system_for_amber(self, filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop', 
                             inpcrd_filename='cosolv_system.inpcrd', pdb_filename='cosolv_system.pdb', 
                             protein_ff='ff19SB', dna_ff='OL15', rna_ff='OL3', glycam_ff='GLYCAM_06j-1', 
-                            lipid_ff='lipid21', water_ff='tip3p', gaff='gaff2', run_tleap=False):
+                            lipid_ff='lipid21', water_ff='tip3p', gaff='gaff2', 
+                            lib_files=None, frcmod_files=None, run_tleap=False):
             """Prepare the system for Amber forcefield. This includes parametrization of the cosolvent 
             molecules using GAFF and the generation of the tleap input file.
 
@@ -1035,6 +1036,10 @@ class CoSolventBox:
                 Name of the water force field
             gaff : str, default='gaff2'
                 Name of the gaff force field
+            lib_files : str or list of str, default=None,
+                Extra amber lib files to be included
+            frcmod_files : str or list of str, default=None,
+                Extra amber frcmod file to be included
             run_tleap : bool, default=False
                 If True, run tleap after generating the tleap input file. This step will generate 
                 the prmtop and inpcrd files.
@@ -1060,6 +1065,18 @@ class CoSolventBox:
 
                     TLEAP_TEMPLATE += "loadamberparams %s\n" % os.path.basename(frcmod_filename)
                     TLEAP_TEMPLATE += "loadoff %s\n" % os.path.basename(lib_filename)
+
+            # Add extra lib and frcmod files
+            if lib_files is not None and frcmod_files is not None:
+                if isinstance(lib_files, str):
+                    lib_files = [lib_files]
+
+                if isinstance(frcmod_files, str):
+                    frcmod_files = [frcmod_files]
+
+                for lib_file, frcmod_file in zip(lib_files, frcmod_files):
+                    TLEAP_TEMPLATE += "loadamberparams %s\n" % os.path.basename(frcmod_file)
+                    TLEAP_TEMPLATE += "loadoff %s\n" % os.path.basename(lib_file)
 
             TLEAP_TEMPLATE += "set default nocenter on\n"
             TLEAP_TEMPLATE += "m = loadpdb %s\n" % pdb_filename
