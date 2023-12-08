@@ -1107,3 +1107,4 @@ class CoSolventBox:
 
                 if errors:
                     print(errors)
+            return
