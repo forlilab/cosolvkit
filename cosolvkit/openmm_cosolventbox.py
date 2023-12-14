@@ -4,7 +4,7 @@ from collections import defaultdict
 from openmm.app import *
 from openmm import *
 import openmm.unit as openmmunit
-from openff.toolkit import Molecule
+from openff.toolkit import Molecule, Topology
 from cosolvkit.cosolvent import CoSolvent
 from scipy import spatial
 import itertools
@@ -68,7 +68,7 @@ class OpenmmCosolventBox:
                         cosolvent_positions[cosolvent].append(new_coords)
         return cosolvent_positions
     
-    def _setup_new_topology(self, cosolvents_positions, receptor_molecules=None, receptor_positions=None):
+    def _setup_new_topology(self, cosolvents_positions, receptor_topology=None, receptor_positions=None):
         # Adding the cosolvent molecules
         molecules = []
         molecules_positions = []
@@ -78,6 +78,11 @@ class OpenmmCosolventBox:
                 [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
 
         # Here I need to add the original receptor (iterate over molecules and positions)
+        off_topology = Topology.from_openmm(receptor_topology)
+        for molecule in off_topology.molecules:
+            # I'm not sure they keep the order going from openmm to openff topology
+            molecules.append(molecule)
+            molecules_positions.append()
 
         molecules_positions = np.array(molecules_positions)
         new_top = Topology.from_molecules(molecules)
