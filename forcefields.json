@@ -1,0 +1,14 @@
+{
+    "Amber":[
+        "amber14-all.xml", 
+        "amber14/tip3pfb.xml"
+    ],
+    "Gromacs":[
+        "amber14-all.xml", 
+        "amber14/tip3pfb.xml"
+    ],
+    "CHARMM": [
+        "charmm36.xml",
+        "charmm36/water.xml"
+    ]
+}

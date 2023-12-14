@@ -133,3 +133,8 @@ dmypy.json
 
 #PDB Files
 *.pdb
+results/simulation.chk
+results/simulation.dcd
+results/simulation.nc
+results/system.inpcrd
+results/system.prmtop

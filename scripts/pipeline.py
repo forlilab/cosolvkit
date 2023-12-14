@@ -3,9 +3,10 @@ import json
 import argparse
 
 from cosolvkit import CoSolventBox
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+from cosolvkit.parametrize import parametrize_system 
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
 from mdtraj.reporters import DCDReporter, NetCDFReporter
 
 
@@ -21,59 +22,56 @@ def build_cosolvent_box(receptor_path: str, cosolvents: list, output_path: str) 
         cosolv.add_cosolvent(**cosolvent)
     cosolv.build()
     cosolv.export_pdb(filename=f"cosolv_system_{receptor}.pdb")
+    parametrize_system(f"protein.pdb", "cosolvents.json", "forcefields.json", "Amber", output_path)
+    # parametrize_system(f"cosolv_system_{receptor}.pdb", "cosolvents.json", "forcefields.json", "Amber", output_path)
+    return
 
-    print("Generating tleap files")
-    tleap_filename = os.path.join(output_path, "tleap.cmd")
-    prmtop_filename = os.path.join(output_path, "cosolv_system.prmtop")
-    inpcrd_filename = os.path.join(output_path, "cosolv_system.inpcrd")
-    cosolv.prepare_system_for_amber(filename=tleap_filename,
-                                    prmtop_filename=prmtop_filename,
-                                    inpcrd_filename=inpcrd_filename,
-                                    run_tleap=True)
-    return prmtop_filename, inpcrd_filename
-
-def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulation_time=None):
+def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulation_time=None, simulation_engine="Amber"):
     # results_path = os.path.join(out_path, "results")
     if simulation_time is None:
         simulation_time = 25000000
 
     results_path = out_path
+    if simulation_engine == "Amber":
+        topology = AmberPrmtopFile(prmtop_file)
+        inpcrd = AmberInpcrdFile(inpcrd_file)
 
-    prmtop = AmberPrmtopFile(prmtop_file)
-    inpcrd = AmberInpcrdFile(inpcrd_file)
-
-    system = prmtop.createSystem(nonbondedMethod=PME, 
-                                nonbondedCutoff=12 * angstrom,
+    system = topology.createSystem(nonbondedMethod=PME, 
+                                nonbondedCutoff=10 * angstrom,
                                 constraints=HBonds,
-                                hydrogenMass=3 * amu)
+                                hydrogenMass=1.5 * amu,
+                                rigidWater=False)
     try:
         platform = Platform.getPlatformByName("OpenCL")
         properties = {"Precision": "mixed"}
         print("Using GPU.")
-    except:
+    except: 
+        properties = {}
         platform = Platform.getPlatformByName("CPU")
         print("Switching to CPU, no GPU available.")
         
-    system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
-    integrator = LangevinIntegrator(300 * kelvin,
-                                    1 / picosecond,
-                                    4 * femtoseconds)
+    integrator = LangevinMiddleIntegrator(300 * kelvin,
+                                            1 / picosecond,
+                                            1 * femtoseconds)
 
     if len(properties) > 0:
-        simulation = Simulation(prmtop.topology, system, integrator, platform, properties)
+        simulation = Simulation(topology.topology, system, integrator, platform, properties)
     else:
-        simulation = Simulation(prmtop.topology, system, integrator, platform)
+        simulation = Simulation(topology.topology, system, integrator, platform)
 
     print("Setting positions for the simulation")
     simulation.context.setPositions(inpcrd.positions)
+    simulation.context.setVelocitiesToTemperature(300 * kelvin)
 
     print("Minimizing system's energy")
     simulation.minimizeEnergy()
 
     # MD simulations - equilibration (1ns)
     print("Equilibrating system")
-    simulation.step(int(simulation_time/100))
+    simulation.step(250000)
 
+    system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
+    simulation.context.reinitialize(preserveState=True)
     # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
 
     simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_file_name + ".nc"), 250))
@@ -83,7 +81,7 @@ def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulat
                                                 potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
                                                 temperature=True, volume=True, density=True, speed=True))
 
-    #100 ns
+    #100 ns = 25000000
     print("Running simulation")
     simulation.step(simulation_time)
     return
@@ -108,7 +106,7 @@ if __name__ == "__main__":
     receptor_path = args.receptor_path
     output_path = args.outpath
     print("Building cosolvent box")
-    prmtop_file, inpcrd_file = build_cosolvent_box(receptor_path, cosolvents, output_path)
-    print("Starting simulation")
-    run_simulation(output_path, prmtop_file, inpcrd_file, "simulation")
-    print("Simulation finished! Time to analyse the results!")
+    build_cosolvent_box(receptor_path, cosolvents, output_path)
+    # print("Starting simulation")
+    # run_simulation(output_path, f"{output_path}/system.prmtop", f"{output_path}/system.inpcrd", "simulation", simulation_time=None)
+    # print("Simulation finished! Time to analyse the results!")

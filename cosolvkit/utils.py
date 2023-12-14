@@ -18,6 +18,7 @@ import mdtraj
 from MDAnalysis import Universe
 from openmm.app import *
 from openmm import *
+import pdbfixer
 
 
 def path_module(module_name):
@@ -292,3 +293,50 @@ def find_disulfide_bridges(pdb_filename):
     cyx_cyx_pairs = sorted(list(cyx_cyx_pairs))
 
     return cyx_cyx_pairs
+
+def fix_pdb(pdb_filename: str):
+    """ Fixes common problems in PDB such as:
+            - missing atoms
+            - missing residues
+            - missing hydrogens
+            - replace nonstandard residues
+    
+    Args:
+        pdb_filename (str): input pdb filename
+    """
+    path = os.getcwd()
+    print("Creating PDBFixer...")
+    fixer = pdbfixer.PDBFixer(pdb_filename)
+    print("Finding missing residues...")
+    fixer.findMissingResidues()
+
+    chains = list(fixer.topology.chains())
+    keys = fixer.missingResidues.keys()
+    for key in list(keys):
+        chain = chains[key[0]]
+        if key[1] == 0 or key[1] == len(list(chain.residues())):
+            print("ok")
+            del fixer.missingResidues[key]
+
+    # print("Finding nonstandard residues...")
+    # fixer.findNonstandardResidues()
+    # print("Replacing nonstandard residues...")
+    # fixer.replaceNonstandardResidues()
+    # print("Removing heterogens...")
+    # fixer.removeHeterogens(keepWater=True)
+
+    # print("Finding missing atoms...")
+    fixer.findMissingAtoms()
+    print("Adding missing atoms...")
+    fixer.addMissingAtoms()
+    print("Adding missing hydrogens...")
+    fixer.addMissingHydrogens(7)
+    print("Writing PDB file...")
+
+    PDBFile.writeFile(
+        fixer.topology,
+        fixer.positions,
+        open(os.path.join(path, f"{pdb_filename.split('.')[0]}_clean.pdb"),
+                "w"),
+        keepIds=True)
+    return f"{pdb_filename.split('.')[0]}_clean.pdb"
