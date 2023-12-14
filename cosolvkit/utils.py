@@ -294,7 +294,7 @@ def find_disulfide_bridges(pdb_filename):
 
     return cyx_cyx_pairs
 
-def fix_pdb(pdb_filename: str):
+def fix_pdb(pdb_filename: str, save=False):
     """ Fixes common problems in PDB such as:
             - missing atoms
             - missing residues
@@ -331,12 +331,13 @@ def fix_pdb(pdb_filename: str):
     fixer.addMissingAtoms()
     print("Adding missing hydrogens...")
     fixer.addMissingHydrogens(7)
-    print("Writing PDB file...")
+    if save:
+        print("Writing PDB file...")
 
-    PDBFile.writeFile(
-        fixer.topology,
-        fixer.positions,
-        open(os.path.join(path, f"{pdb_filename.split('.')[0]}_clean.pdb"),
-                "w"),
-        keepIds=True)
-    return f"{pdb_filename.split('.')[0]}_clean.pdb"
+        PDBFile.writeFile(
+            fixer.topology,
+            fixer.positions,
+            open(os.path.join(path, f"{pdb_filename.split('.')[0]}_clean.pdb"),
+                    "w"),
+            keepIds=True)
+    return fixer.topology, fixer.positions
