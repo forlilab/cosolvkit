@@ -1,24 +1,24 @@
 [
     {
         "name": "benzene",
-        "concentration": 0.5,
+        "copies": 50,
         "smiles": "c1ccccc1"
     },
     {
         "name": "methanol", 
-        "concentration": 1.0, 
+        "copies": 25,
         "smiles": "CO", 
         "resname": "MEH"
     },
     {
         "name": "propane", 
-        "concentration": 0.5, 
+        "copies": 500,
         "smiles": "CCC", 
         "resname": "PRP"
     },
     {
         "name": "imidazole", 
-        "concentration": 1.0, 
+        "copies": 30,
         "smiles": "C1=CN=CN1"
     },
     {

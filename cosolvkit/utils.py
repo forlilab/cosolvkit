@@ -305,9 +305,9 @@ def fix_pdb(pdb_filename: str, save=False):
         pdb_filename (str): input pdb filename
     """
     path = os.getcwd()
-    print("Creating PDBFixer...")
+    # print("Creating PDBFixer...")
     fixer = pdbfixer.PDBFixer(pdb_filename)
-    print("Finding missing residues...")
+    # print("Finding missing residues...")
     fixer.findMissingResidues()
 
     chains = list(fixer.topology.chains())
@@ -327,12 +327,12 @@ def fix_pdb(pdb_filename: str, save=False):
 
     # print("Finding missing atoms...")
     fixer.findMissingAtoms()
-    print("Adding missing atoms...")
+    # print("Adding missing atoms...")
     fixer.addMissingAtoms()
-    print("Adding missing hydrogens...")
+    # print("Adding missing hydrogens...")
     fixer.addMissingHydrogens(7)
     if save:
-        print("Writing PDB file...")
+        # print("Writing PDB file...")
 
         PDBFile.writeFile(
             fixer.topology,

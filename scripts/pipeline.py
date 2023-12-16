@@ -2,45 +2,28 @@ import os
 import json
 import argparse
 
-from cosolvkit import CoSolventBox
-from cosolvkit.parametrize import parametrize_system 
+from cosolvkit.openmm_cosolventbox import CosolventSystem
 from openmm.app import *
 from openmm import *
-from openmm.unit import *
+import openmm.unit as openmmunit
 from mdtraj.reporters import DCDReporter, NetCDFReporter
 
 
-def build_cosolvent_box(receptor_path: str, cosolvents: list, output_path: str) -> str:
+def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, simulation_engine: str, output_path: str) -> str:
     receptor = receptor_path.split('/')[-1].split(".")[0]
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
-    cosolv = CoSolventBox(cutoff=12, box='cubic')
-    cosolv.add_receptor(receptor_path)
-    print("Adding cosolvents...")
-    for cosolvent in cosolvents:
-        cosolv.add_cosolvent(**cosolvent)
-    cosolv.build()
-    cosolv.export_pdb(filename=f"cosolv_system_{receptor}.pdb")
-    parametrize_system(f"protein.pdb", "cosolvents.json", "forcefields.json", "Amber", output_path)
-    # parametrize_system(f"cosolv_system_{receptor}.pdb", "cosolvents.json", "forcefields.json", "Amber", output_path)
-    return
+    cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path)
+    return cosolv
 
-def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulation_time=None, simulation_engine="Amber"):
+def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):
     # results_path = os.path.join(out_path, "results")
     if simulation_time is None:
         simulation_time = 25000000
 
     results_path = out_path
-    if simulation_engine == "Amber":
-        topology = AmberPrmtopFile(prmtop_file)
-        inpcrd = AmberInpcrdFile(inpcrd_file)
 
-    system = topology.createSystem(nonbondedMethod=PME, 
-                                nonbondedCutoff=10 * angstrom,
-                                constraints=HBonds,
-                                hydrogenMass=1.5 * amu,
-                                rigidWater=False)
     try:
         platform = Platform.getPlatformByName("OpenCL")
         properties = {"Precision": "mixed"}
@@ -49,35 +32,37 @@ def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulat
         properties = {}
         platform = Platform.getPlatformByName("CPU")
         print("Switching to CPU, no GPU available.")
-        
-    integrator = LangevinMiddleIntegrator(300 * kelvin,
-                                            1 / picosecond,
-                                            1 * femtoseconds)
+    
+
+    cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
+    integrator = LangevinMiddleIntegrator(300 * openmmunit.kelvin,
+                                            1 / openmmunit.picosecond,
+                                            4 * openmmunit.femtoseconds)
 
     if len(properties) > 0:
-        simulation = Simulation(topology.topology, system, integrator, platform, properties)
+        simulation = Simulation(cosolv_system.modeller.topology, cosolv_system.system, integrator, platform, properties)
     else:
-        simulation = Simulation(topology.topology, system, integrator, platform)
+        simulation = Simulation(cosolv_system.modeller.topology, cosolv_system.system, integrator, platform)
 
     print("Setting positions for the simulation")
-    simulation.context.setPositions(inpcrd.positions)
-    simulation.context.setVelocitiesToTemperature(300 * kelvin)
+    simulation.context.setPositions(cosolv_system.modeller.positions)
+    # simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
 
     print("Minimizing system's energy")
     simulation.minimizeEnergy()
 
     # MD simulations - equilibration (1ns)
     print("Equilibrating system")
-    simulation.step(250000)
+    simulation.step(25000)
 
-    system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
+    # cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
     simulation.context.reinitialize(preserveState=True)
     # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
 
-    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_file_name + ".nc"), 250))
-    simulation.reporters.append(DCDReporter(os.path.join(results_path, output_file_name + ".dcd"), 250))
-    simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_file_name + ".chk"), 250))
-    simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_file_name + ".log"), 250, step=True, time=True,
+    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 25000))
+    simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 25000))
+    simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_filename + ".chk"), 250))
+    simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
                                                 potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
                                                 temperature=True, volume=True, density=True, speed=True))
 
@@ -91,6 +76,10 @@ def cmd_lineparser():
     parser = argparse.ArgumentParser(description="Runs cosolvkit and MD simulation afterwards.")
     parser.add_argument('-c', '--cosolvents_list', dest='cosolvents', required=True,
                         action='store', help='path to the json file defining the cosolvents to add')
+    parser.add_argument('-f', '--forcefields', dest='ffs', required=True,
+                        action='store', help='path to the json file defining the forcefields to add')
+    parser.add_argument('-e', '--engine', dest='engine', required=True,
+                        action='store', help='Simulation engine [AMBER, GROMACS, CHARMM]')
     parser.add_argument('-r', '--receptor', dest='receptor_path', required=True,
                         action='store', help='path to the receptor file')
     parser.add_argument('-o', '--output_path', dest='outpath', required=True,
@@ -99,14 +88,13 @@ def cmd_lineparser():
 
 if __name__ == "__main__":
     args = cmd_lineparser()
-
-    with open(args.cosolvents) as fi:
-        cosolvents = json.load(fi)
-
+    cosolvents = args.cosolvents
+    forcefields = args.ffs
+    simulation_engine = args.engine
     receptor_path = args.receptor_path
     output_path = args.outpath
     print("Building cosolvent box")
-    build_cosolvent_box(receptor_path, cosolvents, output_path)
-    # print("Starting simulation")
-    # run_simulation(output_path, f"{output_path}/system.prmtop", f"{output_path}/system.inpcrd", "simulation", simulation_time=None)
-    # print("Simulation finished! Time to analyse the results!")
+    cosolv_system = build_cosolvent_box(receptor_path, cosolvents, forcefields, simulation_engine, output_path)
+    print("Starting simulation")
+    run_simulation(output_path, cosolv_system, simulation_time=None, simulation_engine=simulation_engine)
+    print("Simulation finished! Time to analyse the results!")

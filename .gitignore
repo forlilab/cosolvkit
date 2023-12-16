@@ -138,5 +138,5 @@ results/simulation.dcd
 results/simulation.nc
 results/system.inpcrd
 results/system.prmtop
-test_openff.ipynb
-benzene.mol
+*.ipynb
+*.mol
