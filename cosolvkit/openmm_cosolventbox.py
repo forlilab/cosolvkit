@@ -322,6 +322,16 @@ class CosolventSystem:
         )
         return
 
+    def save_system(self, out_path: str, system: System):
+        with open(f"{out_path}/system.xml", "w") as fo:
+            fo.write(XmlSerializer.serialize(system))
+        return
+    
+    def load_system(self, system_path: str):
+        with open(system_path) as fi:
+            system = XmlSerializer.deserialize(fi.read())
+        return system
+
     def save_topology(self, topology, positions, system, simulation_engine, out_path):
         parmed_structure = parmed.openmm.load_topology(topology, system, positions)
 
