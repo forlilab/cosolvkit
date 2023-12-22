@@ -1,5 +1,7 @@
 import json
 import numpy as np
+from copy import deepcopy
+from math import ceil, floor, sqrt
 from collections import defaultdict
 import openmm.app as app
 from openmmforcefields.generators import EspalomaTemplateGenerator, GAFFTemplateGenerator, SMIRNOFFTemplateGenerator
@@ -94,6 +96,7 @@ class CoSolvent:
         # self.pdb_conect = _get_pdb_conect(mol)
         return
     
+    
     def _generate_atom_names_from_mol(self, rdkit_mol):
         """Generate atom names from an RDKit molecule.
 
@@ -136,8 +139,6 @@ class CoSolvent:
 
         return conect
 
-
-
 class CosolventSystem:
     # Need to add concentrations
     def __init__(self, 
@@ -147,7 +148,7 @@ class CosolventSystem:
                  receptor: str = None, 
                  hydrate: bool = True,
                  n_waters: int = None, 
-                padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
+                 padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
                  radius: openmmunit.Quantity = None ):
         """
             Create cosolvent system.
@@ -185,6 +186,13 @@ class CosolventSystem:
         self._receptor_cutoff = 4.5*openmmunit.angstrom
         self._cosolvents_cutoff = 3.5*openmmunit.angstrom
         self._edge_cutoff = 3.0*openmmunit.angstrom
+        
+        # We refer to the following paper for the volume of 1 water molecule
+        # https://doi.org/10.1063/1.1676585
+        # https://web.ics.purdue.edu/~gchopra/class/public/readings/Molecular_Simulation_I_Lecture4/Rahman_Stillinger_JCP_71_Water_Dynamics.pdf
+        self._water_dims = [18.856*openmmunit.angstrom, 18.856*openmmunit.angstrom, 18.856*openmmunit.angstrom]
+        self._water_molecule_volume = (18.856 * 18.856 * 18.856) / 216
+
         self._cosolvent_positions = defaultdict(list)
         self._box = None
         self._periodic_box_vectors = None
@@ -233,21 +241,34 @@ class CosolventSystem:
         self._box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
         self.forcefield = self._parametrize_system(forcefields, simulation_engine, self.cosolvents)
+        if self.modeller.positions is not None:
+            self.cells = _CellList(self.modeller.positions, 2.5, self._periodic_box_vectors, True)
+        else:
+            self.cells = None
         print("Adding cosolvents and hydrating")
-        self.modeller = self.build(self.cosolvents, self._cosolvent_positions, self._hydrate, self.forcefield)
-        self.system = self.create_system(self.forcefield, self.modeller.topology)
-        self._added_waters = self._get_number_of_waters(self.modeller.topology)
+        self.modeller.addSolvent(self.forcefield)
+        # self.modeller = self.build(self.cosolvents, self._cosolvent_positions, self._hydrate, self.forcefield)
+        # self.system = self.create_system(self.forcefield, self.modeller.topology)
+        self._added_waters, self._waters_positions, self._receptor_positions = self._get_waters(self.modeller.positions)
         print(f"Box Volume: {self._box_volume} A**3")
         print(f"Number of waters added: {self._added_waters}")
         return
     
-    def _get_number_of_waters(self, topology):
-        count = 0
-        for res in topology.residues():
+    def _get_waters(self, positions):
+        cnt = 0
+        water_pos = {}
+        residues = list(self.modeller.topology.residues())
+        for i in range(len(residues)):
+            res = residues[i]
             if res.name == "HOH":
-                count += 1
-        return count
+                cnt+=1
+        return cnt, 
     
+    def _add_cosolvents(self, cosolvents):
+        for cosolvent in cosolvents:
+            cosolvent_xyz = cosolvents[cosolvent]
+            sizeX, sizeY, sizeZ = cosolvent_xyz.max(axis=0) - cosolvent_xyz.min(axis=0)
+
     def _parametrize_system(self, forcefields: str, engine: str, cosolvents: dict):
         with open(forcefields) as fi:
             ffs = json.load(fi)
@@ -279,7 +300,7 @@ class CosolventSystem:
         cosolvent_copies = dict()
         cosolvent_kdtree = None
         for cosolvent in cosolvents:
-            print(cosolvent.name)
+            # print(cosolvent.name)
             cosolvent_copies[cosolvent] = 0
             cosolvent_xyz = cosolvents[cosolvent]
             sizeX, sizeY, sizeZ = cosolvent_xyz.max(axis=0) - cosolvent_xyz.min(axis=0)
@@ -303,6 +324,10 @@ class CosolventSystem:
                 modeller.addSolvent(forcefield, numAdded=self.n_waters)
             else: modeller.addSolvent(forcefield)
         return modeller
+    
+    def _build(self):
+
+        pass
     
     def create_system(self, forcefield, topology):
         print("Creating system")
@@ -407,7 +432,7 @@ class CosolventSystem:
         box = Vec3(vectors[0][0], vectors[1][1], vectors[2][2])
         return vectors, box
     
-    def _build_mesh(self, modeller, sizeX, sizeY, sizeZ, cutoff):
+    def _build_mesh(self, modeller, sizeX, sizeY, sizeZ, cutoff, water=False):
         vX, vY, vZ = modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
         positions = modeller.positions.value_in_unit(openmmunit.nanometer)
         if len(positions) > 0:
@@ -420,30 +445,86 @@ class CosolventSystem:
         zmin, zmax = origin[2], origin[2] + vZ
 
         cutoff = cutoff.value_in_unit(openmmunit.nanometer)
-        x = np.arange(xmin, xmax, sizeX+cutoff) + cutoff
-        y = np.arange(ymin, ymax, sizeY+cutoff) + cutoff
-        z = np.arange(zmin, zmax, sizeZ+cutoff) + cutoff
+        if not water:
+            x = np.arange(xmin, xmax, sizeX+cutoff) + cutoff
+            y = np.arange(ymin, ymax, sizeY+cutoff) + cutoff
+            z = np.arange(zmin, zmax, sizeZ+cutoff) + cutoff
+        else:
+            sizeX = sizeX.value_in_unit(openmmunit.nanometer)
+            sizeY = sizeY.value_in_unit(openmmunit.nanometer)
+            sizeZ = sizeZ.value_in_unit(openmmunit.nanometer)
+            x = np.arange(xmin, xmax, sizeX) + (sizeX/2.)
+            y = np.arange(ymin, ymax, sizeY) + (sizeY/2.)
+            z = np.arange(zmin, zmax, sizeZ) + (sizeZ/2.)
 
         X, Y, Z = np.meshgrid(x, y, z)
         center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-        # to_remove = self._remove_edge_voxels(center_xyzs, cutoff, xmin, xmax, ymin, ymax, zmin, zmax)
-        # center_xyzs = center_xyzs[~to_remove] 
+        
+        # if water:
+        #     wat_xyzs = []
+        #     if positions is not None:
+        #         for i in center_xyzs:
+        #             wat_xyzs.append(i)
+        #         too_close_receptor = self._water_close_to_receptor(np.vstack(wat_xyzs), positions, distance=2.5*openmmunit.angstrom)
+        #         return center_xyzs[~too_close_receptor]
         return center_xyzs
     
-    # def _remove_edge_voxels(self, center_xyzs, cutoff, xmin, xmax, ymin, ymax, zmin, zmax):
-    #     x, y, z = center_xyzs[:, 0], center_xyzs[:, 1], center_xyzs[:, 2]
+    def _water_close_to_receptor(self, wat_xyzs, poisitions, distance):
+        distance = distance.value_in_unit(openmmunit.nanometer)
+        kdtree = spatial.cKDTree(wat_xyzs)
+        ids = kdtree.query_ball_point(poisitions, distance)
+        ids = np.unique(np.hstack(ids)).astype(int)
+        close_to = np.zeros(len(wat_xyzs), bool)
+        close_to[ids] = True
+        for i in range(0, wat_xyzs.shape[0], 3):
+            close_to[[i, i+1, i+2]] = [np.all(close_to[[i, i+1, i+2]])] * 3
+        return close_to
 
-    #     x_close = np.logical_or(np.abs(xmin - x) <= cutoff, np.abs(xmax - x) <= cutoff)
-    #     y_close = np.logical_or(np.abs(ymin - y) <= cutoff, np.abs(ymax - y) <= cutoff)
-    #     z_close = np.logical_or(np.abs(zmin - z) <= cutoff, np.abs(zmax - z) <= cutoff)
-    #     close_to = np.any((x_close, y_close, z_close), axis=0)
 
-    #     for i in range(0, center_xyzs.shape[0], 3):
-    #         try:
-    #             close_to[[i, i + 1, i + 2]] = [np.all(close_to[[i, i + 1, i + 2]])] * 3
-    #         except Exception as e:
-    #             print(e)
 
-    #     return close_to
 
-    
+
+
+class _CellList(object):
+    """This class organizes atom positions into cells, so the neighbors of a point can be quickly retrieved"""
+
+    def __init__(self, positions, maxCutoff, vectors, periodic):
+        self.positions = deepcopy(positions)
+        self.cells = {}
+        self.numCells = tuple((max(1, int(floor(vectors[i][i]/maxCutoff))) for i in range(3)))
+        self.cellSize = tuple((vectors[i][i]/self.numCells[i] for i in range(3)))
+        self.vectors = vectors
+        self.periodic = periodic
+        invBox = Vec3(1.0/vectors[0][0], 1.0/vectors[1][1], 1.0/vectors[2][2])
+        for i in range(len(self.positions)):
+            pos = self.positions[i]
+            if periodic:
+                pos = pos - floor(pos[2]*invBox[2])*vectors[2]
+                pos -= floor(pos[1]*invBox[1])*vectors[1]
+                pos -= floor(pos[0]*invBox[0])*vectors[0]
+                self.positions[i] = pos
+            cell = self.cellForPosition(pos)
+            if cell in self.cells:
+                self.cells[cell].append(i)
+            else:
+                self.cells[cell] = [i]
+
+    def cellForPosition(self, pos):
+        if self.periodic:
+            invBox = Vec3(1.0/self.vectors[0][0], 1.0/self.vectors[1][1], 1.0/self.vectors[2][2])
+            pos = pos-floor(pos[2]*invBox[2])*self.vectors[2]
+            pos -= floor(pos[1]*invBox[1])*self.vectors[1]
+            pos -= floor(pos[0]*invBox[0])*self.vectors[0]
+        return tuple((int(floor(pos[j]/self.cellSize[j]))%self.numCells[j] for j in range(3)))
+
+    def neighbors(self, pos):
+        processedCells = set()
+        offsets = (-1, 0, 1)
+        for i in offsets:
+            for j in offsets:
+                for k in offsets:
+                    cell = self.cellForPosition(Vec3(pos[0]+i*self.cellSize[0], pos[1]+j*self.cellSize[1], pos[2]+k*self.cellSize[2]))
+                    if cell in self.cells and cell not in processedCells:
+                        processedCells.add(cell)
+                        for atom in self.cells[cell]:
+                            yield atom

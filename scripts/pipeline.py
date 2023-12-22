@@ -14,7 +14,7 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
-    cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path)
+    cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=50*openmmunit.angstrom)
     return cosolv
 
 def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):
@@ -94,21 +94,21 @@ if __name__ == "__main__":
     output_path = args.outpath
     print("Building cosolvent box")
     cosolv_system = build_cosolvent_box(receptor_path, cosolvents, forcefields, simulation_engine, output_path)
-    print("Saving PDB file")
-    cosolv_system.save_pdb(cosolv_system.modeller.topology, 
-                           cosolv_system.modeller.positions,
-                           f"{output_path}/system.pdb")
+    # print("Saving PDB file")
+    # cosolv_system.save_pdb(cosolv_system.modeller.topology, 
+    #                        cosolv_system.modeller.positions,
+    #                        f"{output_path}/system.pdb")
     # Good habit to save the topology files
-    print("Saving topology file")
-    cosolv_system.save_topology(cosolv_system.modeller.topology, 
-                                cosolv_system.modeller.positions,
-                                cosolv_system.system,
-                                simulation_engine,
-                                output_path)
+    # print("Saving topology file")
+    # cosolv_system.save_topology(cosolv_system.modeller.topology, 
+    #                             cosolv_system.modeller.positions,
+    #                             cosolv_system.system,
+    #                             simulation_engine,
+    #                             output_path)
     # If you want to save the system as well
     # cosolv_system.save_system(output_path, cosolv_system.system)
     
-    print("Starting simulation")
-    start = time.time()
-    run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
-    print(f"Simulation finished - simulation time: {time.time() - start}.")
+    # print("Starting simulation")
+    # start = time.time()
+    # run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
+    # print(f"Simulation finished - simulation time: {time.time() - start}.")
