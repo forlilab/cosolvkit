@@ -9,12 +9,21 @@ import openmm.unit as openmmunit
 from mdtraj.reporters import DCDReporter, NetCDFReporter
 
 
-def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, simulation_engine: str, output_path: str) -> CosolventSystem:
-    receptor = receptor_path.split('/')[-1].split(".")[0]
+def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, simulation_engine: str, output_path: str, radius: float) -> CosolventSystem:
+    # receptor = receptor_path.split('/')[-1].split(".")[0]
     if not os.path.exists(output_path):
         os.makedirs(output_path)
-
-    cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=50*openmmunit.angstrom)
+    if radius is not None:
+        radius = radius * openmmunit.angstrom
+    cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=10*openmmunit.angstrom, radius=radius)
+    # prot_xyz, wat_xyz, wat_res_mapping = cosolv._process_positions(cosolv.modeller)
+    # close_to_edge = cosolv._water_close_to_edge(wat_xyz,
+    #                                                2.5,
+    #                                                cosolv._box_origin,
+    #                                                cosolv._box_size)
+    # close_to_receptor = cosolv._water_close_to_receptor(wat_xyz, prot_xyz, distance=3.)
+    cosolv_xyzs = cosolv._add_cosolvents(cosolv.cosolvents)
+    cosolv.modeller = cosolv._setup_new_topology(cosolv_xyzs, cosolv.modeller.topology, cosolv.modeller.positions)
     return cosolv
 
 def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):
@@ -79,8 +88,11 @@ def cmd_lineparser():
                         action='store', help='path to the json file defining the forcefields to add')
     parser.add_argument('-e', '--engine', dest='engine', required=True,
                         action='store', help='Simulation engine [AMBER, GROMACS, CHARMM]')
-    parser.add_argument('-r', '--receptor', dest='receptor_path', required=True,
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-p', '--receptor', dest='receptor_path',
                         action='store', help='path to the receptor file')
+    group.add_argument('-r', '--radius', dest='radius', action='store',
+                       help='radius (in Angstrom) to build the box if receptor not specified.')
     parser.add_argument('-o', '--output_path', dest='outpath', required=True,
                         action='store', help='path where to store output of the MD simulation')
     return parser.parse_args()
@@ -90,14 +102,19 @@ if __name__ == "__main__":
     cosolvents = args.cosolvents
     forcefields = args.ffs
     simulation_engine = args.engine
-    receptor_path = args.receptor_path
+    receptor_path = None
+    radius = None
+    if args.receptor_path:
+        receptor_path = args.receptor_path
+    if args.radius:
+        radius = float(args.radius)
     output_path = args.outpath
     print("Building cosolvent box")
-    cosolv_system = build_cosolvent_box(receptor_path, cosolvents, forcefields, simulation_engine, output_path)
-    # print("Saving PDB file")
-    # cosolv_system.save_pdb(cosolv_system.modeller.topology, 
-    #                        cosolv_system.modeller.positions,
-    #                        f"{output_path}/system.pdb")
+    cosolv_system = build_cosolvent_box(receptor_path, cosolvents, forcefields, simulation_engine, output_path, radius)
+    print("Saving PDB file")
+    cosolv_system.save_pdb(cosolv_system.modeller.topology, 
+                           cosolv_system.modeller.positions,
+                           f"{output_path}/system.pdb")
     # Good habit to save the topology files
     # print("Saving topology file")
     # cosolv_system.save_topology(cosolv_system.modeller.topology, 

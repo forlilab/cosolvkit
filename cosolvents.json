@@ -2,7 +2,8 @@
     {
         "name": "benzene",
         "copies": 50,
-        "smiles": "c1ccccc1"
+        "smiles": "c1ccccc1",
+        "concentration": 0.1
     },
     {
         "name": "methanol", 
