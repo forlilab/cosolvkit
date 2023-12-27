@@ -2,7 +2,7 @@ import os
 import time
 import argparse
 
-from cosolvkit.openmm_cosolventbox import CosolventSystem
+from cosolvkit.cosolvent_system import CosolventSystem
 from openmm.app import *
 from openmm import *
 import openmm.unit as openmmunit
@@ -10,18 +10,11 @@ from mdtraj.reporters import DCDReporter, NetCDFReporter
 
 
 def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, simulation_engine: str, output_path: str, radius: float) -> CosolventSystem:
-    # receptor = receptor_path.split('/')[-1].split(".")[0]
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     if radius is not None:
         radius = radius * openmmunit.angstrom
     cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=10*openmmunit.angstrom, radius=radius)
-    # prot_xyz, wat_xyz, wat_res_mapping = cosolv._process_positions(cosolv.modeller)
-    # close_to_edge = cosolv._water_close_to_edge(wat_xyz,
-    #                                                2.5,
-    #                                                cosolv._box_origin,
-    #                                                cosolv._box_size)
-    # close_to_receptor = cosolv._water_close_to_receptor(wat_xyz, prot_xyz, distance=3.)
     cosolv_xyzs = cosolv._add_cosolvents(cosolv.cosolvents)
     cosolv.modeller = cosolv._setup_new_topology(cosolv_xyzs, cosolv.modeller.topology, cosolv.modeller.positions)
     return cosolv
