@@ -3,7 +3,7 @@
         "name": "benzene",
         "copies": 50,
         "smiles": "c1ccccc1",
-        "concentration": 0.1
+        "concentration": 1.5
     },
     {
         "name": "methanol", 
@@ -19,7 +19,7 @@
     },
     {
         "name": "imidazole", 
-        "copies": 30,
+        "copies": 3000,
         "smiles": "C1=CN=CN1"
     },
     {

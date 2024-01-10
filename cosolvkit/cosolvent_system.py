@@ -201,7 +201,8 @@ class CosolventSystem:
         for c in cosolvents_dict:
             cosolvent = CoSolvent(**c)
             cosolvent_xyz = cosolvent.positions*openmmunit.angstrom
-            self.cosolvents[cosolvent] = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
+            cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
+            self.cosolvents[cosolvent] = cosolvent_xyz
 
         if receptor is not None:
             print("Cleaning protein")
@@ -227,19 +228,130 @@ class CosolventSystem:
         self._box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
         self.forcefield = self._parametrize_system(forcefields, simulation_engine, self.cosolvents)
+        # print(f"Number of possible added waters with mesh approach: {self._number_of_possible_added_waters_mesh()}")
         print("Adding cosolvents and hydrating")
-        self.modeller.addSolvent(self.forcefield)
-        # self.modeller = self.build(self.cosolvents, self._cosolvent_positions, self._hydrate, self.forcefield)
-        # self.system = self.create_system(self.forcefield, self.modeller.topology)
-        self._added_waters = self._get_n_waters()
-        self._receptor_xyzs, self._water_xyzs, self._wat_res_mapping = self._process_positions(self.modeller)
-        print(f"Box Volume: {self._box_volume} A**3")
-        print(f"Number of waters added: {self._added_waters}")
+        # self.modeller.addSolvent(self.forcefield)
+        # self._added_waters = self._get_n_waters()
+        # self._receptor_xyzs, self._water_xyzs, self._wat_res_mapping = self._process_positions(self.modeller)
+        # print(f"Box Volume: {self._box_volume} A**3")
+        # print(f"Number of waters added: {self._added_waters}")
         return
+    
+    ############################# PUBLIC
+    def build(self):
+        # cosolv_xyz = self._add_cosolvents(self.cosolvents)
+        self._add_cosolvents_fill_the_void(self.cosolvents,
+                                           False)
+        # self.system = self._create_system(self.forcefield, self.modeller.topology)
+        return
+    
+    def save_pdb(self, topology, positions, out_path):
+        app.PDBFile.writeFile(
+            topology,
+            positions,
+            open(out_path, "w"),
+            keepIds=True
+        )
+        return
+
+    def save_system(self, out_path: str, system: System):
+        with open(f"{out_path}/system.xml", "w") as fo:
+            fo.write(XmlSerializer.serialize(system))
+        return
+    
+    def load_system(self, system_path: str):
+        with open(system_path) as fi:
+            system = XmlSerializer.deserialize(fi.read())
+        return system
+
+    def save_topology(self, topology, positions, system, simulation_engine, out_path):
+        parmed_structure = parmed.openmm.load_topology(topology, system, positions)
+
+        simulation_engine = simulation_engine.upper()
+        if simulation_engine == "AMBER":
+            # Add dummy bond type for None ones so that parmed doesn't trip
+            bond_type = parmed.BondType(1.0, 1.0, list=parmed_structure.bond_types)
+            parmed_structure.bond_types.append(bond_type)
+            for bond in parmed_structure.bonds:
+                if bond.type is None:
+                    bond.type = bond_type
+
+            parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
+            parmed_structure.save(f'{out_path}/system.inpcrd', overwrite=True)
+
+        elif simulation_engine == "GROMACS":
+            parmed_structure.save(f'{out_path}/system.top', overwrite=True)
+            parmed_structure.save(f'{out_path}/system.gro', overwrite=True)
+
+        elif simulation_engine == "CHARMM":
+            parmed_structure.save(f'{out_path}/system.psf', overwrite=True)
+
+        else:
+            print("The specified simulation engine is not supported!")
+            print(f"Available simulation engines:\n\t{self._available_engines}")
+        return
+    
+    ############################# PRIVATE
+    def _check_cosolvent_occupancy(self):
+        water_concentration = 55.4 * openmmunit.molar
+        total_volume = 0
+        cosolvs_volume = defaultdict(float)
+        for cosolvent in self.cosolvents:
+            if cosolvent.concentration is not None:
+                n_copies = (self._added_waters * (cosolvent.concentration * openmmunit.molar)) / water_concentration
+                cosolvent.copies = int(floor(n_copies + 0.5))
+            cosolvs_volume[cosolvent] = self._build_mesh(self.cosolvents[cosolvent]) * cosolvent.copies
+            total_volume += cosolvs_volume[cosolvent]
+        wat = CoSolvent("wat", "O")
+        cosolvs_volume["HOH"] = self._build_mesh(wat.positions) * self._added_waters
+        # cosolvs_volume["HOH"] = 30.9 * self._added_waters
+        assert total_volume <= cosolvs_volume["HOH"]/2.0, \
+            "Error! The volume occupied by the requested cosolvent molecules exceeds the volume limit of 50% of the solvent\n" + \
+            f"Volume requested for cosolvents: {total_volume}\n" + \
+            f"Volume available for cosolvents: {cosolvs_volume['HOH']/2.}\n" + \
+            f"Total Volume available: {cosolvs_volume['HOH']}"
+        
+        print(f"Volume requested for cosolvents: {total_volume}")
+        print(f"Volume available for cosolvents: {cosolvs_volume['HOH']/2.}")
+        print(f"Total Volume available: {cosolvs_volume['HOH']}")
+        return cosolvs_volume
+
     
     def _get_n_waters(self):
         res = [r.name for r in self.modeller.topology.residues()]
         return res.count('HOH')
+    
+    def _number_of_possible_added_waters_mesh(self):
+        # wat = CoSolvent("wat", "O")
+        # wat_xyzs = wat.positions*openmmunit.angstrom
+        # sizeX, sizeY, sizeZ = wat_xyzs.max(axis=0) - wat_xyzs.min(axis=0)
+        watref_dims = [18.856, 18.856, 18.856]*openmmunit.angstrom
+        watref_dims = watref_dims.value_in_unit(openmmunit.angstrom)
+        vX, vY, vZ = self.modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.angstrom)
+        positions = self.modeller.positions.value_in_unit(openmmunit.angstrom)
+        if len(positions) > 0:
+            center = [(max((pos[i] for pos in positions))+min((pos[i] for pos in positions)))/2 for i in range(3)]
+        else:
+            center = Vec3(0, 0, 0)
+        origin = center - (np.ceil(np.array([vX, vY, vZ])).astype(int)/2)
+        xmin, xmax = origin[0], origin[0] + vX
+        ymin, ymax = origin[1], origin[1] + vY
+        zmin, zmax = origin[2], origin[2] + vZ
+
+        # sizeX = sizeX.value_in_unit(openmmunit.nanometer)
+        # sizeY = sizeY.value_in_unit(openmmunit.nanometer)
+        # sizeZ = sizeZ.value_in_unit(openmmunit.nanometer)
+        # x = np.arange(xmin, xmax, sizeX) + (sizeX/2.)
+        # y = np.arange(ymin, ymax, sizeY) + (sizeY/2.)
+        # z = np.arange(zmin, zmax, sizeZ) + (sizeZ/2.)
+        x = np.arange(xmin, xmax, watref_dims[0]) + (watref_dims[0]/2.)
+        y = np.arange(ymin, ymax, watref_dims[1]) + (watref_dims[1]/2.)
+        z = np.arange(zmin, zmax, watref_dims[2]) + (watref_dims[2]/2.)
+
+        X, Y, Z = np.meshgrid(x, y, z)
+        center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+        print(len(center_xyzs))
+        return center_xyzs
 
     def _process_positions(self, modeller):
         _xyz = [(x, y, z) for x, y, z in modeller.positions.value_in_unit(openmmunit.nanometer)]
@@ -296,8 +408,7 @@ class CosolventSystem:
         current_number_copies = {}
         final_number_copies = {}
         cosolv_xyzs = defaultdict(list)
-        distance_from_cosolvent = 2.5 * openmmunit.angstrom
-        water_concentration = 55.4 * openmmunit.molar
+        distance_from_cosolvent = 3.5 * openmmunit.angstrom
         offset = list(self._wat_res_mapping.keys())[0]
         water_close_to_edge = self._water_close_to_edge(self._water_xyzs, 
                                                         3.*openmmunit.angstrom, 
@@ -314,11 +425,11 @@ class CosolventSystem:
                                                                    offset=offset)
             banned_ids.append(water_close_to_protein)
         for cosolvent in cosolvents:
-            if cosolvent.concentration is not None:
-                current_number_copies[cosolvent.name] = 0
-                n_copies = (self._added_waters * (cosolvent.concentration)) / water_concentration
-                final_number_copies[cosolvent.name] = int(floor(n_copies + 0.5))
-            else:
+            # if cosolvent.concentration is not None:
+            #     current_number_copies[cosolvent.name] = 0
+            #     n_copies = (self._added_waters * (cosolvent.concentration * openmmunit.molar)) / water_concentration
+            #     final_number_copies[cosolvent.name] = int(floor(n_copies + 0.5))
+            # else:
                 current_number_copies[cosolvent.name] = 0
                 final_number_copies[cosolvent.name] = cosolvent.copies
                 
@@ -336,13 +447,13 @@ class CosolventSystem:
             kdtree = spatial.cKDTree(wat_xyzs)
 
             c = [cosolvent for cosolvent in cosolvents if cosolvent.name == cosolv_name][0]
-            if current_number_copies[cosolv_name] <= final_number_copies[cosolv_name]:
+            if current_number_copies[cosolv_name] < final_number_copies[cosolv_name]:
                 wat_id = np.random.choice(valid_ids[~np.isin(valid_ids, np.array(banned_ids))])
                 wat_xyz = oxy_ids[wat_id]
 
                 # Translate fragment on the top of the selected water molecule
                 cosolv_xyz = self.cosolvents[c] + wat_xyz
-
+                np.append(wat_xyzs, cosolv_xyz).reshape(wat_xyzs.shape[0]+cosolv_xyz.shape[0], 3)
                 # Add fragment to list
                 cosolv_xyzs[c].append(cosolv_xyz)
 
@@ -353,8 +464,11 @@ class CosolventSystem:
                     to_be_removed = np.unique(np.hstack(to_be_removed)).astype(int)
                     to_be_removed = to_be_removed+offset
                     # Get the ids of the water oxygen atoms
-                    [banned_ids.append(i) for i in to_be_removed if i not in banned_ids]
-                    [waters_to_delete.append(i) for i in to_be_removed if i not in waters_to_delete]
+                    for i in to_be_removed:
+                        if i not in banned_ids: banned_ids.append(i)
+                        if i not in waters_to_delete: waters_to_delete.append(i)
+                    # [banned_ids.append(i) for i in to_be_removed if i not in banned_ids]
+                    # [waters_to_delete.append(i) for i in to_be_removed if i not in waters_to_delete]
                 current_number_copies[cosolv_name] += 1
         # Delete waters
         waters_removed = set([self._wat_res_mapping[x] for x in waters_to_delete])
@@ -362,12 +476,69 @@ class CosolventSystem:
         self.modeller.delete(waters_removed)
         return cosolv_xyzs
     
+    def _add_cosolvents_fill_the_void(self, cosolvents, hydrate=True):
+        raw_positions = list()
+        cosolvent_copies = dict()
+        cosolvent_kdtree = None
+        kdtree = None
+        cosolv_xyzs = defaultdict(list)
+        if self.receptor:
+            kdtree = spatial.cKDTree(self.modeller.positions.value_in_unit(openmmunit.nanometer))
+        for cosolvent in cosolvents:
+            cosolvent_copies[cosolvent] = 0
+            cosolvent_xyz = cosolvents[cosolvent]
+            vecs = self.modeller.topology.getPeriodicBoxVectors().value_in_unit(openmmunit.nanometer)
+            x = np.arange(0, vecs[0][0], 1)
+            y = np.arange(0, vecs[1][1], 1)
+            z = np.arange(0, vecs[2][2], 1)
+            X, Y, Z = np.meshgrid(x, y, z)
+            center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+            # sizeX, sizeY, sizeZ = cosolvent_xyz.max(axis=0) - cosolvent_xyz.min(axis=0)
+            # center_xyzs = self._build_mesh(self.modeller, sizeX, sizeY, sizeZ, cutoff=self._cosolvents_cutoff)
+            # Randomize the cosolvent molecules placement
+            np.random.shuffle(center_xyzs)
+            if len(cosolv_xyzs) > 0:
+                cosolvent_kdtree = spatial.cKDTree(raw_positions)
+            for i in range(len(center_xyzs)):
+                if cosolvent_copies[cosolvent] < cosolvent.copies:
+                    new_coords = cosolvent_xyz + center_xyzs[i]
+                    if self._check_coordinates_to_add(new_coords,
+                                                      cosolvent_kdtree,
+                                                      kdtree):
+                            cosolv_xyzs[cosolvent].append(new_coords)
+                            cosolvent_copies[cosolvent] += 1
+                            [raw_positions.append(pos) for pos in new_coords]
+        self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
+        if hydrate:
+            if self.n_waters is not None:
+                self.modeller.addSolvent(self.forcefield, numAdded=self.n_waters)
+            else: self.modeller.addSolvent(self.forcefield)
+        return self.modeller
+    
+    def _check_coordinates_to_add(self, new_coords, cosolvent_kdtree, kdtree):
+            cosolvents_cutoff = 3.5*openmmunit.angstrom
+            receptor_cutoff = 4.5*openmmunit.angstrom
+            if kdtree is not None and not any(kdtree.query_ball_point(new_coords, receptor_cutoff.value_in_unit(openmmunit.nanometer))):
+                if cosolvent_kdtree is not None:
+                    if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolvents_cutoff.value_in_unit(openmmunit.nanometer))):
+                        return True
+                    else: return False
+                else:
+                    return True
+            else:
+                if cosolvent_kdtree is not None:
+                    if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolvents_cutoff.value_in_unit(openmmunit.nanometer))):
+                        return True
+                    else: return False
+                else:
+                    return True
+
     def _parametrize_system(self, forcefields: str, engine: str, cosolvents: dict):
         with open(forcefields) as fi:
             ffs = json.load(fi)
         engine = engine.upper()
         forcefield = app.ForceField(*ffs[engine])
-        sm_ff = ffs["small_molecules"]
+        sm_ff = ffs["small_molecules"][0]
         small_molecule_ff = self._parametrize_cosolvents(cosolvents, small_molecule_ff=sm_ff)
         forcefield.registerTemplateGenerator(small_molecule_ff.generator)
         return forcefield
@@ -376,7 +547,7 @@ class CosolventSystem:
         molecules = list()
         for cosolvent in cosolvents:
             try:
-                molecules.append(Molecule.from_smiles(cosolvent.smiles))
+                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
             except Exception as e:
                 print(e)
                 print(cosolvent)
@@ -388,60 +559,14 @@ class CosolventSystem:
             small_ff = SMIRNOFFTemplateGenerator(molecules=molecules)
         return small_ff
     
-    def create_system(self, forcefield, topology):
+    def _create_system(self, forcefield, topology):
         print("Creating system")
         system = forcefield.createSystem(topology,
                                          nonbondedMethod=app.PME,
                                          nonbondedCutoff=10*openmmunit.angstrom,
                                          constraints=app.HBonds,
                                          hydrogenMass=1.5*openmmunit.amu)
-        return system
-    
-    def save_pdb(self, topology, positions, out_path):
-        app.PDBFile.writeFile(
-            topology,
-            positions,
-            open(out_path, "w"),
-            keepIds=True
-        )
-        return
-
-    def save_system(self, out_path: str, system: System):
-        with open(f"{out_path}/system.xml", "w") as fo:
-            fo.write(XmlSerializer.serialize(system))
-        return
-    
-    def load_system(self, system_path: str):
-        with open(system_path) as fi:
-            system = XmlSerializer.deserialize(fi.read())
-        return system
-
-    def save_topology(self, topology, positions, system, simulation_engine, out_path):
-        parmed_structure = parmed.openmm.load_topology(topology, system, positions)
-
-        simulation_engine = simulation_engine.upper()
-        if simulation_engine == "AMBER":
-            # Add dummy bond type for None ones so that parmed doesn't trip
-            bond_type = parmed.BondType(1.0, 1.0, list=parmed_structure.bond_types)
-            parmed_structure.bond_types.append(bond_type)
-            for bond in parmed_structure.bonds:
-                if bond.type is None:
-                    bond.type = bond_type
-
-            parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
-            parmed_structure.save(f'{out_path}/system.inpcrd', overwrite=True)
-
-        elif simulation_engine == "GROMACS":
-            parmed_structure.save(f'{out_path}/system.top', overwrite=True)
-            parmed_structure.save(f'{out_path}/system.gro', overwrite=True)
-
-        elif simulation_engine == "CHARMM":
-            parmed_structure.save(f'{out_path}/system.psf', overwrite=True)
-
-        else:
-            print("The specified simulation engine is not supported!")
-            print(f"Available simulation engines:\n\t{self._available_engines}")
-        return 
+        return system 
     
     def _setup_new_topology(self, cosolvents_positions, receptor_topology=None, receptor_positions=None):
         # Adding the cosolvent molecules
@@ -449,13 +574,13 @@ class CosolventSystem:
         molecules_positions = []
         for cosolvent in cosolvents_positions:
             for i in range(len(cosolvents_positions[cosolvent])):
-                molecules.append(Molecule.from_smiles(cosolvent.smiles))
+                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
                 [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
 
         molecules_positions = np.array(molecules_positions)
         new_top = Topology.from_molecules(molecules)
         new_mod = app.Modeller(new_top.to_openmm(), molecules_positions)
-        if receptor_topology is not None and receptor_positions is not None: 
+        if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
             new_mod.add(receptor_topology, receptor_positions)
         new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
         return new_mod
@@ -482,31 +607,57 @@ class CosolventSystem:
                                            maxRange[2]-minRange[2]])).astype(int)
         return vectors, box
     
-    def _build_mesh(self, modeller, sizeX, sizeY, sizeZ, cutoff, water=False):
-        vX, vY, vZ = modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
-        positions = modeller.positions.value_in_unit(openmmunit.nanometer)
-        if len(positions) > 0:
-            center = [(max((pos[i] for pos in positions))+min((pos[i] for pos in positions)))/2 for i in range(3)]
-        else:
-            center = Vec3(0, 0, 0)
-        origin = center - (np.ceil(np.array([vX, vY, vZ])).astype(int)/2)
-        xmin, xmax = origin[0], origin[0] + vX
-        ymin, ymax = origin[1], origin[1] + vY
-        zmin, zmax = origin[2], origin[2] + vZ
+    # def _build_mesh(self, modeller, sizeX, sizeY, sizeZ, cutoff, water=False):
+    #     vX, vY, vZ = modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
+    #     positions = modeller.positions.value_in_unit(openmmunit.nanometer)
+    #     if len(positions) > 0:
+    #         center = [(max((pos[i] for pos in positions))+min((pos[i] for pos in positions)))/2 for i in range(3)]
+    #     else:
+    #         center = Vec3(0, 0, 0)
+    #     origin = center - (np.ceil(np.array([vX, vY, vZ])).astype(int)/2)
+    #     xmin, xmax = origin[0], origin[0] + vX
+    #     ymin, ymax = origin[1], origin[1] + vY
+    #     zmin, zmax = origin[2], origin[2] + vZ
 
-        cutoff = cutoff.value_in_unit(openmmunit.nanometer)
-        if not water:
-            x = np.arange(xmin, xmax, sizeX+cutoff) + cutoff
-            y = np.arange(ymin, ymax, sizeY+cutoff) + cutoff
-            z = np.arange(zmin, zmax, sizeZ+cutoff) + cutoff
-        else:
-            sizeX = sizeX.value_in_unit(openmmunit.nanometer)
-            sizeY = sizeY.value_in_unit(openmmunit.nanometer)
-            sizeZ = sizeZ.value_in_unit(openmmunit.nanometer)
-            x = np.arange(xmin, xmax, sizeX) + (sizeX/2.)
-            y = np.arange(ymin, ymax, sizeY) + (sizeY/2.)
-            z = np.arange(zmin, zmax, sizeZ) + (sizeZ/2.)
+    #     cutoff = cutoff.value_in_unit(openmmunit.nanometer)
+    #     if not water:
+    #         x = np.arange(xmin, xmax, sizeX+cutoff) + cutoff
+    #         y = np.arange(ymin, ymax, sizeY+cutoff) + cutoff
+    #         z = np.arange(zmin, zmax, sizeZ+cutoff) + cutoff
+    #     else:
+    #         sizeX = sizeX.value_in_unit(openmmunit.nanometer)
+    #         sizeY = sizeY.value_in_unit(openmmunit.nanometer)
+    #         sizeZ = sizeZ.value_in_unit(openmmunit.nanometer)
+    #         x = np.arange(xmin, xmax, sizeX) + (sizeX/2.)
+    #         y = np.arange(ymin, ymax, sizeY) + (sizeY/2.)
+    #         z = np.arange(zmin, zmax, sizeZ) + (sizeZ/2.)
 
+    #     X, Y, Z = np.meshgrid(x, y, z)
+    #     center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+    #     return center_xyzs
+    
+    def _build_mesh(self, positions):
+        # For water this is translated in 30.9
+        padding = 1.3*openmmunit.angstrom
+        offset = 1.5*openmmunit.angstrom
+        mesh_step = 0.3*openmmunit.angstrom
+        minRange = np.array([min((pos[i] for pos in positions)) for i in range(3)])
+        maxRange = np.array([max((pos[i] for pos in positions)) for i in range(3)])
+        # padding = padding.value_in_unit(openmmunit.nanometer)
+        # mesh_step = mesh_step.value_in_unit(openmmunit.nanometer)
+        x = np.arange(minRange[0], maxRange[0]+padding, mesh_step)
+        y = np.arange(minRange[1], maxRange[1]+padding, mesh_step)
+        z = np.arange(minRange[2], maxRange[2]+padding, mesh_step)
         X, Y, Z = np.meshgrid(x, y, z)
         center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-        return center_xyzs
+        kdtree = spatial.cKDTree(center_xyzs)
+        # offset = offset.value_in_unit(openmmunit.nanometer)
+        query = kdtree.query_ball_point(positions, offset)
+        query = np.unique(np.hstack(query)).astype(int)
+        close_to = np.zeros(len(center_xyzs), bool)
+        close_to[query] = True
+        return round(np.count_nonzero(close_to)*mesh_step, 2)
+
+
+
+        

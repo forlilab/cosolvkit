@@ -140,3 +140,4 @@ results/system.inpcrd
 results/system.prmtop
 *.ipynb
 *.mol
+cosolvents_diogo.json
