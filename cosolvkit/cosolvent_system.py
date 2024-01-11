@@ -201,7 +201,7 @@ class CosolventSystem:
         for c in cosolvents_dict:
             cosolvent = CoSolvent(**c)
             cosolvent_xyz = cosolvent.positions*openmmunit.angstrom
-            cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
+            # cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
             self.cosolvents[cosolvent] = cosolvent_xyz
 
         if receptor is not None:
@@ -657,7 +657,3 @@ class CosolventSystem:
         close_to = np.zeros(len(center_xyzs), bool)
         close_to[query] = True
         return round(np.count_nonzero(close_to)*mesh_step, 2)
-
-
-
-        
