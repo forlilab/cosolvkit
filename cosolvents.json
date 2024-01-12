@@ -13,13 +13,13 @@
     },
     {
         "name": "propane", 
-        "copies": 500,
+        "copies": 50,
         "smiles": "CCC", 
         "resname": "PRP"
     },
     {
         "name": "imidazole", 
-        "copies": 3000,
+        "copies": 30,
         "smiles": "C1=CN=CN1"
     },
     {

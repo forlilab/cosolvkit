@@ -185,6 +185,7 @@ class CosolventSystem:
         self._periodic_box_vectors = None
         self._box_volume = None
         self._hydrate = hydrate
+        self._padding = padding
         self.n_waters = n_waters
 
         # Public
@@ -201,7 +202,7 @@ class CosolventSystem:
         for c in cosolvents_dict:
             cosolvent = CoSolvent(**c)
             cosolvent_xyz = cosolvent.positions*openmmunit.angstrom
-            # cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
+            cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
             self.cosolvents[cosolvent] = cosolvent_xyz
 
         if receptor is not None:
@@ -607,6 +608,25 @@ class CosolventSystem:
                                            maxRange[2]-minRange[2]])).astype(int)
         return vectors, box
     
+    def get_box_origin_and_size(self, positions, padding, radius=None, system_unit=openmmunit.angstrom):
+        padding = padding.value_in_unit(system_unit)
+        if positions is not None:
+            positions = positions.value_in_unit(system_unit)
+            minRange = Vec3(*(min((pos[i] for pos in positions)) for i in range(3)))
+            maxRange = Vec3(*(max((pos[i] for pos in positions)) for i in range(3)))
+            center = 0.5*(minRange+maxRange)
+            radius = max(unit.norm(center-pos) for pos in positions)
+        else:
+            center = Vec3(0, 0, 0)
+            radius = radius.value_in_unit(system_unit)
+            maxRange = Vec3(radius, radius, radius)
+            minRange = Vec3(-radius, -radius, -radius)
+        width = max(2*radius+padding, 2*padding)
+        vectors = (Vec3(width, 0, 0), Vec3(0, width, 0), Vec3(0, 0, width))
+        box = Vec3(vectors[0][0], vectors[1][1], vectors[2][2])
+        lowerBound = center-box/2
+        upperBound = center+box/2
+        return vectors, lowerBound, upperBound
     # def _build_mesh(self, modeller, sizeX, sizeY, sizeZ, cutoff, water=False):
     #     vX, vY, vZ = modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
     #     positions = modeller.positions.value_in_unit(openmmunit.nanometer)
