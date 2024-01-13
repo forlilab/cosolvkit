@@ -3,7 +3,9 @@ import os
 from collections import defaultdict
 import numpy as np
 from scipy import spatial
-from math import floor
+from scipy.stats import qmc
+import math 
+from itertools import product
 import parmed
 from openmm import Vec3, unit, XmlSerializer, System
 import openmm.app as app
@@ -216,34 +218,54 @@ class CosolventSystem:
             assert radius is not None, "Error! If no receptor is passed, the radius parameter has to be set and it needs to be in angstrom openmm.unit"
             assert (isinstance(radius, openmmunit.Quantity)) and (radius.unit == openmmunit.angstrom), \
                 "Error! If no receptor is passed, the radius parameter has to be set and it needs to be in angstrom openmm.unit"
-            self._box = self._build_box(None, padding, radius=radius)
+            self.vectors, self.box, self.lowerBound, self.upperBound = self._build_box(None, padding, radius=radius)
             self.modeller = app.Modeller(app.Topology(), None)
         else:
-            self._box = self._build_box(self.modeller.positions, padding, radius=None)
+            self.vectors, self.box, self.lowerBound, self.upperBound = self._build_box(self.modeller.positions, padding, radius=None)
         
         # Setting up the box - This has to be done before building the system with
         # the cosolvent molecules.
-        self.modeller.topology.setPeriodicBoxVectors(self._box[0])
+        self.modeller.topology.setPeriodicBoxVectors(self.vectors)
         self._periodic_box_vectors = self.modeller.topology.getPeriodicBoxVectors().value_in_unit(openmmunit.nanometer)
-        vX, vY, vZ = self.modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.angstrom)
-        self._box_volume = vX * vY * vZ
+        vX, vY, vZ = self.modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
+        self.box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
         self.forcefield = self._parametrize_system(forcefields, simulation_engine, self.cosolvents)
         # print(f"Number of possible added waters with mesh approach: {self._number_of_possible_added_waters_mesh()}")
-        print("Adding cosolvents and hydrating")
+        # print("Adding cosolvents and hydrating")
         # self.modeller.addSolvent(self.forcefield)
         # self._added_waters = self._get_n_waters()
         # self._receptor_xyzs, self._water_xyzs, self._wat_res_mapping = self._process_positions(self.modeller)
-        # print(f"Box Volume: {self._box_volume} A**3")
+        print(f"Box Volume: {self.box_volume} nm**3")
         # print(f"Number of waters added: {self._added_waters}")
         return
     
     ############################# PUBLIC
-    def build(self):
-        # cosolv_xyz = self._add_cosolvents(self.cosolvents)
-        self._add_cosolvents_fill_the_void(self.cosolvents,
-                                           False)
-        # self.system = self._create_system(self.forcefield, self.modeller.topology)
+    def build(self, solvent_smiles="H2O", n_solvent_molecules=None):
+        volume_not_occupied_by_cosolvent = self.fitting_checks()
+        assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
+        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
+        self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
+        if solvent_smiles == "H2O":
+            if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=False)
+            else: self.modeller.addSolvent(self.forcefield, numAdded=n_solvent_molecules, neutralize=False)
+        elif solvent_smiles is not None:
+            c = {"name": "solvent",
+                 "smiles": solvent_smiles}
+            solvent_mol = CoSolvent(**c)
+            cosolv_xyz = solvent_mol.positions*openmmunit.angstrom
+            if n_solvent_molecules is not None:
+                solvent_mol.copies = n_solvent_molecules
+            else:
+                one_mol_vol = self.calculate_mol_volume(cosolv_xyz)
+                solvent_mol.copies = int(math.floor((volume_not_occupied_by_cosolvent/one_mol_vol)+0.5)*.6)
+            print(f"Placing {solvent_mol.copies}")
+            solv_xyz = self.add_cosolvents({solvent_mol: cosolv_xyz.value_in_unit(openmmunit.nanometer)}, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
+            self.modeller = self._setup_new_topology(solv_xyz, self.modeller.topology, self.modeller.positions)
+        # # cosolv_xyz = self._add_cosolvents(self.cosolvents)
+        # self._add_cosolvents_fill_the_void(self.cosolvents,
+        #                                    False)
+        self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
     def save_pdb(self, topology, positions, out_path):
@@ -293,67 +315,18 @@ class CosolventSystem:
         return
     
     ############################# PRIVATE
-    def _check_cosolvent_occupancy(self):
-        water_concentration = 55.4 * openmmunit.molar
-        total_volume = 0
-        cosolvs_volume = defaultdict(float)
+    def _copies_from_concentration(self, water_volume):
         for cosolvent in self.cosolvents:
             if cosolvent.concentration is not None:
-                n_copies = (self._added_waters * (cosolvent.concentration * openmmunit.molar)) / water_concentration
-                cosolvent.copies = int(floor(n_copies + 0.5))
-            cosolvs_volume[cosolvent] = self._build_mesh(self.cosolvents[cosolvent]) * cosolvent.copies
-            total_volume += cosolvs_volume[cosolvent]
-        wat = CoSolvent("wat", "O")
-        cosolvs_volume["HOH"] = self._build_mesh(wat.positions) * self._added_waters
-        # cosolvs_volume["HOH"] = 30.9 * self._added_waters
-        assert total_volume <= cosolvs_volume["HOH"]/2.0, \
-            "Error! The volume occupied by the requested cosolvent molecules exceeds the volume limit of 50% of the solvent\n" + \
-            f"Volume requested for cosolvents: {total_volume}\n" + \
-            f"Volume available for cosolvents: {cosolvs_volume['HOH']/2.}\n" + \
-            f"Total Volume available: {cosolvs_volume['HOH']}"
-        
-        print(f"Volume requested for cosolvents: {total_volume}")
-        print(f"Volume available for cosolvents: {cosolvs_volume['HOH']/2.}")
-        print(f"Total Volume available: {cosolvs_volume['HOH']}")
-        return cosolvs_volume
+                cosolvent.copies = int(math.floor((((cosolvent.concentration*openmmunit.molar)*(water_volume*openmmunit.liters))*openmmunit.AVOGADRO_CONSTANT_NA) + 0.5))
+        return
 
     
     def _get_n_waters(self):
         res = [r.name for r in self.modeller.topology.residues()]
         return res.count('HOH')
-    
-    def _number_of_possible_added_waters_mesh(self):
-        # wat = CoSolvent("wat", "O")
-        # wat_xyzs = wat.positions*openmmunit.angstrom
-        # sizeX, sizeY, sizeZ = wat_xyzs.max(axis=0) - wat_xyzs.min(axis=0)
-        watref_dims = [18.856, 18.856, 18.856]*openmmunit.angstrom
-        watref_dims = watref_dims.value_in_unit(openmmunit.angstrom)
-        vX, vY, vZ = self.modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.angstrom)
-        positions = self.modeller.positions.value_in_unit(openmmunit.angstrom)
-        if len(positions) > 0:
-            center = [(max((pos[i] for pos in positions))+min((pos[i] for pos in positions)))/2 for i in range(3)]
-        else:
-            center = Vec3(0, 0, 0)
-        origin = center - (np.ceil(np.array([vX, vY, vZ])).astype(int)/2)
-        xmin, xmax = origin[0], origin[0] + vX
-        ymin, ymax = origin[1], origin[1] + vY
-        zmin, zmax = origin[2], origin[2] + vZ
 
-        # sizeX = sizeX.value_in_unit(openmmunit.nanometer)
-        # sizeY = sizeY.value_in_unit(openmmunit.nanometer)
-        # sizeZ = sizeZ.value_in_unit(openmmunit.nanometer)
-        # x = np.arange(xmin, xmax, sizeX) + (sizeX/2.)
-        # y = np.arange(ymin, ymax, sizeY) + (sizeY/2.)
-        # z = np.arange(zmin, zmax, sizeZ) + (sizeZ/2.)
-        x = np.arange(xmin, xmax, watref_dims[0]) + (watref_dims[0]/2.)
-        y = np.arange(ymin, ymax, watref_dims[1]) + (watref_dims[1]/2.)
-        z = np.arange(zmin, zmax, watref_dims[2]) + (watref_dims[2]/2.)
-
-        X, Y, Z = np.meshgrid(x, y, z)
-        center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-        print(len(center_xyzs))
-        return center_xyzs
-
+    ##################### FIND AND REPLACE APPROACH #####################
     def _process_positions(self, modeller):
         _xyz = [(x, y, z) for x, y, z in modeller.positions.value_in_unit(openmmunit.nanometer)]
         xyz = np.array(_xyz, dtype=float)
@@ -476,64 +449,211 @@ class CosolventSystem:
         print(f"Removed {len(waters_removed)} waters for the cosolvents!")
         self.modeller.delete(waters_removed)
         return cosolv_xyzs
-    
-    def _add_cosolvents_fill_the_void(self, cosolvents, hydrate=True):
-        raw_positions = list()
-        cosolvent_copies = dict()
-        cosolvent_kdtree = None
-        kdtree = None
-        cosolv_xyzs = defaultdict(list)
-        if self.receptor:
-            kdtree = spatial.cKDTree(self.modeller.positions.value_in_unit(openmmunit.nanometer))
-        for cosolvent in cosolvents:
-            cosolvent_copies[cosolvent] = 0
-            cosolvent_xyz = cosolvents[cosolvent]
-            vecs = self.modeller.topology.getPeriodicBoxVectors().value_in_unit(openmmunit.nanometer)
-            x = np.arange(0, vecs[0][0], 1)
-            y = np.arange(0, vecs[1][1], 1)
-            z = np.arange(0, vecs[2][2], 1)
-            X, Y, Z = np.meshgrid(x, y, z)
-            center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-            # sizeX, sizeY, sizeZ = cosolvent_xyz.max(axis=0) - cosolvent_xyz.min(axis=0)
-            # center_xyzs = self._build_mesh(self.modeller, sizeX, sizeY, sizeZ, cutoff=self._cosolvents_cutoff)
-            # Randomize the cosolvent molecules placement
-            np.random.shuffle(center_xyzs)
-            if len(cosolv_xyzs) > 0:
-                cosolvent_kdtree = spatial.cKDTree(raw_positions)
-            for i in range(len(center_xyzs)):
-                if cosolvent_copies[cosolvent] < cosolvent.copies:
-                    new_coords = cosolvent_xyz + center_xyzs[i]
-                    if self._check_coordinates_to_add(new_coords,
-                                                      cosolvent_kdtree,
-                                                      kdtree):
-                            cosolv_xyzs[cosolvent].append(new_coords)
-                            cosolvent_copies[cosolvent] += 1
-                            [raw_positions.append(pos) for pos in new_coords]
-        self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
-        if hydrate:
-            if self.n_waters is not None:
-                self.modeller.addSolvent(self.forcefield, numAdded=self.n_waters)
-            else: self.modeller.addSolvent(self.forcefield)
-        return self.modeller
-    
-    def _check_coordinates_to_add(self, new_coords, cosolvent_kdtree, kdtree):
-            cosolvents_cutoff = 3.5*openmmunit.angstrom
-            receptor_cutoff = 4.5*openmmunit.angstrom
-            if kdtree is not None and not any(kdtree.query_ball_point(new_coords, receptor_cutoff.value_in_unit(openmmunit.nanometer))):
-                if cosolvent_kdtree is not None:
-                    if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolvents_cutoff.value_in_unit(openmmunit.nanometer))):
-                        return True
-                    else: return False
-                else:
-                    return True
-            else:
-                if cosolvent_kdtree is not None:
-                    if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolvents_cutoff.value_in_unit(openmmunit.nanometer))):
-                        return True
-                    else: return False
-                else:
-                    return True
+    ##################### FIND AND REPLACE APPROACH ####################
 
+    ##################### FILL THE VOID APPROACH ####################
+    def add_cosolvents(self, cosolvents, vectors, lowerBound, upperBound, receptor_positions):
+        protein_radius = 3.5*openmmunit.angstrom
+        prot_kdtree = None
+        placed_atoms_positions = []
+        if receptor_positions is not None and len(receptor_positions) > 0:
+            prot_kdtree = spatial.cKDTree(receptor_positions)
+        cosolv_xyzs = defaultdict(list)
+        sampler = qmc.Halton(d=3)
+        points = sampler.random(1000000)
+        points= qmc.scale(points, [lowerBound[0], lowerBound[0], lowerBound[0]], [upperBound[0], upperBound[1], upperBound[2]])
+        used_halton_ids = list()
+        if prot_kdtree is not None:
+            banned_ids = prot_kdtree.query_ball_point(points, protein_radius.value_in_unit(openmmunit.nanometer))
+            used_halton_ids = list(np.unique(np.hstack(banned_ids)).astype(int))
+        for cosolvent in cosolvents:
+            print(f"Placing {cosolvent.name}")
+            c_xyz = cosolvents[cosolvent]
+            for replicate in range(cosolvent.copies):
+                counter = replicate
+                if len(placed_atoms_positions) < 1:
+                    xyz = points[counter]
+                    cosolv_xyz = c_xyz + xyz
+                    [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
+                    cosolv_xyzs[cosolvent].append(cosolv_xyz)
+                    used_halton_ids.append(counter)
+                    kdtree = spatial.cKDTree(placed_atoms_positions)
+                else:
+                    kdtree = spatial.cKDTree(placed_atoms_positions)
+                    cosolv_xyz, used_halton_ids = self.accept_reject(c_xyz, points, kdtree, used_halton_ids, lowerBound, vectors, prot_kdtree)
+                    if isinstance(cosolv_xyz, int):
+                        print("Could not place the cosolvent molecule!")
+                    else:
+                        cosolv_xyzs[cosolvent].append(cosolv_xyz)
+                        [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
+            print("Done!")
+        print("Added cosolvents:")
+        for cosolvent in cosolv_xyzs:
+            print(f"{cosolvent.name}: {len(cosolv_xyzs[cosolvent])}")
+        return cosolv_xyzs
+
+    def check_coordinates_to_add(self, new_coords, cosolvent_kdtree, protein_kdtree):
+        protein_radius = 3.5*openmmunit.angstrom
+        cosolv_radius = 2.5*openmmunit.angstrom
+        if protein_kdtree is not None and not any(protein_kdtree.query_ball_point(new_coords, protein_radius.value_in_unit(openmmunit.nanometer))):
+            if cosolvent_kdtree is not None:
+                if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
+                    return True
+                else: return False
+            else:
+                return True
+        elif protein_kdtree is None and cosolvent_kdtree is not None:
+            if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
+                return True
+            else: 
+                return False
+        else:
+            return False
+
+    def accept_reject(self, xyz, halton, kdtree, used, lowerBound, upperBound, protein_kdtree):
+        trial = 0
+        accepted = False
+        coords_to_return = 0
+        moves = self.local_search()
+        valid_ids = np.array(range(0, len(halton)))
+        while not accepted and trial < 1000000:
+            halton_idx = np.random.choice(valid_ids[~np.isin(valid_ids, np.array(used))])
+            rotated_xyz = self.generate_rotation(xyz)
+            cosolv_xyz = rotated_xyz + halton[halton_idx]
+            if self.check_coordinates_to_add(cosolv_xyz, kdtree, protein_kdtree):
+                used.append(halton_idx)
+                accepted = True
+                coords_to_return = cosolv_xyz
+            else:
+                trial += 1
+                for move in moves:
+                    rotated_xyz = self.generate_rotation(xyz)
+                    cosolv_xyz = rotated_xyz + halton_idx + move
+                    if self.is_in_box(cosolv_xyz, lowerBound, upperBound):
+                        if self.check_coordinates_to_add(cosolv_xyz, kdtree, protein_kdtree):
+                            accepted = True
+                            used.append(halton_idx)
+                            coords_to_return = cosolv_xyz
+                            break
+                    trial += 1
+        return coords_to_return, used
+
+    def is_in_box(self, xyzs, lowerBound, upperBound):
+        """Is in the box or not?
+        """
+        xyzs = np.atleast_2d(xyzs)
+        x, y, z = xyzs[:, 0], xyzs[:, 1], xyzs[:, 2]
+
+        xmin, xmax = lowerBound[0], upperBound[0][0]
+        ymin, ymax = lowerBound[1], upperBound[1][1]
+        zmin, zmax = lowerBound[2], upperBound[2][2]
+
+        x_in = np.logical_and(xmin <= x, x <= xmax)
+        y_in = np.logical_and(ymin <= y, y <= ymax)
+        z_in = np.logical_and(zmin <= z, z <= zmax)
+        all_in = np.all((x_in, y_in, z_in), axis=0)
+
+        return np.all(all_in)
+
+    def local_search(self):
+        step = 1
+        moves = filter(lambda point: not all(axis ==0 for axis in point), list(product([-step, 0, step], repeat=3)))
+        return moves
+
+    def generate_rotation(self, coords):
+        """
+            Rotate a list of 3D [x,y,z] vectors about corresponding random uniformly
+            distributed quaternion [w, x, y, z]
+        
+            Parameters
+            ----------
+            coords : numpy.ndarray with shape [n,3]
+                list of [x,y,z] cartesian vector coordinates
+        """
+        rand = np.random.rand(3)
+        r1 = np.sqrt(1.0 - rand[0])
+        r2 = np.sqrt(rand[0])
+        pi2 = math.pi * 2.0
+        t1 = pi2 * rand[1]
+        t2 = pi2 * rand[2]
+        qrot = np.array([np.cos(t2) * r2,
+                        np.sin(t1) * r1,
+                        np.cos(t1) * r1,
+                        np.sin(t2) * r2])
+        rotation = spatial.transform.Rotation.from_quat(qrot)
+        return rotation.apply(coords)
+    
+    ##################### SANITY CHECKS ####################
+    def calculate_mol_volume(self, mol_positions):
+        """Computes volume occupied by the receptor in nm**3"""
+        padding = 3.5*openmmunit.angstrom
+        offset = 1.5*openmmunit.angstrom
+        mesh_step = 0.3*openmmunit.angstrom
+        padding = padding.value_in_unit(openmmunit.nanometer)
+        offset = offset.value_in_unit(openmmunit.nanometer)
+        mesh_step = mesh_step.value_in_unit(openmmunit.nanometer)
+        if isinstance(mol_positions, openmmunit.Quantity):
+            mol_positions = mol_positions.value_in_unit(openmmunit.nanometer)
+        minRange = np.array([min((pos[i] for pos in mol_positions)) for i in range(3)])
+        maxRange = np.array([max((pos[i] for pos in mol_positions)) for i in range(3)])
+        x = np.arange(minRange[0]-padding, maxRange[0]+padding, mesh_step)
+        y = np.arange(minRange[1]-padding, maxRange[1]+padding, mesh_step)
+        z = np.arange(minRange[2]-padding, maxRange[2]+padding, mesh_step)
+        X, Y, Z = np.meshgrid(x, y, z)
+        center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+        kdtree = spatial.cKDTree(center_xyzs)
+        query = kdtree.query_ball_point(mol_positions, offset)
+        points = np.unique(np.hstack(query)).astype(int)
+        return round(len(points)*mesh_step**3, 2)
+
+    def fitting_checks(self):
+        prot_volume = 0
+        if self.receptor:
+            prot_volume = self.calculate_mol_volume(self.modeller.positions)
+        empty_volume = self.cubic_nanometers_to_liters(self.box_volume - prot_volume)
+        self._copies_from_concentration(empty_volume)
+        cosolvs_volume = defaultdict(float)
+        for cosolvent in self.cosolvents:
+            cosolvs_volume[cosolvent] = self.calculate_mol_volume(self.cosolvents[cosolvent])*cosolvent.copies
+        volume_occupied_by_cosolvent = round(sum(cosolvs_volume.values()), 3)
+        empty_available_volume = round(self.liters_to_cubic_nanometers(empty_volume)/2., 3)
+        print(f"Volume requested for cosolvents: {volume_occupied_by_cosolvent} nm**3")
+        print(f"Volume available for cosolvents: {empty_available_volume} nm**3")
+        if volume_occupied_by_cosolvent > empty_available_volume:
+            return None
+        return empty_available_volume
+
+    def liters_to_cubic_nanometers(self, liters):
+        if isinstance(liters, openmmunit.Quantity):
+            liters = liters.value_in_unit(openmmunit.liters)
+        value = liters * 1e+24
+        return value
+
+    def cubic_nanometers_to_liters(self, vol):
+        value = vol * 1e-24
+        return value
+    ##################### SANITY CHECKS ####################
+
+    ##################### FILL THE VOID APPROACH ####################
+                
+    def _setup_new_topology(self, cosolvents_positions, receptor_topology=None, receptor_positions=None):
+        # Adding the cosolvent molecules
+        molecules = []
+        molecules_positions = []
+        for cosolvent in cosolvents_positions:
+            for i in range(len(cosolvents_positions[cosolvent])):
+                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
+                [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
+
+        molecules_positions = np.array(molecules_positions)
+        new_top = Topology.from_molecules(molecules)
+        new_mod = app.Modeller(new_top.to_openmm(), molecules_positions)
+        if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
+            new_mod.add(receptor_topology, receptor_positions)
+        new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
+        return new_mod
+
+    ##################### FORCEFIELD PARAMETRIZATION ####################
     def _parametrize_system(self, forcefields: str, engine: str, cosolvents: dict):
         with open(forcefields) as fi:
             ffs = json.load(fi)
@@ -559,7 +679,8 @@ class CosolventSystem:
         else:
             small_ff = SMIRNOFFTemplateGenerator(molecules=molecules)
         return small_ff
-    
+    ##################### FORCEFIELD PARAMETRIZATION ####################
+
     def _create_system(self, forcefield, topology):
         print("Creating system")
         system = forcefield.createSystem(topology,
@@ -569,23 +690,7 @@ class CosolventSystem:
                                          hydrogenMass=1.5*openmmunit.amu)
         return system 
     
-    def _setup_new_topology(self, cosolvents_positions, receptor_topology=None, receptor_positions=None):
-        # Adding the cosolvent molecules
-        molecules = []
-        molecules_positions = []
-        for cosolvent in cosolvents_positions:
-            for i in range(len(cosolvents_positions[cosolvent])):
-                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
-                [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
-
-        molecules_positions = np.array(molecules_positions)
-        new_top = Topology.from_molecules(molecules)
-        new_mod = app.Modeller(new_top.to_openmm(), molecules_positions)
-        if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
-            new_mod.add(receptor_topology, receptor_positions)
-        new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
-        return new_mod
-
+    ##################### BOX ####################
     def _build_box(self, positions, padding, radius=None):
         padding = padding.value_in_unit(openmmunit.nanometer)
         if positions is not None:
@@ -606,74 +711,28 @@ class CosolventSystem:
         self._box_size = np.ceil(np.array([maxRange[0]-minRange[0],
                                            maxRange[1]-minRange[1],
                                            maxRange[2]-minRange[2]])).astype(int)
-        return vectors, box
-    
-    def get_box_origin_and_size(self, positions, padding, radius=None, system_unit=openmmunit.angstrom):
-        padding = padding.value_in_unit(system_unit)
-        if positions is not None:
-            positions = positions.value_in_unit(system_unit)
-            minRange = Vec3(*(min((pos[i] for pos in positions)) for i in range(3)))
-            maxRange = Vec3(*(max((pos[i] for pos in positions)) for i in range(3)))
-            center = 0.5*(minRange+maxRange)
-            radius = max(unit.norm(center-pos) for pos in positions)
-        else:
-            center = Vec3(0, 0, 0)
-            radius = radius.value_in_unit(system_unit)
-            maxRange = Vec3(radius, radius, radius)
-            minRange = Vec3(-radius, -radius, -radius)
-        width = max(2*radius+padding, 2*padding)
-        vectors = (Vec3(width, 0, 0), Vec3(0, width, 0), Vec3(0, 0, width))
-        box = Vec3(vectors[0][0], vectors[1][1], vectors[2][2])
         lowerBound = center-box/2
         upperBound = center+box/2
-        return vectors, lowerBound, upperBound
-    # def _build_mesh(self, modeller, sizeX, sizeY, sizeZ, cutoff, water=False):
-    #     vX, vY, vZ = modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
-    #     positions = modeller.positions.value_in_unit(openmmunit.nanometer)
-    #     if len(positions) > 0:
-    #         center = [(max((pos[i] for pos in positions))+min((pos[i] for pos in positions)))/2 for i in range(3)]
-    #     else:
-    #         center = Vec3(0, 0, 0)
-    #     origin = center - (np.ceil(np.array([vX, vY, vZ])).astype(int)/2)
-    #     xmin, xmax = origin[0], origin[0] + vX
-    #     ymin, ymax = origin[1], origin[1] + vY
-    #     zmin, zmax = origin[2], origin[2] + vZ
-
-    #     cutoff = cutoff.value_in_unit(openmmunit.nanometer)
-    #     if not water:
-    #         x = np.arange(xmin, xmax, sizeX+cutoff) + cutoff
-    #         y = np.arange(ymin, ymax, sizeY+cutoff) + cutoff
-    #         z = np.arange(zmin, zmax, sizeZ+cutoff) + cutoff
-    #     else:
-    #         sizeX = sizeX.value_in_unit(openmmunit.nanometer)
-    #         sizeY = sizeY.value_in_unit(openmmunit.nanometer)
-    #         sizeZ = sizeZ.value_in_unit(openmmunit.nanometer)
-    #         x = np.arange(xmin, xmax, sizeX) + (sizeX/2.)
-    #         y = np.arange(ymin, ymax, sizeY) + (sizeY/2.)
-    #         z = np.arange(zmin, zmax, sizeZ) + (sizeZ/2.)
-
+        return vectors, box, lowerBound, upperBound 
+    
+    # def _build_mesh(self, positions):
+    #     # For water this is translated in 30.9
+    #     padding = 1.3*openmmunit.angstrom
+    #     offset = 1.5*openmmunit.angstrom
+    #     mesh_step = 0.3*openmmunit.angstrom
+    #     minRange = np.array([min((pos[i] for pos in positions)) for i in range(3)])
+    #     maxRange = np.array([max((pos[i] for pos in positions)) for i in range(3)])
+    #     # padding = padding.value_in_unit(openmmunit.nanometer)
+    #     # mesh_step = mesh_step.value_in_unit(openmmunit.nanometer)
+    #     x = np.arange(minRange[0], maxRange[0]+padding, mesh_step)
+    #     y = np.arange(minRange[1], maxRange[1]+padding, mesh_step)
+    #     z = np.arange(minRange[2], maxRange[2]+padding, mesh_step)
     #     X, Y, Z = np.meshgrid(x, y, z)
     #     center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-    #     return center_xyzs
-    
-    def _build_mesh(self, positions):
-        # For water this is translated in 30.9
-        padding = 1.3*openmmunit.angstrom
-        offset = 1.5*openmmunit.angstrom
-        mesh_step = 0.3*openmmunit.angstrom
-        minRange = np.array([min((pos[i] for pos in positions)) for i in range(3)])
-        maxRange = np.array([max((pos[i] for pos in positions)) for i in range(3)])
-        # padding = padding.value_in_unit(openmmunit.nanometer)
-        # mesh_step = mesh_step.value_in_unit(openmmunit.nanometer)
-        x = np.arange(minRange[0], maxRange[0]+padding, mesh_step)
-        y = np.arange(minRange[1], maxRange[1]+padding, mesh_step)
-        z = np.arange(minRange[2], maxRange[2]+padding, mesh_step)
-        X, Y, Z = np.meshgrid(x, y, z)
-        center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-        kdtree = spatial.cKDTree(center_xyzs)
-        # offset = offset.value_in_unit(openmmunit.nanometer)
-        query = kdtree.query_ball_point(positions, offset)
-        query = np.unique(np.hstack(query)).astype(int)
-        close_to = np.zeros(len(center_xyzs), bool)
-        close_to[query] = True
-        return round(np.count_nonzero(close_to)*mesh_step, 2)
+    #     kdtree = spatial.cKDTree(center_xyzs)
+    #     # offset = offset.value_in_unit(openmmunit.nanometer)
+    #     query = kdtree.query_ball_point(positions, offset)
+    #     query = np.unique(np.hstack(query)).astype(int)
+    #     close_to = np.zeros(len(center_xyzs), bool)
+    #     close_to[query] = True
+    #     return round(np.count_nonzero(close_to)*mesh_step, 2)

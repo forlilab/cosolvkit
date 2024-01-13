@@ -15,9 +15,7 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     if radius is not None:
         radius = radius * openmmunit.angstrom
     cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=10*openmmunit.angstrom, radius=radius)
-    # cosolv_volume = cosolv._check_cosolvent_occupancy()
     cosolv.build()
-    # cosolv._add_cosolvents_fill_the_void(cosolv.cosolvents, cosolv._cosolvent_positions)
     return cosolv
 
 def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):
@@ -110,12 +108,12 @@ if __name__ == "__main__":
                            cosolv_system.modeller.positions,
                            f"{output_path}/system.pdb")
     # Good habit to save the topology files
-    # print("Saving topology file")
-    # cosolv_system.save_topology(cosolv_system.modeller.topology, 
-    #                             cosolv_system.modeller.positions,
-    #                             cosolv_system.system,
-    #                             simulation_engine,
-    #                             output_path)
+    print("Saving topology file")
+    cosolv_system.save_topology(cosolv_system.modeller.topology, 
+                                cosolv_system.modeller.positions,
+                                cosolv_system.system,
+                                simulation_engine,
+                                output_path)
     # If you want to save the system as well
     # cosolv_system.save_system(output_path, cosolv_system.system)
     
