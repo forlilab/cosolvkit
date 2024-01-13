@@ -25,15 +25,18 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
 
     results_path = out_path
 
-    try:
-        platform = Platform.getPlatformByName("OpenCL")
-        properties = {"Precision": "mixed"}
-        print("Using GPU.")
-    except: 
-        properties = {}
-        platform = Platform.getPlatformByName("CPU")
-        print("Switching to CPU, no GPU available.")
+    # try:
+    #     platform = Platform.getPlatformByName("OpenCL")
+    #     properties = {"Precision": "mixed"}
+    #     print("Using GPU.")
+    # except: 
+    #     properties = {}
+    #     platform = Platform.getPlatformByName("CPU")
+    #     print("Switching to CPU, no GPU available.")
 
+    properties = {}
+    platform = Platform.getPlatformByName("CPU")
+    print("Switching to CPU, no GPU available.")
     cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
     integrator = LangevinMiddleIntegrator(300 * openmmunit.kelvin,
                                             1 / openmmunit.picosecond,
@@ -52,23 +55,23 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
     simulation.minimizeEnergy()
 
     # MD simulations - equilibration (1ns)
-    # print("Equilibrating system")
-    # simulation.step(25000)
+    print("Equilibrating system")
+    simulation.step(25000)
 
     # cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
     # simulation.context.reinitialize(preserveState=True)
     # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
 
-    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 25000))
-    simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 25000))
-    simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_filename + ".chk"), 250))
-    simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
-                                                potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
-                                                temperature=True, volume=True, density=True, speed=True))
+    # simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 25000))
+    # simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 25000))
+    # simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_filename + ".chk"), 250))
+    # simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
+    #                                             potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
+    #                                             temperature=True, volume=True, density=True, speed=True))
 
-    #100 ns = 25000000
-    print("Running simulation")
-    simulation.step(simulation_time)
+    # #100 ns = 25000000
+    # print("Running simulation")
+    # simulation.step(simulation_time)
     return
 
 

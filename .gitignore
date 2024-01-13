@@ -143,3 +143,6 @@ results/system.prmtop
 cosolvents_diogo.json
 cosolvents_small.json
 results/system.xml
+results/.DS_Store
+data/.DS_Store
+.DS_Store

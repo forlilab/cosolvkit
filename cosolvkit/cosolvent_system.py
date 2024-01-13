@@ -14,6 +14,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from openff.toolkit import Molecule, Topology
 from openmmforcefields.generators import EspalomaTemplateGenerator, GAFFTemplateGenerator, SMIRNOFFTemplateGenerator
+from openmmforcefields.generators.template_generators import SmallMoleculeTemplateGenerator
 from cosolvkit.utils import fix_pdb
 
 class CoSolvent:
@@ -140,44 +141,34 @@ class CoSolvent:
         return conect
 
 class CosolventSystem:
-    # Need to add concentrations
     def __init__(self, 
                  cosolvents: str,
                  forcefields: str,
                  simulation_engine: str, 
-                 receptor: str = None, 
-                 hydrate: bool = True,
-                 n_waters: int = None, 
+                 receptor: str = None,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
                  radius: openmmunit.Quantity = None ):
         """
             Create cosolvent system.
 
-            Parameters
-            ----------
-            cosolvents : str
-                Path to the cosolvents.json file
-            forcefields : str
-                Path to the forcefields.json file
-            simulation_engine : str
-                Engine that want to be used for the simulation.
-                Supported engines: Amber, Gromacs, CHARMM
-            receptor : None | str
-                Path to the pdb file of the receptor. 
-                By default is None to allow cosolvent
-                simulations without receptor
-            hydrate : bool
-                If True, waters will be added by openmm
-            n_waters : None | int
-                If hydrate is True and n_waters is specified,
-                openmm will solvate the system with exactly the number
-                of waters specified. By default is None
-            padding : openmm.unit.Quantity
-                Specifies the padding used to create the simulation box 
-                if no receptor is provided. Default to 12 Angstrom
-            radius : openmm.unit.Quantity
-                Specifies the radius to create the box without receptor.
-                Default is None
+            Args:
+                cosolvents : str
+                    Path to the cosolvents.json file
+                forcefields : str
+                    Path to the forcefields.json file
+                simulation_engine : str
+                    Engine that want to be used for the simulation.
+                    Supported engines: Amber, Gromacs, CHARMM
+                receptor : None | str
+                    Path to the pdb file of the receptor. 
+                    By default is None to allow cosolvent
+                    simulations without receptor
+                padding : openmm.unit.Quantity
+                    Specifies the padding used to create the simulation box 
+                    if no receptor is provided. Default to 12 Angstrom
+                radius : openmm.unit.Quantity
+                    Specifies the radius to create the box without receptor.
+                    Default is None
         """ 
         
         # Private
@@ -186,9 +177,7 @@ class CosolventSystem:
         self._box = None
         self._periodic_box_vectors = None
         self._box_volume = None
-        self._hydrate = hydrate
         self._padding = padding
-        self.n_waters = n_waters
 
         # Public
         self.modeller = None
@@ -240,8 +229,18 @@ class CosolventSystem:
         # print(f"Number of waters added: {self._added_waters}")
         return
     
-    ############################# PUBLIC
+#region Public
     def build(self, solvent_smiles="H2O", n_solvent_molecules=None):
+        """This function adds thd cosolvents specified in the CosolvSystem
+        and solvates with the desired solvent. If n_solvent_molecules is not passed
+        the function will try to fill the box with the desired solvent to a certain extent.
+        Please note that the solvation with solvents different from water may highly impact
+        the execution time.
+
+        Args:
+            solvent_smiles (str, optional): smiles string defining the desired solvent to use. Defaults to "H2O".
+            n_solvent_molecules (_type_, optional): number of mulecules of solvent to add. Defaults to None.
+        """
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
         receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
@@ -260,16 +259,27 @@ class CosolventSystem:
             else:
                 one_mol_vol = self.calculate_mol_volume(cosolv_xyz)
                 solvent_mol.copies = int(math.floor((volume_not_occupied_by_cosolvent/one_mol_vol)+0.5)*.6)
+            d_mol = {solvent_mol: cosolv_xyz.value_in_unit(openmmunit.nanometer)}
+            # need to register the custom solvent if not present already
+            self.forcefield.registerTemplateGenerator(self._parametrize_cosolvents(d_mol).generator)
             print(f"Placing {solvent_mol.copies}")
-            solv_xyz = self.add_cosolvents({solvent_mol: cosolv_xyz.value_in_unit(openmmunit.nanometer)}, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
+            solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
             self.modeller = self._setup_new_topology(solv_xyz, self.modeller.topology, self.modeller.positions)
+            
         # # cosolv_xyz = self._add_cosolvents(self.cosolvents)
         # self._add_cosolvents_fill_the_void(self.cosolvents,
         #                                    False)
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
-    def save_pdb(self, topology, positions, out_path):
+    def save_pdb(self, topology: app.Topology, positions: list, out_path: str):
+        """Saves the specified topology and position to the out_path file.
+
+        Args:
+            topology (app.Topology): topology used
+            positions (list): list of 3D coords
+            out_path (str): path to where to save the file
+        """
         app.PDBFile.writeFile(
             topology,
             positions,
@@ -279,16 +289,39 @@ class CosolventSystem:
         return
 
     def save_system(self, out_path: str, system: System):
+        """Saves the openmm system to the desired out path.
+
+        Args:
+            out_path (str): path where to save the System
+            system (System): system to be saved
+        """
         with open(f"{out_path}/system.xml", "w") as fo:
             fo.write(XmlSerializer.serialize(system))
         return
     
-    def load_system(self, system_path: str):
+    def load_system(self, system_path: str) -> System:
+        """Loads the desired system.
+
+        Args:
+            system_path (str): path to the system file
+
+        Returns:
+            System: system
+        """
         with open(system_path) as fi:
             system = XmlSerializer.deserialize(fi.read())
         return system
 
-    def save_topology(self, topology, positions, system, simulation_engine, out_path):
+    def save_topology(self, topology: app.Topology, positions: list, system: System, simulation_engine: str, out_path: str):
+        """Save the topology files necessary for MD simulations according to the simulation engine specified.
+
+        Args:
+            topology (app.Topology): openmm topology 
+            positions (list): list of 3D coordinates of the topology
+            system (System): openmm system
+            simulation_engine (str): name of the simulation engine
+            out_path (str): output path to where to save the topology files
+        """
         parmed_structure = parmed.openmm.load_topology(topology, system, positions)
 
         simulation_engine = simulation_engine.upper()
@@ -314,20 +347,78 @@ class CosolventSystem:
             print("The specified simulation engine is not supported!")
             print(f"Available simulation engines:\n\t{self._available_engines}")
         return
+#endregion
     
-    ############################# PRIVATE
-    def _copies_from_concentration(self, water_volume):
+#region Private
+#region Misc
+    def _copies_from_concentration(self, water_volume: float):
+        """Computes the number of copies of cosolvent necessary to reach the desired concentration
+
+        Args:
+            water_volume (float): volume available to be filled with cosolvents.
+        """
         for cosolvent in self.cosolvents:
             if cosolvent.concentration is not None:
                 cosolvent.copies = int(math.floor((((cosolvent.concentration*openmmunit.molar)*(water_volume*openmmunit.liters))*openmmunit.AVOGADRO_CONSTANT_NA) + 0.5))
         return
 
     
-    def _get_n_waters(self):
+    def _get_n_waters(self) -> int:
+        """Returns the number of waters in the system
+
+        Returns:
+            int: number of waters in the system
+        """
         res = [r.name for r in self.modeller.topology.residues()]
         return res.count('HOH')
+    
+    def _setup_new_topology(self, cosolvents_positions: dict, receptor_topology: app.Topology = None, receptor_positions:list = None) -> app.Modeller:
+        """Returns a new modeller with the topolgy with the new molecules specified
 
-    ##################### FIND AND REPLACE APPROACH #####################
+        Args:
+            cosolvents_positions (dict): keys are cosolvent molecules and values are lists of position of the new molecules to add
+            receptor_topology (app.Topology, optional): old topology to which add the new molecules. Defaults to None.
+            receptor_positions (list, optional): old positions to which add the new molecules. Defaults to None.
+
+        Returns:
+            app.Modeller: new modeller containing combined topology and positions
+        """
+        # Adding the cosolvent molecules
+        molecules = []
+        molecules_positions = []
+        for cosolvent in cosolvents_positions:
+            for i in range(len(cosolvents_positions[cosolvent])):
+                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
+                [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
+
+        molecules_positions = np.array(molecules_positions)
+        new_top = Topology.from_molecules(molecules)
+        new_mod = app.Modeller(new_top.to_openmm(), molecules_positions)
+        if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
+            new_mod.add(receptor_topology, receptor_positions)
+        new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
+        return new_mod
+    
+    def _create_system(self, forcefield: app.forcefield, topology: app.Topology) -> System:
+        """Returns system created from the Forcefield and the Topology.
+
+        Args:
+            forcefield (app.forcefield): Forcefield(s) used to build the system
+            topology (app.Topology): Topology used to build the system 
+
+        Returns:
+            System: created system
+        """
+        print("Creating system")
+        system = forcefield.createSystem(topology,
+                                         nonbondedMethod=app.PME,
+                                         nonbondedCutoff=10*openmmunit.angstrom,
+                                         constraints=app.HBonds,
+                                         hydrogenMass=1.5*openmmunit.amu)
+        return system 
+#endregion
+#region FindAndReplace
+# Not commenting since it's going to be replaced soon
     def _process_positions(self, modeller):
         _xyz = [(x, y, z) for x, y, z in modeller.positions.value_in_unit(openmmunit.nanometer)]
         xyz = np.array(_xyz, dtype=float)
@@ -450,12 +541,32 @@ class CosolventSystem:
         print(f"Removed {len(waters_removed)} waters for the cosolvents!")
         self.modeller.delete(waters_removed)
         return cosolv_xyzs
-    ##################### FIND AND REPLACE APPROACH ####################
+#endregion
+#region FillTheVoid
+    def add_cosolvents(self, 
+                       cosolvents: dict, 
+                       vectors: tuple[Vec3, Vec3, Vec3], 
+                       lowerBound: openmmunit.Quantity | Vec3, 
+                       upperBound: openmmunit.Quantity | Vec3, 
+                       receptor_positions: list) -> dict:
+        """This function adds the desired number of cosolvent molecules using the halton sequence
+        to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
+        At first, if a receptor/protein is present the halton sequence points that would clash with the protein
+        are pruned.
 
-    ##################### FILL THE VOID APPROACH ####################
-    def add_cosolvents(self, cosolvents, vectors, lowerBound, upperBound, receptor_positions):
+        Args:
+            cosolvents (dict): keys are cosolvent molecules and values are 3D coordinates of the molecule
+            vectors (tuple[Vec3, Vec3, Vec3]): vectors defining the simulation box
+            lowerBound (openmmunit.Quantity | Vec3): lower bound of the simulation box
+            upperBound (openmmunit.Quantity | Vec3): upper bound of the simulation box
+            receptor_positions (list): 3D coordinates of the receptor
+
+        Returns:
+            dict: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvents molecules
+        """
         protein_radius = 3.5*openmmunit.angstrom
         prot_kdtree = None
+        # This is used to update the kdtree of the placed cosolvents
         placed_atoms_positions = []
         if receptor_positions is not None and len(receptor_positions) > 0:
             prot_kdtree = spatial.cKDTree(receptor_positions)
@@ -493,7 +604,17 @@ class CosolventSystem:
             print(f"{cosolvent.name}: {len(cosolv_xyzs[cosolvent])}")
         return cosolv_xyzs
 
-    def check_coordinates_to_add(self, new_coords, cosolvent_kdtree, protein_kdtree):
+    def check_coordinates_to_add(self, new_coords: np.ndarray, cosolvent_kdtree: spatial.cKDTree, protein_kdtree: spatial.cKDTree) -> bool:
+        """Checks that the new coordinates don't clash with the receptor (if present) and/or other cosolvent molecules
+
+        Args:
+            new_coords (np.ndarray): coordinates of the new molecule of shape (n, 3)
+            cosolvent_kdtree (spatial.cKDTree): binary tree of the cosolvent molecules present in the box
+            protein_kdtree (spatial.cKDTree): binary tree of the receptor's coordinates
+
+        Returns:
+            bool: True if there are no clashes False otherwise
+        """
         protein_radius = 3.5*openmmunit.angstrom
         cosolv_radius = 2.5*openmmunit.angstrom
         if protein_kdtree is not None and not any(protein_kdtree.query_ball_point(new_coords, protein_radius.value_in_unit(openmmunit.nanometer))):
@@ -511,7 +632,33 @@ class CosolventSystem:
         else:
             return False
 
-    def accept_reject(self, xyz, halton, kdtree, used, lowerBound, upperBound, protein_kdtree):
+    def accept_reject(self, 
+                      xyz: np.ndarray, 
+                      halton: list, 
+                      kdtree: spatial.cKDTree, 
+                      used: list, 
+                      lowerBound: openmmunit.Quantity | Vec3, 
+                      upperBound: openmmunit.Quantity | Vec3, 
+                      protein_kdtree: spatial.cKDTree) -> tuple[np.ndarray, list]:
+        """Accepts or reject the halton move. A random halton point is selected and checked, if accepted
+        the cosolvent is placed there, otherwise a local search is performed in the neighbors of the point 
+        (1 tile). If the local search produces no clashes the new position is accepted, otherwise a new 
+        random halton point is selected and the old one is marked as not good. The algorithm stops
+        when a move is accepted or 1000000 of trials are done and no move is accepted.
+
+        Args:
+            xyz (np.ndarray): 3D coordinates of the cosolvent molecule
+            halton (list): halton sequence
+            kdtree (spatial.cKDTree): binary tree of the cosolvent molecules positions already placed in the box
+            used (list): used halton indices
+            lowerBound (openmmunit.Quantity | Vec3): lower bound of the box
+            upperBound (openmmunit.Quantity | Vec3): upper bound of the box
+            protein_kdtree (spatial.cKDTree): binary tree of the protein's positions
+
+        Returns:
+            tuple[np.ndarray, list]: accepted coordinates for the cosolvent and the used halton ids
+        """
+        
         trial = 0
         accepted = False
         coords_to_return = 0
@@ -539,8 +686,19 @@ class CosolventSystem:
                     trial += 1
         return coords_to_return, used
 
-    def is_in_box(self, xyzs, lowerBound, upperBound):
-        """Is in the box or not?
+    def is_in_box(self, 
+                  xyzs: np.ndarray, 
+                  lowerBound: openmmunit.Quantity | Vec3, 
+                  upperBound: openmmunit.Quantity | Vec3) -> bool:
+        """Checks if the coordinates are in the box or not
+
+        Args:
+            xyzs (np.ndarray): coordinates to check
+            lowerBound (openmmunit.Quantity | Vec3): lower bound of the box
+            upperBound (openmmunit.Quantity | Vec3): upper bound of the box
+
+        Returns:
+            bool: True if all the coordinates are in the box, False otherwise
         """
         xyzs = np.atleast_2d(xyzs)
         x, y, z = xyzs[:, 0], xyzs[:, 1], xyzs[:, 2]
@@ -556,20 +714,23 @@ class CosolventSystem:
 
         return np.all(all_in)
 
-    def local_search(self):
+    def local_search(self) -> list:
+        """Return all the possible moves in the 1 tile neighbors
+
+        Returns:
+            list: combinations
+        """
         step = 1
         moves = filter(lambda point: not all(axis ==0 for axis in point), list(product([-step, 0, step], repeat=3)))
         return moves
 
-    def generate_rotation(self, coords):
-        """
-            Rotate a list of 3D [x,y,z] vectors about corresponding random uniformly
+    def generate_rotation(self, coords: np.ndarray) -> np.ndarray:
+        """ Rotate a list of 3D [x,y,z] vectors about corresponding random uniformly
             distributed quaternion [w, x, y, z]
-        
-            Parameters
-            ----------
-            coords : numpy.ndarray with shape [n,3]
-                list of [x,y,z] cartesian vector coordinates
+        Args:
+            coords (np.ndarray) with shape [n,3]: list of [x,y,z] cartesian vector coordinates
+        Returns:
+            np.ndarray: rotated coordinates
         """
         rand = np.random.rand(3)
         r1 = np.sqrt(1.0 - rand[0])
@@ -584,9 +745,17 @@ class CosolventSystem:
         rotation = spatial.transform.Rotation.from_quat(qrot)
         return rotation.apply(coords)
     
-    ##################### SANITY CHECKS ####################
-    def calculate_mol_volume(self, mol_positions):
-        """Computes volume occupied by the receptor in nm**3"""
+#region SizeChecks
+    def calculate_mol_volume(self, mol_positions: np.ndarray) -> float:
+        """Calculates the volume occupied by the 3D coordinates provided based
+        on voxelization.
+
+        Args:
+            mol_positions (np.ndarray): 3D coordinates
+
+        Returns:
+            float: volume occupied in nm**3
+        """
         padding = 3.5*openmmunit.angstrom
         offset = 1.5*openmmunit.angstrom
         mesh_step = 0.3*openmmunit.angstrom
@@ -607,7 +776,14 @@ class CosolventSystem:
         points = np.unique(np.hstack(query)).astype(int)
         return round(len(points)*mesh_step**3, 2)
 
-    def fitting_checks(self):
+    def fitting_checks(self) -> float | None:
+        """Checks if the required cosolvents can fit in the box and 
+        do not exceed the 50% of the available fillable volume 
+        (volume not occupied by the receptor, if present).
+
+        Returns:
+            float | None: available volume if the cosolvents can fit, None otherwise
+        """
         prot_volume = 0
         if self.receptor:
             prot_volume = self.calculate_mol_volume(self.modeller.positions)
@@ -624,38 +800,46 @@ class CosolventSystem:
             return None
         return empty_available_volume
 
-    def liters_to_cubic_nanometers(self, liters):
+    def liters_to_cubic_nanometers(self, liters: float | openmmunit.Quantity) -> float:
+        """Converts liters in cubic nanometers
+
+        Args:
+            liters (float | openmmunit.Quantity): volume to convert
+
+        Returns:
+            float: converted volume 
+        """
         if isinstance(liters, openmmunit.Quantity):
             liters = liters.value_in_unit(openmmunit.liters)
         value = liters * 1e+24
         return value
 
-    def cubic_nanometers_to_liters(self, vol):
+    def cubic_nanometers_to_liters(self, vol: float) -> float:
+        """Converts cubic nanometers in liters
+
+        Args:
+            vol (float): volume to convert
+
+        Returns:
+            float: converted volume
+        """
         value = vol * 1e-24
         return value
-    ##################### SANITY CHECKS ####################
+#endregion
+#endregion                
 
-    ##################### FILL THE VOID APPROACH ####################
-                
-    def _setup_new_topology(self, cosolvents_positions, receptor_topology=None, receptor_positions=None):
-        # Adding the cosolvent molecules
-        molecules = []
-        molecules_positions = []
-        for cosolvent in cosolvents_positions:
-            for i in range(len(cosolvents_positions[cosolvent])):
-                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
-                [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
+#region ForceFieldParametrization
+    def _parametrize_system(self, forcefields: str, engine: str, cosolvents: dict) -> app.ForceField:
+        """Parametrize the system with the specified forcefields
 
-        molecules_positions = np.array(molecules_positions)
-        new_top = Topology.from_molecules(molecules)
-        new_mod = app.Modeller(new_top.to_openmm(), molecules_positions)
-        if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
-            new_mod.add(receptor_topology, receptor_positions)
-        new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
-        return new_mod
+        Args:
+            forcefields (str): path to the json file containing the forcefields to use
+            engine (str): name of the simulation engine
+            cosolvents (dict): cosolvent molecules
 
-    ##################### FORCEFIELD PARAMETRIZATION ####################
-    def _parametrize_system(self, forcefields: str, engine: str, cosolvents: dict):
+        Returns:
+            app.ForceField: forcefield obj
+        """
         with open(forcefields) as fi:
             ffs = json.load(fi)
         engine = engine.upper()
@@ -665,7 +849,16 @@ class CosolventSystem:
         forcefield.registerTemplateGenerator(small_molecule_ff.generator)
         return forcefield
 
-    def _parametrize_cosolvents(self, cosolvents, small_molecule_ff="espaloma"):
+    def _parametrize_cosolvents(self, cosolvents: dict, small_molecule_ff="espaloma") -> SmallMoleculeTemplateGenerator:
+        """Parametrizes cosolvent molecules according to the forcefiled specified.
+
+        Args:
+            cosolvents (dict): cosolvents specified
+            small_molecule_ff (str, optional): name of the forcefield to use. Defaults to "espaloma".
+
+        Returns:
+            SmallMoleculeTemplateGenerator: forcefiled obj
+        """
         molecules = list()
         for cosolvent in cosolvents:
             try:
@@ -680,19 +873,31 @@ class CosolventSystem:
         else:
             small_ff = SMIRNOFFTemplateGenerator(molecules=molecules)
         return small_ff
-    ##################### FORCEFIELD PARAMETRIZATION ####################
-
-    def _create_system(self, forcefield, topology):
-        print("Creating system")
-        system = forcefield.createSystem(topology,
-                                         nonbondedMethod=app.PME,
-                                         nonbondedCutoff=10*openmmunit.angstrom,
-                                         constraints=app.HBonds,
-                                         hydrogenMass=1.5*openmmunit.amu)
-        return system 
+#endregion
     
-    ##################### BOX ####################
-    def _build_box(self, positions, padding, radius=None):
+#region SimulationBox
+    def _build_box(self, 
+                   positions: np.ndarray, 
+                   padding: openmmunit.Quantity, 
+                   radius: openmmunit.Quantity = None) -> tuple[tuple[Vec3, Vec3, Vec3], 
+                                                                Vec3, 
+                                                                openmmunit.Quantity | Vec3,
+                                                                openmmunit.Quantity | Vec3]:
+        """Builds the simulation box. If a receptor is passed it is used alongside with the padding
+        parameter to build the box automatically, otherwise a radius has to be passed. If no receptor
+        the box is centered on the point [0, 0, 0].
+
+        Args:
+            positions (np.ndarray): coordinates of the receptor if present
+            padding (openmmunit.Quantity): padding to be used
+            radius (openmmunit.Quantity, optional): radius specified if no receptor is passed. Defaults to None.
+
+        Returns:
+            tuple[tuple[Vec3, Vec3, Vec3], Vec3, openmmunit.Quantity | Vec3, openmmunit.Quantity | Vec3]: 
+                The first element returned is a tuple containing the three vectors describing the simulation box.
+                The second element is the box itself.
+                Third and fourth elements are the lower and upper bound of the simulation box. 
+        """
         padding = padding.value_in_unit(openmmunit.nanometer)
         if positions is not None:
             positions = positions.value_in_unit(openmmunit.nanometer)
@@ -715,25 +920,5 @@ class CosolventSystem:
         lowerBound = center-box/2
         upperBound = center+box/2
         return vectors, box, lowerBound, upperBound 
-    
-    # def _build_mesh(self, positions):
-    #     # For water this is translated in 30.9
-    #     padding = 1.3*openmmunit.angstrom
-    #     offset = 1.5*openmmunit.angstrom
-    #     mesh_step = 0.3*openmmunit.angstrom
-    #     minRange = np.array([min((pos[i] for pos in positions)) for i in range(3)])
-    #     maxRange = np.array([max((pos[i] for pos in positions)) for i in range(3)])
-    #     # padding = padding.value_in_unit(openmmunit.nanometer)
-    #     # mesh_step = mesh_step.value_in_unit(openmmunit.nanometer)
-    #     x = np.arange(minRange[0], maxRange[0]+padding, mesh_step)
-    #     y = np.arange(minRange[1], maxRange[1]+padding, mesh_step)
-    #     z = np.arange(minRange[2], maxRange[2]+padding, mesh_step)
-    #     X, Y, Z = np.meshgrid(x, y, z)
-    #     center_xyzs = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-    #     kdtree = spatial.cKDTree(center_xyzs)
-    #     # offset = offset.value_in_unit(openmmunit.nanometer)
-    #     query = kdtree.query_ball_point(positions, offset)
-    #     query = np.unique(np.hstack(query)).astype(int)
-    #     close_to = np.zeros(len(center_xyzs), bool)
-    #     close_to[query] = True
-    #     return round(np.count_nonzero(close_to)*mesh_step, 2)
+#endregion
+#endregion

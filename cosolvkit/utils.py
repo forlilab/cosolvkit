@@ -299,7 +299,7 @@ def fix_pdb(pdb_filename: str, save=False):
             - missing atoms
             - missing residues
             - missing hydrogens
-            - replace nonstandard residues
+            - remove nonstandard residues
     
     Args:
         pdb_filename (str): input pdb filename
@@ -313,15 +313,9 @@ def fix_pdb(pdb_filename: str, save=False):
     for key in list(keys):
         chain = chains[key[0]]
         if key[1] == 0 or key[1] == len(list(chain.residues())):
-            print("ok")
             del fixer.missingResidues[key]
 
-    # # print("Finding nonstandard residues...")
-    # fixer.findNonstandardResidues()
-    # # print("Replacing nonstandard residues...")
-    # fixer.replaceNonstandardResidues()
-    # # print("Removing heterogens...")
-    # fixer.removeHeterogens(keepWater=True)
+    fixer.removeHeterogens(keepWater=True)
 
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()

@@ -12,6 +12,6 @@
         "charmm36/water.xml"
     ],
     "small_molecules":[
-        "espaloma"
+        "gaff"
     ]
 }
