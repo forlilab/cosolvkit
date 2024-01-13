@@ -244,7 +244,8 @@ class CosolventSystem:
     def build(self, solvent_smiles="H2O", n_solvent_molecules=None):
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
-        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
+        receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
+        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
         if solvent_smiles == "H2O":
             if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=False)
@@ -461,7 +462,7 @@ class CosolventSystem:
         cosolv_xyzs = defaultdict(list)
         sampler = qmc.Halton(d=3)
         points = sampler.random(1000000)
-        points= qmc.scale(points, [lowerBound[0], lowerBound[0], lowerBound[0]], [upperBound[0], upperBound[1], upperBound[2]])
+        points= qmc.scale(points, [lowerBound[0], lowerBound[1], lowerBound[2]], [upperBound[0], upperBound[1], upperBound[2]])
         used_halton_ids = list()
         if prot_kdtree is not None:
             banned_ids = prot_kdtree.query_ball_point(points, protein_radius.value_in_unit(openmmunit.nanometer))
@@ -475,7 +476,7 @@ class CosolventSystem:
                     xyz = points[counter]
                     cosolv_xyz = c_xyz + xyz
                     [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
-                    cosolv_xyzs[cosolvent].append(cosolv_xyz)
+                    cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
                     used_halton_ids.append(counter)
                     kdtree = spatial.cKDTree(placed_atoms_positions)
                 else:
@@ -484,7 +485,7 @@ class CosolventSystem:
                     if isinstance(cosolv_xyz, int):
                         print("Could not place the cosolvent molecule!")
                     else:
-                        cosolv_xyzs[cosolvent].append(cosolv_xyz)
+                        cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
                         [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
             print("Done!")
         print("Added cosolvents:")

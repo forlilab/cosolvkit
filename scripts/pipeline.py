@@ -115,9 +115,9 @@ if __name__ == "__main__":
                                 simulation_engine,
                                 output_path)
     # If you want to save the system as well
-    # cosolv_system.save_system(output_path, cosolv_system.system)
+    cosolv_system.save_system(output_path, cosolv_system.system)
     
-    # print("Starting simulation")
-    # start = time.time()
-    # run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
-    # print(f"Simulation finished - simulation time: {time.time() - start}.")
+    print("Starting simulation")
+    start = time.time()
+    run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
+    print(f"Simulation finished - simulation time: {time.time() - start}.")

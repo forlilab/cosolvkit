@@ -316,6 +316,13 @@ def fix_pdb(pdb_filename: str, save=False):
             print("ok")
             del fixer.missingResidues[key]
 
+    # # print("Finding nonstandard residues...")
+    # fixer.findNonstandardResidues()
+    # # print("Replacing nonstandard residues...")
+    # fixer.replaceNonstandardResidues()
+    # # print("Removing heterogens...")
+    # fixer.removeHeterogens(keepWater=True)
+
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()
     fixer.addMissingHydrogens(7)

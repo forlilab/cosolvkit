@@ -142,3 +142,4 @@ results/system.prmtop
 *.mol
 cosolvents_diogo.json
 cosolvents_small.json
+results/system.xml
