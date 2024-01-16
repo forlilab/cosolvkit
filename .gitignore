@@ -146,3 +146,8 @@ results/system.xml
 results/.DS_Store
 data/.DS_Store
 .DS_Store
+simulation_results
+simulation_results.tar.gz
+results/lysozyme/system.inpcrd
+results/lysozyme/system.prmtop
+results/lysozyme/system.xml

@@ -15,7 +15,10 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     if radius is not None:
         radius = radius * openmmunit.angstrom
     cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=10*openmmunit.angstrom, radius=radius)
-    cosolv.build()
+    cosolv.build(solvent_smiles=None)
+    cosolv.modeller.addMembrane(cosolv.forcefield, 
+                                lipidType='POPC',
+                                minimumPadding=1*openmmunit.nanometer)
     return cosolv
 
 def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):
@@ -49,7 +52,7 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
 
     print("Setting positions for the simulation")
     simulation.context.setPositions(cosolv_system.modeller.positions)
-    # simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
+    simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
 
     print("Minimizing system's energy")
     simulation.minimizeEnergy()
@@ -62,16 +65,16 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
     # simulation.context.reinitialize(preserveState=True)
     # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
 
-    # simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 25000))
-    # simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 25000))
-    # simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_filename + ".chk"), 250))
-    # simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
-    #                                             potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
-    #                                             temperature=True, volume=True, density=True, speed=True))
+    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 250))
+    simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 250))
+    simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_filename + ".chk"), 250))
+    simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
+                                                potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
+                                                temperature=True, volume=True, density=True, speed=True))
 
     # #100 ns = 25000000
-    # print("Running simulation")
-    # simulation.step(simulation_time)
+    print("Running simulation")
+    simulation.step(simulation_time)
     return
 
 
@@ -117,8 +120,8 @@ if __name__ == "__main__":
                                 cosolv_system.system,
                                 simulation_engine,
                                 output_path)
-    # If you want to save the system as well
-    cosolv_system.save_system(output_path, cosolv_system.system)
+    # # If you want to save the system as well
+    # cosolv_system.save_system(output_path, cosolv_system.system)
     
     print("Starting simulation")
     start = time.time()
