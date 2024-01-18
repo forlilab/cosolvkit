@@ -655,24 +655,24 @@ def _generate_pdb(receptor_data=None, cosolvents=None, cosolv_xyzs=None, wat_xyz
             current_chain_index += 1
 
     # Write water molecules
-    # if wat_xyzs is not None:
-    #     n_residue = 1
-    #     n_atom_water = 1
-    #     water_atom_names = ["O", "H1", "H2"] * int(wat_xyzs.shape[0] / 3)
+    if wat_xyzs is not None:
+        n_residue = 1
+        n_atom_water = 1
+        water_atom_names = ["O", "H1", "H2"] * int(wat_xyzs.shape[0] / 3)
 
-    #     # And water molecules at the end
-    #     for wat_xyz, atom_name in zip(wat_xyzs, water_atom_names):
-    #         x, y, z = wat_xyz
-    #         pdb_string += template.format("HETATM", hy36encode(5, n_atom), atom_name, " ",
-    #                                       'WAT', chain_alphabet[current_chain_index], hy36encode(4, n_residue),
-    #                                       " ", x, y, z, 0., 0., "WAT", atom_name[0], " ")
+        # And water molecules at the end
+        for wat_xyz, atom_name in zip(wat_xyzs, water_atom_names):
+            x, y, z = wat_xyz
+            pdb_string += template.format("HETATM", hy36encode(5, n_atom), atom_name, " ",
+                                          'WAT', chain_alphabet[current_chain_index], hy36encode(4, n_residue),
+                                          " ", x, y, z, 0., 0., "WAT", atom_name[0], " ")
 
-    #         if n_atom_water % 3 == 0:
-    #             n_residue += 1
-    #             pdb_string += 'TER\n'
+            if n_atom_water % 3 == 0:
+                n_residue += 1
+                pdb_string += 'TER\n'
 
-    #         n_atom_water += 1
-    #         n_atom += 1
+            n_atom_water += 1
+            n_atom += 1
     
     if pdb_conects:
         for pdb_conect in pdb_conects:

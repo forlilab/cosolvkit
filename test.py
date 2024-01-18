@@ -170,21 +170,21 @@ def calculate_receptor_volume(receptor_positions):
     points = np.unique(np.hstack(query)).astype(int)
     return round(len(points)*mesh_step**3, 2)
 
-# def save_kdtree(mol_positions, cosolv):
-#     from openff.toolkit import Molecule, Topology
-#     import openmm.app as app
-#     molecules = []
-#     molecule_positions = []
-#     for cosolvent in mol_positions:
-#         for i in range(len(mol_positions[cosolvent])):
-#             mol = Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name)
-#             molecules.append(mol)
-#             [molecule_positions.append(x + mol_positions[cosolvent][i]) for x in cosolvent.positions]
-#     molecule_positions = np.array(molecule_positions)
-#     new_top = Topology.from_molecules(molecules)
-#     new_mod = app.Modeller(new_top.to_openmm(), molecule_positions)
-#     cosolv.save_pdb(new_mod.topology, new_mod.positions, "results/kdtree.pdb")
-#     return
+def save_kdtree(mol_positions, cosolv):
+    from openff.toolkit import Molecule, Topology
+    import openmm.app as app
+    molecules = []
+    molecule_positions = []
+    for cosolvent in mol_positions:
+        for i in range(len(mol_positions[cosolvent])):
+            mol = Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name)
+            molecules.append(mol)
+            [molecule_positions.append(x + mol_positions[cosolvent][i]) for x in cosolvent.positions]
+    molecule_positions = np.array(molecule_positions)
+    new_top = Topology.from_molecules(molecules)
+    new_mod = app.Modeller(new_top.to_openmm(), molecule_positions)
+    cosolv.save_pdb(new_mod.topology, new_mod.positions, "results/kdtree.pdb")
+    return
 
 
 def create_and_parametrize_system(receptor=None, out_file=None):
@@ -195,17 +195,18 @@ def create_and_parametrize_system(receptor=None, out_file=None):
 
     cosolv = CosolventSystem("cosolvents_small.json", "forcefields.json", "amber", receptor=receptor, radius=radius)
     cosolv = fitting_checks(cosolv)
-    assert cosolv is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
-    vectors, lowerBound, upperBound = cosolv.vectors, cosolv.lowerBound, cosolv.upperBound
-    print("Adding cosolvents")
-    cosolv_xyzs = add_cosolvents(cosolv.cosolvents, vectors, lowerBound, upperBound, cosolv.modeller.positions.value_in_unit(openmmunit.nanometer))
-    print("Done adding cosolvents, setting up new topology!")
-    cosolv.modeller = cosolv._setup_new_topology(cosolv_xyzs,
-                                             cosolv.modeller.topology,
-                                             cosolv.modeller.positions)
-    print("New topology set up!")
-    cosolv.modeller.addSolvent(cosolv.forcefield)
-    cosolv.save_pdb(cosolv.modeller.topology, cosolv.modeller.positions, os.path.join("results", out_file))
+    save_kdtree(cosolv.modeller.positions, cosolv)
+    # assert cosolv is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
+    # vectors, lowerBound, upperBound = cosolv.vectors, cosolv.lowerBound, cosolv.upperBound
+    # print("Adding cosolvents")
+    # cosolv_xyzs = add_cosolvents(cosolv.cosolvents, vectors, lowerBound, upperBound, cosolv.modeller.positions.value_in_unit(openmmunit.nanometer))
+    # print("Done adding cosolvents, setting up new topology!")
+    # cosolv.modeller = cosolv._setup_new_topology(cosolv_xyzs,
+    #                                          cosolv.modeller.topology,
+    #                                          cosolv.modeller.positions)
+    # print("New topology set up!")
+    # cosolv.modeller.addSolvent(cosolv.forcefield)
+    # cosolv.save_pdb(cosolv.modeller.topology, cosolv.modeller.positions, os.path.join("results", out_file))
     return
 
 def fitting_checks(cosolv):
@@ -223,30 +224,30 @@ def fitting_checks(cosolv):
         return None
     return cosolv
 
-# def test_volumes(receptor):
-#     """Test to check the volumes calculations are okay"""
-#     import openmm.app as app
-#     cosolv = CosolventSystem("cosolvents.json", "forcefields.json", "amber", receptor=receptor, radius=None)
-#     prot_volume = calculate_receptor_volume(cosolv.modeller.positions)
-#     cosolv.modeller.addSolvent(cosolv.forcefield)
-#     n_waters = cosolv._get_n_waters()
-#     wat_volume = liters_to_cubic_nanometers(((n_waters/openmmunit.AVOGADRO_CONSTANT_NA)*(1*openmmunit.liters))/(55.4*openmmunit.moles))
-#     print(f"Volume occupied by protein: {prot_volume} nm**3")
-#     print(f"Volume occupied by water: {wat_volume} nm**3")
-#     print(f"Combined volume: {wat_volume+prot_volume} nm**3")
-#     print(f"Total volume: {cosolv._box_volume} nm**3")
+def test_volumes(receptor):
+    """Test to check the volumes calculations are okay"""
+    import openmm.app as app
+    cosolv = CosolventSystem("cosolvents.json", "forcefields.json", "amber", receptor=receptor, radius=None)
+    prot_volume = calculate_receptor_volume(cosolv.modeller.positions)
+    cosolv.modeller.addSolvent(cosolv.forcefield)
+    n_waters = cosolv._get_n_waters()
+    wat_volume = liters_to_cubic_nanometers(((n_waters/openmmunit.AVOGADRO_CONSTANT_NA)*(1*openmmunit.liters))/(55.4*openmmunit.moles))
+    print(f"Volume occupied by protein: {prot_volume} nm**3")
+    print(f"Volume occupied by water: {wat_volume} nm**3")
+    print(f"Combined volume: {wat_volume+prot_volume} nm**3")
+    print(f"Total volume: {cosolv._box_volume} nm**3")
 
-#     empty_modeller = app.Modeller(app.Topology(), []) 
-#     empty_modeller.topology.setPeriodicBoxVectors(cosolv._periodic_box_vectors)
-#     empty_modeller.addSolvent(cosolv.forcefield)
-#     res = [r.name for r in empty_modeller.topology.residues()]
-#     n_waters_empty = res.count("HOH")
-#     wat_volume_empty = liters_to_cubic_nanometers(((n_waters_empty/openmmunit.AVOGADRO_CONSTANT_NA)*(1*openmmunit.liters))/(55.4*openmmunit.moles))
-#     vX, vY, vZ = empty_modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
-#     box_volume = vX*vY*vZ 
-#     print(f"\nVolume occupied by water: {wat_volume_empty} nm**3")
-#     print(f"Total volume: {box_volume} nm**3")
-#     return
+    empty_modeller = app.Modeller(app.Topology(), []) 
+    empty_modeller.topology.setPeriodicBoxVectors(cosolv._periodic_box_vectors)
+    empty_modeller.addSolvent(cosolv.forcefield)
+    res = [r.name for r in empty_modeller.topology.residues()]
+    n_waters_empty = res.count("HOH")
+    wat_volume_empty = liters_to_cubic_nanometers(((n_waters_empty/openmmunit.AVOGADRO_CONSTANT_NA)*(1*openmmunit.liters))/(55.4*openmmunit.moles))
+    vX, vY, vZ = empty_modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
+    box_volume = vX*vY*vZ 
+    print(f"\nVolume occupied by water: {wat_volume_empty} nm**3")
+    print(f"Total volume: {box_volume} nm**3")
+    return
 
 def liters_to_cubic_nanometers(liters):
     if isinstance(liters, openmmunit.Quantity):

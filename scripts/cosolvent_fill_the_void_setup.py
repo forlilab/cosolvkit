@@ -14,15 +14,11 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
         os.makedirs(output_path)
     if radius is not None:
         radius = radius * openmmunit.angstrom
-    cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=10*openmmunit.angstrom, radius=radius)
-    cosolv.build(solvent_smiles=None)
-    cosolv.modeller.addMembrane(cosolv.forcefield, 
-                                lipidType='POPC',
-                                minimumPadding=1*openmmunit.nanometer)
+    cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=15*openmmunit.angstrom, radius=radius)
+    cosolv.build()
     return cosolv
 
 def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):
-    # results_path = os.path.join(out_path, "results")
     if simulation_time is None:
         simulation_time = 25000000
 
@@ -37,9 +33,6 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
         platform = Platform.getPlatformByName("CPU")
         print("Switching to CPU, no GPU available.")
 
-    properties = {}
-    platform = Platform.getPlatformByName("CPU")
-    print("Switching to CPU, no GPU available.")
     cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
     integrator = LangevinMiddleIntegrator(300 * openmmunit.kelvin,
                                             1 / openmmunit.picosecond,
@@ -52,18 +45,9 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
 
     print("Setting positions for the simulation")
     simulation.context.setPositions(cosolv_system.modeller.positions)
-    simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
 
     print("Minimizing system's energy")
     simulation.minimizeEnergy()
-
-    # MD simulations - equilibration (1ns)
-    print("Equilibrating system")
-    simulation.step(25000)
-
-    # cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
-    # simulation.context.reinitialize(preserveState=True)
-    # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
 
     simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 250))
     simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 250))
@@ -72,7 +56,7 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
                                                 potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
                                                 temperature=True, volume=True, density=True, speed=True))
 
-    # #100 ns = 25000000
+    #100 ns = 25000000
     print("Running simulation")
     simulation.step(simulation_time)
     return
@@ -120,10 +104,10 @@ if __name__ == "__main__":
                                 cosolv_system.system,
                                 simulation_engine,
                                 output_path)
-    # # If you want to save the system as well
-    # cosolv_system.save_system(output_path, cosolv_system.system)
+    # If you want to save the system as well
+    cosolv_system.save_system(output_path, cosolv_system.system)
     
     print("Starting simulation")
-    start = time.time()
-    run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
-    print(f"Simulation finished - simulation time: {time.time() - start}.")
+    # start = time.time()
+    # run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
+    # print(f"Simulation finished - simulation time: {time.time() - start}.")

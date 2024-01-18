@@ -226,6 +226,7 @@ class CosolventSystem:
         # self._added_waters = self._get_n_waters()
         # self._receptor_xyzs, self._water_xyzs, self._wat_res_mapping = self._process_positions(self.modeller)
         print(f"Box Volume: {self.box_volume} nm**3")
+        print(f"\t{self.box_volume*1000} A^3")
         # print(f"Number of waters added: {self._added_waters}")
         return
     
@@ -249,6 +250,7 @@ class CosolventSystem:
         if solvent_smiles == "H2O":
             if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=False)
             else: self.modeller.addSolvent(self.forcefield, numAdded=n_solvent_molecules, neutralize=False)
+            print(f"Waters added: {self._get_n_waters()}")
         elif solvent_smiles is not None:
             c = {"name": "solvent",
                  "smiles": solvent_smiles}
@@ -547,7 +549,7 @@ class CosolventSystem:
                        cosolvents: dict, 
                        vectors: tuple[Vec3, Vec3, Vec3], 
                        lowerBound: openmmunit.Quantity | Vec3, 
-                       upperBound: openmmunit.Quantity | Vec3, 
+                       upperBound: openmmunit.Quantity | Vec3,
                        receptor_positions: list) -> dict:
         """This function adds the desired number of cosolvent molecules using the halton sequence
         to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
@@ -565,6 +567,7 @@ class CosolventSystem:
             dict: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvents molecules
         """
         protein_radius = 3.5*openmmunit.angstrom
+        edge_cutoff = 4.5*openmmunit.angstrom
         prot_kdtree = None
         # This is used to update the kdtree of the placed cosolvents
         placed_atoms_positions = []
@@ -573,11 +576,19 @@ class CosolventSystem:
         cosolv_xyzs = defaultdict(list)
         sampler = qmc.Halton(d=3)
         points = sampler.random(1000000)
-        points= qmc.scale(points, [lowerBound[0], lowerBound[1], lowerBound[2]], [upperBound[0], upperBound[1], upperBound[2]])
+        points= qmc.scale(points, [lowerBound[0], 
+                                   lowerBound[1], 
+                                   lowerBound[2]], 
+                                  [upperBound[0], 
+                                   upperBound[1], 
+                                   upperBound[2]])
         used_halton_ids = list()
         if prot_kdtree is not None:
             banned_ids = prot_kdtree.query_ball_point(points, protein_radius.value_in_unit(openmmunit.nanometer))
             used_halton_ids = list(np.unique(np.hstack(banned_ids)).astype(int))
+        used_halton_ids = self.delete_edges_points(points, lowerBound, vectors, edge_cutoff.value_in_unit(openmmunit.nanometer), used_halton_ids)
+        valid_ids = np.array(range(0, len(points)))
+        valid_ids = np.delete(valid_ids, used_halton_ids)
         for cosolvent in cosolvents:
             print(f"Placing {cosolvent.name}")
             c_xyz = cosolvents[cosolvent]
@@ -586,13 +597,16 @@ class CosolventSystem:
                 if len(placed_atoms_positions) < 1:
                     xyz = points[counter]
                     cosolv_xyz = c_xyz + xyz
-                    [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
-                    cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
-                    used_halton_ids.append(counter)
-                    kdtree = spatial.cKDTree(placed_atoms_positions)
+                    if self.check_coordinates_to_add(cosolv_xyz, None, prot_kdtree):
+                        [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
+                        cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
+                        used_halton_ids.append(counter)
+                        kdtree = spatial.cKDTree(placed_atoms_positions)
                 else:
                     kdtree = spatial.cKDTree(placed_atoms_positions)
-                    cosolv_xyz, used_halton_ids = self.accept_reject(c_xyz, points, kdtree, used_halton_ids, lowerBound, vectors, prot_kdtree)
+                    cosolv_xyz = self.accept_reject(c_xyz, points, kdtree, valid_ids, lowerBound, vectors, prot_kdtree)
+                    # cosolv_xyz, used_halton_ids = self.accept_reject(c_xyz, points, kdtree, used_halton_ids, lowerBound, vectors, prot_kdtree)
+
                     if isinstance(cosolv_xyz, int):
                         print("Could not place the cosolvent molecule!")
                     else:
@@ -603,6 +617,23 @@ class CosolventSystem:
         for cosolvent in cosolv_xyzs:
             print(f"{cosolvent.name}: {len(cosolv_xyzs[cosolvent])}")
         return cosolv_xyzs
+    
+    def delete_edges_points(self, xyzs, lowerBound, upperBound, distance, used_halton_ids):
+        xyzs = np.atleast_2d(xyzs)
+        x, y, z = xyzs[:, 0], xyzs[:, 1], xyzs[:, 2]
+
+        xmin, xmax = lowerBound[0], upperBound[0][0]
+        ymin, ymax = lowerBound[1], upperBound[1][1]
+        zmin, zmax = lowerBound[2], upperBound[2][2]
+
+        x_close = np.logical_or(np.abs(xmin - x) <= distance, np.abs(xmax - x) <= distance)
+        y_close = np.logical_or(np.abs(ymin - y) <= distance, np.abs(ymax - y) <= distance)
+        z_close = np.logical_or(np.abs(zmin - z) <= distance, np.abs(zmax - z) <= distance)
+        close_to = np.unique(np.argwhere(np.any((x_close, y_close, z_close), axis=0)).flatten())
+
+
+
+        return used_halton_ids+list(close_to)
 
     def check_coordinates_to_add(self, new_coords: np.ndarray, cosolvent_kdtree: spatial.cKDTree, protein_kdtree: spatial.cKDTree) -> bool:
         """Checks that the new coordinates don't clash with the receptor (if present) and/or other cosolvent molecules
@@ -636,7 +667,7 @@ class CosolventSystem:
                       xyz: np.ndarray, 
                       halton: list, 
                       kdtree: spatial.cKDTree, 
-                      used: list, 
+                      valid_ids: list, 
                       lowerBound: openmmunit.Quantity | Vec3, 
                       upperBound: openmmunit.Quantity | Vec3, 
                       protein_kdtree: spatial.cKDTree) -> tuple[np.ndarray, list]:
@@ -650,7 +681,7 @@ class CosolventSystem:
             xyz (np.ndarray): 3D coordinates of the cosolvent molecule
             halton (list): halton sequence
             kdtree (spatial.cKDTree): binary tree of the cosolvent molecules positions already placed in the box
-            used (list): used halton indices
+            valid_ids (list): valid halton indices
             lowerBound (openmmunit.Quantity | Vec3): lower bound of the box
             upperBound (openmmunit.Quantity | Vec3): upper bound of the box
             protein_kdtree (spatial.cKDTree): binary tree of the protein's positions
@@ -663,28 +694,32 @@ class CosolventSystem:
         accepted = False
         coords_to_return = 0
         moves = self.local_search()
-        valid_ids = np.array(range(0, len(halton)))
+        halton = np.array(halton)[valid_ids]
         while not accepted and trial < 1000000:
-            halton_idx = np.random.choice(valid_ids[~np.isin(valid_ids, np.array(used))])
+            halton_idx = np.random.choice(len(halton))
+            # halton_idx = valid_ids[0]
+            # assert halton_idx not in used
             rotated_xyz = self.generate_rotation(xyz)
             cosolv_xyz = rotated_xyz + halton[halton_idx]
             if self.check_coordinates_to_add(cosolv_xyz, kdtree, protein_kdtree):
-                used.append(halton_idx)
+                # used.append(halton_idx)
+                valid_ids = np.delete(valid_ids, halton_idx)
                 accepted = True
                 coords_to_return = cosolv_xyz
             else:
                 trial += 1
                 for move in moves:
                     rotated_xyz = self.generate_rotation(xyz)
-                    cosolv_xyz = rotated_xyz + halton_idx + move
+                    cosolv_xyz = rotated_xyz + halton[halton_idx] + move
                     if self.is_in_box(cosolv_xyz, lowerBound, upperBound):
                         if self.check_coordinates_to_add(cosolv_xyz, kdtree, protein_kdtree):
                             accepted = True
-                            used.append(halton_idx)
+                            # used.append(halton_idx)
+                            valid_ids = np.delete(valid_ids, halton_idx)
                             coords_to_return = cosolv_xyz
                             break
                     trial += 1
-        return coords_to_return, used
+        return coords_to_return
 
     def is_in_box(self, 
                   xyzs: np.ndarray, 
@@ -700,8 +735,13 @@ class CosolventSystem:
         Returns:
             bool: True if all the coordinates are in the box, False otherwise
         """
+        cutoff = (1.5*openmmunit.angstrom).value_in_unit(openmmunit.nanometer)
         xyzs = np.atleast_2d(xyzs)
         x, y, z = xyzs[:, 0], xyzs[:, 1], xyzs[:, 2]
+
+        # xmin, xmax = lowerBound[0]+cutoff, upperBound[0][0]-cutoff
+        # ymin, ymax = lowerBound[1]+cutoff, upperBound[1][1]-cutoff
+        # zmin, zmax = lowerBound[2]+cutoff, upperBound[2][2]-cutoff
 
         xmin, xmax = lowerBound[0], upperBound[0][0]
         ymin, ymax = lowerBound[1], upperBound[1][1]
@@ -787,6 +827,8 @@ class CosolventSystem:
         prot_volume = 0
         if self.receptor:
             prot_volume = self.calculate_mol_volume(self.modeller.positions)
+            prot_volume = prot_volume
+            print(f"Volume protein: {prot_volume*1000} A^3")
         empty_volume = self.cubic_nanometers_to_liters(self.box_volume - prot_volume)
         self._copies_from_concentration(empty_volume)
         cosolvs_volume = defaultdict(float)
@@ -913,12 +955,13 @@ class CosolventSystem:
         width = max(2*radius+padding, 2*padding)
         vectors = (Vec3(width, 0, 0), Vec3(0, width, 0), Vec3(0, 0, width))
         box = Vec3(vectors[0][0], vectors[1][1], vectors[2][2])
-        self._box_origin = center - (np.ceil(np.array((vectors[0][0], vectors[1][1], vectors[2][2]))))
+        origin = center - (np.ceil(np.array((width, width, width))))
+        self._box_origin = origin
         self._box_size = np.ceil(np.array([maxRange[0]-minRange[0],
                                            maxRange[1]-minRange[1],
                                            maxRange[2]-minRange[2]])).astype(int)
         lowerBound = center-box/2
         upperBound = center+box/2
-        return vectors, box, lowerBound, upperBound 
+        return vectors, box, lowerBound, upperBound
 #endregion
 #endregion
