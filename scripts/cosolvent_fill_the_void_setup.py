@@ -80,6 +80,7 @@ def cmd_lineparser():
     return parser.parse_args()
 
 if __name__ == "__main__":
+    start = time.time()
     args = cmd_lineparser()
     cosolvents = args.cosolvents
     forcefields = args.ffs
@@ -109,5 +110,6 @@ if __name__ == "__main__":
     
     print("Starting simulation")
     # start = time.time()
-    # run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
-    # print(f"Simulation finished - simulation time: {time.time() - start}.")
+    # 10 ps
+    run_simulation(output_path, cosolv_system, simulation_time=25000, simulation_engine=simulation_engine)
+    print(f"Simulation finished - simulation time: {time.time() - start}.")

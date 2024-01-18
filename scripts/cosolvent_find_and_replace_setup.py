@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import argparse
 
 from cosolvkit import CoSolventBox
@@ -94,6 +95,7 @@ def cmd_lineparser():
     return parser.parse_args()
 
 if __name__ == "__main__":
+    start = time.time()
     args = cmd_lineparser()
 
     with open(args.cosolvents) as fi:
@@ -104,5 +106,7 @@ if __name__ == "__main__":
     print("Building cosolvent box")
     prmtop_file, inpcrd_file = build_cosolvent_box(receptor_path, cosolvents, output_path)
     print("Starting simulation")
-    run_simulation(output_path, prmtop_file, inpcrd_file, "simulation", simulation_time=250000)
+    # 10 ps
+    run_simulation(output_path, prmtop_file, inpcrd_file, "simulation", simulation_time=25000)
     print("Simulation finished! Time to analyse the results!")
+    print(f"Simulation finished - simulation time: {time.time() - start}.")

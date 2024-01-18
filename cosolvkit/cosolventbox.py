@@ -926,7 +926,7 @@ class CoSolventBox:
                 # Select only cosolvents that are added as copies
                 cosolvents = {k: v for k, v in self._cosolvents.items() if k in self._added_as_copies}
                 # Add copies of cosolvents
-                wat_xyzs, cosolv_xyzs, final_copies = _add_cosolvent_as_copies(self._wat_xyzs, cosolvents,
+                wat_xyzs, cosolv_xyzs, final_copies, to_be_removed = _add_cosolvent_as_copies(self._wat_xyzs, cosolvents,
                                                               self._origin, self._box_size, self._copies, self._center_positions,
                                                               receptor_xyzs)
 
