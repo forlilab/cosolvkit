@@ -99,17 +99,17 @@ if __name__ == "__main__":
                            cosolv_system.modeller.positions,
                            f"{output_path}/system.pdb")
     # Good habit to save the topology files
-    print("Saving topology file")
-    cosolv_system.save_topology(cosolv_system.modeller.topology, 
-                                cosolv_system.modeller.positions,
-                                cosolv_system.system,
-                                simulation_engine,
-                                output_path)
-    # If you want to save the system as well
-    cosolv_system.save_system(output_path, cosolv_system.system)
+    # print("Saving topology file")
+    # cosolv_system.save_topology(cosolv_system.modeller.topology, 
+    #                             cosolv_system.modeller.positions,
+    #                             cosolv_system.system,
+    #                             simulation_engine,
+    #                             output_path)
+    # # If you want to save the system as well
+    # cosolv_system.save_system(output_path, cosolv_system.system)
     
-    print("Starting simulation")
-    # start = time.time()
-    # 10 ps
-    run_simulation(output_path, cosolv_system, simulation_time=25000, simulation_engine=simulation_engine)
-    print(f"Simulation finished - simulation time: {time.time() - start}.")
+    # print("Starting simulation")
+    # # start = time.time()
+    # # 10 ps
+    # run_simulation(output_path, cosolv_system, simulation_time=25000, simulation_engine=simulation_engine)
+    # print(f"Simulation finished - simulation time: {time.time() - start}.")

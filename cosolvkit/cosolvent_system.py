@@ -388,14 +388,19 @@ class CosolventSystem:
         # Adding the cosolvent molecules
         molecules = []
         molecules_positions = []
+        cosolvent_names = []
         for cosolvent in cosolvents_positions:
             for i in range(len(cosolvents_positions[cosolvent])):
-                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
+                cosolvent_names.append(cosolvent.resname)
+                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.resname))
                 [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
 
         molecules_positions = np.array(molecules_positions)
-        new_top = Topology.from_molecules(molecules)
-        new_mod = app.Modeller(new_top.to_openmm(), molecules_positions)
+        new_top = Topology.from_molecules(molecules).to_openmm()
+        residues = list(new_top.residues())
+        for i in range(len(residues)):
+            residues[i].name = cosolvent_names[i]
+        new_mod = app.Modeller(new_top, molecules_positions)
         if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
             new_mod.add(receptor_topology, receptor_positions)
         new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
@@ -590,7 +595,7 @@ class CosolventSystem:
         valid_ids = np.array(range(0, len(points)))
         valid_ids = np.delete(valid_ids, used_halton_ids)
         for cosolvent in cosolvents:
-            print(f"Placing {cosolvent.name}")
+            print(f"Placing {cosolvent.copies} copies of {cosolvent.name}")
             c_xyz = cosolvents[cosolvent]
             for replicate in range(cosolvent.copies):
                 counter = replicate

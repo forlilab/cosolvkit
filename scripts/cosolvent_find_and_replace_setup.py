@@ -4,9 +4,9 @@ import time
 import argparse
 
 from cosolvkit import CoSolventBox
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+from openmm.app import *
+from openmm import *
+import openmm.unit as openmmunit
 from mdtraj.reporters import DCDReporter, NetCDFReporter
 
 
@@ -21,13 +21,15 @@ def build_cosolvent_box(receptor_path: str, cosolvents: list, output_path: str) 
     for cosolvent in cosolvents:
         cosolv.add_cosolvent(**cosolvent)
     cosolv.build()
-    cosolv.export_pdb(filename=f"cosolv_system_{receptor}.pdb")
+    pdb_filename = os.path.join(output_path, f"cosolv_system_{receptor}.pdb")
+    cosolv.export_pdb(filename=pdb_filename)
 
     print("Generating tleap files")
     tleap_filename = os.path.join(output_path, "tleap.cmd")
     prmtop_filename = os.path.join(output_path, "cosolv_system.prmtop")
     inpcrd_filename = os.path.join(output_path, "cosolv_system.inpcrd")
     cosolv.prepare_system_for_amber(filename=tleap_filename,
+                                    pdb_filename=pdb_filename,
                                     prmtop_filename=prmtop_filename,
                                     inpcrd_filename=inpcrd_filename,
                                     run_tleap=True)
@@ -44,9 +46,9 @@ def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulat
     inpcrd = AmberInpcrdFile(inpcrd_file)
 
     system = prmtop.createSystem(nonbondedMethod=PME, 
-                                nonbondedCutoff=10 * angstrom,
+                                nonbondedCutoff=10 * openmmunit.angstrom,
                                 constraints=HBonds,
-                                hydrogenMass=1.5 * amu)
+                                hydrogenMass=1.5 * openmmunit.amu)
     try:
         platform = Platform.getPlatformByName("OpenCL")
         properties = {"Precision": "mixed"}
@@ -55,10 +57,10 @@ def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulat
         platform = Platform.getPlatformByName("CPU")
         print("Switching to CPU, no GPU available.")
         
-    system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
-    integrator = LangevinIntegrator(300 * kelvin,
-                                    1 / picosecond,
-                                    0.004 * picosecond)
+    system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
+    integrator = LangevinIntegrator(300 * openmmunit.kelvin,
+                                    1 / openmmunit.picosecond,
+                                    0.004 * openmmunit.picosecond)
 
     if len(properties) > 0:
         simulation = Simulation(prmtop.topology, system, integrator, platform, properties)

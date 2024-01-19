@@ -81,7 +81,7 @@ def _read_pdb(pdb_filename):
                 chain = line[21:22].strip()
                 xyz = [float(line[30:38]), float(line[38:46]), float(line[46:54])]
                 is_hydrogen = True if name[0] == 'H' else False
-                is_ter = True if lines[i + 1].startswith('TER') else False
+                is_ter = True if lines[i+1].startswith('TER') else False
  
                 data.append((name, resname, resid, chain, xyz, is_hydrogen, is_ter))
 
@@ -624,7 +624,6 @@ def _generate_pdb(receptor_data=None, cosolvents=None, cosolv_xyzs=None, wat_xyz
     # We look for the highest chain index in the receptor, in 
     # case chains are not in alphabetical order. And we add 1.
     current_chain_index = chain_alphabet.index(max(receptor_data['chain'])) + 1
-
     # Write cosolvent molecules
     if cosolv_xyzs is not None:
         cosolvent_n_atom = 0
