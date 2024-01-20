@@ -555,7 +555,8 @@ class CosolventSystem:
                        vectors: tuple[Vec3, Vec3, Vec3], 
                        lowerBound: openmmunit.Quantity | Vec3, 
                        upperBound: openmmunit.Quantity | Vec3,
-                       receptor_positions: list) -> dict:
+                       receptor_positions: list,
+                       use_halton: bool=True) -> dict:
         """This function adds the desired number of cosolvent molecules using the halton sequence
         to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
         At first, if a receptor/protein is present the halton sequence points that would clash with the protein
@@ -567,6 +568,8 @@ class CosolventSystem:
             lowerBound (openmmunit.Quantity | Vec3): lower bound of the simulation box
             upperBound (openmmunit.Quantity | Vec3): upper bound of the simulation box
             receptor_positions (list): 3D coordinates of the receptor
+            use_halton (bool, optional): if True it uses Halton sequence to geenrate random placements,
+                                         otherwise the normal random python module. Defaults to True
 
         Returns:
             dict: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvents molecules
@@ -579,8 +582,12 @@ class CosolventSystem:
         if receptor_positions is not None and len(receptor_positions) > 0:
             prot_kdtree = spatial.cKDTree(receptor_positions)
         cosolv_xyzs = defaultdict(list)
-        sampler = qmc.Halton(d=3)
-        points = sampler.random(1000000)
+        
+        if use_halton:
+            sampler = qmc.Halton(d=3)
+            points = sampler.random(1000000)
+        else:
+            points = np.random.rand(1000000)
         points= qmc.scale(points, [lowerBound[0], 
                                    lowerBound[1], 
                                    lowerBound[2]], 
@@ -610,7 +617,6 @@ class CosolventSystem:
                 else:
                     kdtree = spatial.cKDTree(placed_atoms_positions)
                     cosolv_xyz = self.accept_reject(c_xyz, points, kdtree, valid_ids, lowerBound, vectors, prot_kdtree)
-                    # cosolv_xyz, used_halton_ids = self.accept_reject(c_xyz, points, kdtree, used_halton_ids, lowerBound, vectors, prot_kdtree)
 
                     if isinstance(cosolv_xyz, int):
                         print("Could not place the cosolvent molecule!")
@@ -702,12 +708,9 @@ class CosolventSystem:
         halton = np.array(halton)[valid_ids]
         while not accepted and trial < 1000000:
             halton_idx = np.random.choice(len(halton))
-            # halton_idx = valid_ids[0]
-            # assert halton_idx not in used
             rotated_xyz = self.generate_rotation(xyz)
             cosolv_xyz = rotated_xyz + halton[halton_idx]
             if self.check_coordinates_to_add(cosolv_xyz, kdtree, protein_kdtree):
-                # used.append(halton_idx)
                 valid_ids = np.delete(valid_ids, halton_idx)
                 accepted = True
                 coords_to_return = cosolv_xyz
@@ -719,7 +722,6 @@ class CosolventSystem:
                     if self.is_in_box(cosolv_xyz, lowerBound, upperBound):
                         if self.check_coordinates_to_add(cosolv_xyz, kdtree, protein_kdtree):
                             accepted = True
-                            # used.append(halton_idx)
                             valid_ids = np.delete(valid_ids, halton_idx)
                             coords_to_return = cosolv_xyz
                             break
