@@ -15,7 +15,7 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     if radius is not None:
         radius = radius * openmmunit.angstrom
     cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=15*openmmunit.angstrom, radius=radius)
-    cosolv.build()
+    cosolv.build(use_halton=True)
     return cosolv
 
 def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):

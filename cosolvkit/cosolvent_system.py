@@ -220,18 +220,15 @@ class CosolventSystem:
         self.box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
         self.forcefield = self._parametrize_system(forcefields, simulation_engine, self.cosolvents)
-        # print(f"Number of possible added waters with mesh approach: {self._number_of_possible_added_waters_mesh()}")
-        # print("Adding cosolvents and hydrating")
-        # self.modeller.addSolvent(self.forcefield)
-        # self._added_waters = self._get_n_waters()
-        # self._receptor_xyzs, self._water_xyzs, self._wat_res_mapping = self._process_positions(self.modeller)
         print(f"Box Volume: {self.box_volume} nm**3")
         print(f"\t{self.box_volume*1000} A^3")
-        # print(f"Number of waters added: {self._added_waters}")
         return
     
 #region Public
-    def build(self, solvent_smiles="H2O", n_solvent_molecules=None):
+    def build(self, 
+              solvent_smiles: str="H2O", 
+              n_solvent_molecules: int=None, 
+              use_halton: bool=True):
         """This function adds thd cosolvents specified in the CosolvSystem
         and solvates with the desired solvent. If n_solvent_molecules is not passed
         the function will try to fill the box with the desired solvent to a certain extent.
@@ -240,12 +237,12 @@ class CosolventSystem:
 
         Args:
             solvent_smiles (str, optional): smiles string defining the desired solvent to use. Defaults to "H2O".
-            n_solvent_molecules (_type_, optional): number of mulecules of solvent to add. Defaults to None.
+            n_solvent_molecules (int, optional): number of mulecules of solvent to add. Defaults to None.
         """
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
         receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
-        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions)
+        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions, use_halton)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
         if solvent_smiles == "H2O":
             if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=False)
@@ -265,12 +262,9 @@ class CosolventSystem:
             # need to register the custom solvent if not present already
             self.forcefield.registerTemplateGenerator(self._parametrize_cosolvents(d_mol).generator)
             print(f"Placing {solvent_mol.copies}")
-            solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
+            solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions, use_halton)
             self.modeller = self._setup_new_topology(solv_xyz, self.modeller.topology, self.modeller.positions)
-            
-        # # cosolv_xyz = self._add_cosolvents(self.cosolvents)
-        # self._add_cosolvents_fill_the_void(self.cosolvents,
-        #                                    False)
+
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
@@ -423,131 +417,6 @@ class CosolventSystem:
                                          constraints=app.HBonds,
                                          hydrogenMass=1.5*openmmunit.amu)
         return system 
-#endregion
-#region FindAndReplace
-# Not commenting since it's going to be replaced soon
-    def _process_positions(self, modeller):
-        _xyz = [(x, y, z) for x, y, z in modeller.positions.value_in_unit(openmmunit.nanometer)]
-        xyz = np.array(_xyz, dtype=float)
-        wat_res_mapping = {}
-        wat_xyz = []
-        protein_xyz = []
-        for res in modeller.topology.residues():
-            if res.name == "HOH":
-                for atom in res.atoms():
-                    wat_res_mapping[atom.index] = res
-                    wat_xyz.append(xyz[atom.index])
-            else:
-                for atom in res.atoms():
-                    protein_xyz.append(xyz[atom.index])
-        return np.array(protein_xyz, dtype=float), np.array(wat_xyz, dtype=float), wat_res_mapping
-    
-    def _water_close_to_edge(self, wat_xyzs, distance, box_origin, box_size, offset=0):
-        """Is it too close from the edge?
-        """
-        wat_xyzs = np.atleast_2d(wat_xyzs)
-        x, y, z = wat_xyzs[:, 0], wat_xyzs[:, 1], wat_xyzs[:, 2]
-
-        xmin, xmax = box_origin[0], box_origin[0] + box_size[0]
-        ymin, ymax = box_origin[1], box_origin[1] + box_size[1]
-        zmin, zmax = box_origin[2], box_origin[2] + box_size[2]
-        distance = distance.value_in_unit(openmmunit.nanometer)
-        x_close = np.logical_or(np.abs(xmin - x) <= distance, np.abs(xmax - x) <= distance)
-        y_close = np.logical_or(np.abs(ymin - y) <= distance, np.abs(ymax - y) <= distance)
-        z_close = np.logical_or(np.abs(zmin - z) <= distance, np.abs(zmax - z) <= distance)
-        close_to = np.any((x_close, y_close, z_close), axis=0)
-
-        for i in range(0, wat_xyzs.shape[0]-2, 3):
-            close_to[[i, i + 1, i + 2]] = [np.all(close_to[[i, i + 1, i + 2]])] * 3
-        indices = np.asarray(close_to==True).nonzero()[0]
-        return indices+offset
-    
-    def _water_close_to_receptor(self, wat_xyzs, receptor_xyzs, distance=3., offset=0):
-        kdtree = spatial.cKDTree(wat_xyzs)
-
-        ids = kdtree.query_ball_point(receptor_xyzs, distance.value_in_unit(openmmunit.nanometer))
-        ids = np.unique(np.hstack(ids)).astype(int)
-        close_to = np.zeros(len(wat_xyzs), bool)
-        close_to[ids] = True
-
-        for i in range(0, wat_xyzs.shape[0]-2, 3):
-            close_to[[i, i+1, i+2]] = [np.all(close_to[[i, i+1, i+2]])]*3
-        indices = np.asarray(close_to==True).nonzero()[0]
-        return indices+offset
-    
-    
-    def _add_cosolvents(self, cosolvents):
-        banned_ids = list()
-        current_number_copies = {}
-        final_number_copies = {}
-        cosolv_xyzs = defaultdict(list)
-        distance_from_cosolvent = 3.5 * openmmunit.angstrom
-        offset = list(self._wat_res_mapping.keys())[0]
-        water_close_to_edge = self._water_close_to_edge(self._water_xyzs, 
-                                                        3.*openmmunit.angstrom, 
-                                                        self._box_origin, 
-                                                        self._box_size,
-                                                        offset=offset)
-        banned_ids.append(water_close_to_edge)
-        wat_xyzs = self._water_xyzs
-
-        if len(self._receptor_xyzs) > 0:
-            water_close_to_protein = self._water_close_to_receptor(wat_xyzs, 
-                                                                   self._receptor_xyzs, 
-                                                                   distance=4.5*openmmunit.angstrom, 
-                                                                   offset=offset)
-            banned_ids.append(water_close_to_protein)
-        for cosolvent in cosolvents:
-            # if cosolvent.concentration is not None:
-            #     current_number_copies[cosolvent.name] = 0
-            #     n_copies = (self._added_waters * (cosolvent.concentration * openmmunit.molar)) / water_concentration
-            #     final_number_copies[cosolvent.name] = int(floor(n_copies + 0.5))
-            # else:
-                current_number_copies[cosolvent.name] = 0
-                final_number_copies[cosolvent.name] = cosolvent.copies
-                
-        placement_order = []
-        for cosolv_name, n in final_number_copies.items():
-            placement_order += [cosolv_name] * n
-        np.random.shuffle(placement_order)
-
-        oxy_ids = wat_xyzs[::3]
-        valid_ids = np.array((range(0, oxy_ids.shape[0])))
-        banned_ids = [x for xs in banned_ids for x in xs]
-        waters_to_delete = []
-
-        for cosolv_name in placement_order:
-            kdtree = spatial.cKDTree(wat_xyzs)
-
-            c = [cosolvent for cosolvent in cosolvents if cosolvent.name == cosolv_name][0]
-            if current_number_copies[cosolv_name] < final_number_copies[cosolv_name]:
-                wat_id = np.random.choice(valid_ids[~np.isin(valid_ids, np.array(banned_ids))])
-                wat_xyz = oxy_ids[wat_id]
-
-                # Translate fragment on the top of the selected water molecule
-                cosolv_xyz = self.cosolvents[c] + wat_xyz
-                np.append(wat_xyzs, cosolv_xyz).reshape(wat_xyzs.shape[0]+cosolv_xyz.shape[0], 3)
-                # Add fragment to list
-                cosolv_xyzs[c].append(cosolv_xyz)
-
-                # Get the ids of all the closest water atoms
-                to_be_removed = kdtree.query_ball_point(cosolv_xyz, distance_from_cosolvent.value_in_unit(openmmunit.nanometer))
-                if any(to_be_removed) > 0:
-                    # Keep the unique ids
-                    to_be_removed = np.unique(np.hstack(to_be_removed)).astype(int)
-                    to_be_removed = to_be_removed+offset
-                    # Get the ids of the water oxygen atoms
-                    for i in to_be_removed:
-                        if i not in banned_ids: banned_ids.append(i)
-                        if i not in waters_to_delete: waters_to_delete.append(i)
-                    # [banned_ids.append(i) for i in to_be_removed if i not in banned_ids]
-                    # [waters_to_delete.append(i) for i in to_be_removed if i not in waters_to_delete]
-                current_number_copies[cosolv_name] += 1
-        # Delete waters
-        waters_removed = set([self._wat_res_mapping[x] for x in waters_to_delete])
-        print(f"Removed {len(waters_removed)} waters for the cosolvents!")
-        self.modeller.delete(waters_removed)
-        return cosolv_xyzs
 #endregion
 #region FillTheVoid
     def add_cosolvents(self, 
