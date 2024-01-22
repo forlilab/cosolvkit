@@ -220,20 +220,17 @@ class CosolventSystem:
         self.box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
         self.forcefield = self._parametrize_system(forcefields, simulation_engine, self.cosolvents)
-        # print(f"Number of possible added waters with mesh approach: {self._number_of_possible_added_waters_mesh()}")
-        # print("Adding cosolvents and hydrating")
-        # self.modeller.addSolvent(self.forcefield)
-        # self._added_waters = self._get_n_waters()
-        # self._receptor_xyzs, self._water_xyzs, self._wat_res_mapping = self._process_positions(self.modeller)
         print(f"Box Volume: {self.box_volume} nm**3")
         print(f"\t{self.box_volume*1000} A^3")
-        # print(f"Number of waters added: {self._added_waters}")
         return
     
 #region Public
     def build(self, 
-              solvent_smiles="H2O", 
-              n_solvent_molecules=None,
+              
+              solvent_smiles: str="H2O", 
+              
+              n_solvent_molecules: int=None,
+              use_halton: bool=True, 
               use_halton: bool=True):
         """This function adds thd cosolvents specified in the CosolvSystem
         and solvates with the desired solvent. If n_solvent_molecules is not passed
@@ -250,6 +247,7 @@ class CosolventSystem:
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
         receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
+        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions, use_halton)
         cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions, use_halton)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
         if solvent_smiles == "H2O":
@@ -270,6 +268,7 @@ class CosolventSystem:
             # need to register the custom solvent if not present already
             self.forcefield.registerTemplateGenerator(self._parametrize_cosolvents(d_mol).generator)
             print(f"Placing {solvent_mol.copies}")
+            solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions, use_halton)
             solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions, use_halton)
             self.modeller = self._setup_new_topology(solv_xyz, self.modeller.topology, self.modeller.positions)
             
@@ -434,6 +433,8 @@ class CosolventSystem:
                        upperBound: openmmunit.Quantity | Vec3,
                        receptor_positions: list,
                        use_halton: bool=True) -> dict:
+                       receptor_positions: list,
+                       use_halton: bool=True) -> dict:
         """This function adds the desired number of cosolvent molecules using the halton sequence
         to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
         At first, if a receptor/protein is present the halton sequence points that would clash with the protein
@@ -445,6 +446,8 @@ class CosolventSystem:
             lowerBound (openmmunit.Quantity | Vec3): lower bound of the simulation box
             upperBound (openmmunit.Quantity | Vec3): upper bound of the simulation box
             receptor_positions (list): 3D coordinates of the receptor
+            use_halton (bool, optional): if True it uses Halton sequence to geenrate random placements,
+                                         otherwise the normal random python module. Defaults to True
             use_halton (bool, optional): if True it uses Halton sequence to geenrate random placements,
                                          otherwise the normal random python module. Defaults to True
 
