@@ -230,7 +230,6 @@ class CosolventSystem:
               solvent_smiles: str="H2O", 
               
               n_solvent_molecules: int=None,
-              use_halton: bool=True, 
               use_halton: bool=True):
         """This function adds thd cosolvents specified in the CosolvSystem
         and solvates with the desired solvent. If n_solvent_molecules is not passed
@@ -431,8 +430,6 @@ class CosolventSystem:
                        vectors: tuple[Vec3, Vec3, Vec3], 
                        lowerBound: openmmunit.Quantity | Vec3, 
                        upperBound: openmmunit.Quantity | Vec3,
-                       receptor_positions: list,
-                       use_halton: bool=True) -> dict:
                        receptor_positions: list,
                        use_halton: bool=True) -> dict:
         """This function adds the desired number of cosolvent molecules using the halton sequence
