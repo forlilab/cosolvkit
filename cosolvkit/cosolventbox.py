@@ -10,6 +10,7 @@ import itertools
 import os
 import string
 import sys
+import math
 from operator import itemgetter
 
 import numpy as np
@@ -344,6 +345,7 @@ def _add_cosolvent_as_concentrations(wat_xyzs, cosolvents, box_origin, box_size,
             # Translate fragment on the top of the selected water molecule
             cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
 
+            cosolv_xyz = generate_rotation(cosolv_xyzs)
             # Add fragment to list
             cosolv_xyzs[cosolv_name].append(cosolv_xyz)
 
@@ -440,6 +442,7 @@ def _add_cosolvent_as_copies(wat_xyzs, cosolvents, box_origin, box_size, target_
         # Update kdtree
         kdtree = spatial.cKDTree(wat_xyzs)
 
+        cosolv_xyz = generate_rotation(cosolvents[cosolv_name].positions)
         if center_positions[cosolv_name] is None:
             # Choose a random water molecule
             wat_o = wat_xyzs[::3]
@@ -447,10 +450,10 @@ def _add_cosolvent_as_copies(wat_xyzs, cosolvents, box_origin, box_size, target_
             wat_xyz = wat_o[wat_id]
 
             # Translate fragment on the top of the selected water molecule
-            cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
+            cosolv_xyz = cosolv_xyz + wat_xyz
         else:
             center = center_positions[cosolv_name][final_number_copies[cosolv_name]]
-            cosolv_xyz = cosolvents[cosolv_name].positions + center
+            cosolv_xyz = cosolv_xyz + center
 
         # Add fragment to list
         cosolv_xyzs[cosolv_name].append(cosolv_xyz)
@@ -463,11 +466,12 @@ def _add_cosolvent_as_copies(wat_xyzs, cosolvents, box_origin, box_size, target_
         to_be_removed = np.unique(to_be_removed - (to_be_removed % 3.))
         # Complete with the ids of the hydrogen atoms
         to_be_removed = [[r, r + 1, r + 2]  for r in to_be_removed]
-        to_be_removed = np.hstack(to_be_removed).astype(int)
-        # Remove those water molecules
-        mask = np.ones(len(wat_xyzs), bool)
-        mask[to_be_removed] = 0
-        wat_xyzs = wat_xyzs[mask]
+        if len(to_be_removed) > 0:
+            to_be_removed = np.hstack(to_be_removed).astype(int)
+            # Remove those water molecules
+            mask = np.ones(len(wat_xyzs), bool)
+            mask[to_be_removed] = 0
+            wat_xyzs = wat_xyzs[mask]
 
         # Increment current number of copies of that cosolvent
         final_number_copies[cosolv_name] += 1
@@ -476,6 +480,27 @@ def _add_cosolvent_as_copies(wat_xyzs, cosolvents, box_origin, box_size, target_
     wat_xyzs = np.vstack((to_keep_wat_xyzs, wat_xyzs))
 
     return wat_xyzs, cosolv_xyzs, final_number_copies, to_be_removed
+
+def generate_rotation(coords: np.ndarray) -> np.ndarray:
+        """ Rotate a list of 3D [x,y,z] vectors about corresponding random uniformly
+            distributed quaternion [w, x, y, z]
+        Args:
+            coords (np.ndarray) with shape [n,3]: list of [x,y,z] cartesian vector coordinates
+        Returns:
+            np.ndarray: rotated coordinates
+        """
+        rand = np.random.rand(3)
+        r1 = np.sqrt(1.0 - rand[0])
+        r2 = np.sqrt(rand[0])
+        pi2 = math.pi * 2.0
+        t1 = pi2 * rand[1]
+        t2 = pi2 * rand[2]
+        qrot = np.array([np.cos(t2) * r2,
+                        np.sin(t1) * r1,
+                        np.cos(t1) * r1,
+                        np.sin(t2) * r2])
+        rotation = spatial.transform.Rotation.from_quat(qrot)
+        return rotation.apply(coords)
 
 
 def _apply_neutral_patches(receptor_data, peptides_terminus):

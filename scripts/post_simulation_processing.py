@@ -1,9 +1,12 @@
-import sys
+import argparse
+import json
 import mdtraj
 import numpy as np
 import pandas as pd
 import freud
 import matplotlib.pyplot as plt
+
+from cosolvkit.cosolvent_system import CoSolvent
 
 def get_temp_vol_pot(log_file):
     df = pd.read_csv(log_file)
@@ -37,7 +40,7 @@ def plot_temp_vol_pot(pot_e, temp, vol, outpath=None):
     plt.show()
     return
 
-def radial_distribution_function(traj, outpath=None):
+def radial_distribution_function(cosolvents, traj, outpath=None):
     # pairs = traj.top.select_pairs("name O", "name O")
     # r, gr = mdtraj.compute_rdf(
     #     traj,
@@ -45,6 +48,11 @@ def radial_distribution_function(traj, outpath=None):
     #     r_range=(0.1, 0.5),
     #     bin_width=0.0005
     # )
+
+    for cosolvent in cosolvents:
+        cosolvent_name = cosolvent.resname
+        cosolvent_indices = [atom.index for atom in traj.top.atoms if atom.name == "" and atom.residue.name == cosolvent_name]
+
     oxygen_indices = [atom.index for atom in traj.top.atoms if atom.name == "O" and atom.residue.name == "HOH"]
     freud_rdf = freud.density.RDF(bins=300, r_min=0.01, r_max=1)
     for system in zip(np.asarray(traj.unitcell_vectors), traj.xyz[:, oxygen_indices, :]):
@@ -67,12 +75,39 @@ def radial_distribution_function(traj, outpath=None):
     plt.show()
     return
 
+def cmd_lineparser():
+    parser = argparse.ArgumentParser(description="Runs cosolvkit and MD simulation afterwards.")
+    parser.add_argument('-l', '--log_file', dest='log_file', required=True,
+                        action='store', help='path to the log file from MD simulation')
+    parser.add_argument('-traj', dest='traj_file', required=True,
+                        action='store', help='path to the traj <.dcd> file from MD simulation')
+    parser.add_argument('-topo', dest='top_file', required=True,
+                        action='store', help='path to the topology file from MD simulation')
+    parser.add_argument('-o', '--out_path', dest='out_path', required=True,
+                        action='store', help='path where to store output plots')
+    parser.add_argument('-c', '--cosolvents', dest='cosolvents', required=True,
+                        action='store', help='path to the json file containing cosolvents used for the simulation')
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    # pot_e, temp, vol = get_temp_vol_pot(sys.argv[1])
-    # plot_temp_vol_pot(pot_e, temp, vol, outpath=sys.argv[2])
-    traj = "/home/nick/phd/cosolvkit_validation/diogo_target/find_and_replace/simulation.dcd"
-    topo = "/home/nick/phd/cosolvkit_validation/diogo_target/find_and_replace/cosolv_system.prmtop"
-    traj = mdtraj.load(traj, top=topo)
+    args = cmd_lineparser()
+    log_file = args.log_file
+    traj_file = args.traj_file
+    top_file = args.top_file
+    out_path = args.out_path
+    cosolvents_path = args.cosolvents
+
+    with open(cosolvents_path) as fi:
+        cosolvents_d = json.load(fi)
+    
+    cosolvents = list()
+    for cosolvent in cosolvents_d:
+        cosolvents.append(CoSolvent(**cosolvent))
+
+
+    pot_e, temp, vol = get_temp_vol_pot(log_file)
+    plot_temp_vol_pot(pot_e, temp, vol, outpath=out_path+"/equilibration_plot.png")
+    traj = mdtraj.load(traj_file, top=top_file)
     print("Traj loaded in memory")
-    radial_distribution_function(traj, outpath="/home/nick/phd/cosolvkit_validation/diogo_target/find_and_replace/rdf.png")
+    radial_distribution_function(cosolvents, traj, outpath=out_path+"/rdf.png")
