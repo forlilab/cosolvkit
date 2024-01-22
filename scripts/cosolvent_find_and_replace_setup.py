@@ -73,8 +73,8 @@ def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulat
     print("Minimizing system's energy")
     simulation.minimizeEnergy()
 
-    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_file_name + ".nc"), 250))
-    simulation.reporters.append(DCDReporter(os.path.join(results_path, output_file_name + ".dcd"), 250))
+    # simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_file_name + ".nc"), 250))
+    simulation.reporters.append(DCDReporter(os.path.join(results_path, output_file_name + ".dcd"), 2500))
     simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_file_name + ".chk"), 250))
     simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_file_name + ".log"), 250, step=True, time=True,
                                                 potentialEnergy=True, kineticEnergy=True, totalEnergy=True,

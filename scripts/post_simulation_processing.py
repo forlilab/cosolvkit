@@ -26,7 +26,7 @@ def plot_temp_vol_pot(pot_e, temp, vol, outpath=None):
     ax.set(**{
         "title": "Energy",
         "xlabel": "time / ps",
-        "xlim": (0, 100),
+        "xlim": (0, len(temp)),
         # "ylabel": "energy / 10$^{3}$ kJ mol$^{-1}$"
         })
 
@@ -49,9 +49,9 @@ def radial_distribution_function(cosolvents, traj, outpath=None):
     #     bin_width=0.0005
     # )
 
-    for cosolvent in cosolvents:
-        cosolvent_name = cosolvent.resname
-        cosolvent_indices = [atom.index for atom in traj.top.atoms if atom.name == "" and atom.residue.name == cosolvent_name]
+    # for cosolvent in cosolvents:
+    #     cosolvent_name = cosolvent.resname
+    #     cosolvent_indices = [atom.index for atom in traj.top.atoms if atom.name == "" and atom.residue.name == cosolvent_name]
 
     oxygen_indices = [atom.index for atom in traj.top.atoms if atom.name == "O" and atom.residue.name == "HOH"]
     freud_rdf = freud.density.RDF(bins=300, r_min=0.01, r_max=1)
