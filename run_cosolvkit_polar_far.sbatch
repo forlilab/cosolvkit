@@ -13,4 +13,4 @@ echo "Here: `pwd`"
 source /gpfs/home/nbruciaferri/.bashrc
 conda activate cosolvkit
 
-python /gpfs/home/nbruciaferri/cosolvkit/scripts/cosolvent_find_and_replace.py -c /gpfs/home/nbruciaferri/validation/cosolvents_polar.json -r /gpfs/home/nbruciaferri/validation/7jrn.pdb -o /gpfs/home/nbruciaferri/cosolvkit/results/polar_far
+python /gpfs/home/nbruciaferri/cosolvkit/scripts/cosolvent_find_and_replace_setup.py -c /gpfs/home/nbruciaferri/validation/cosolvents_polar.json -r /gpfs/home/nbruciaferri/validation/7jrn.pdb -o /gpfs/home/nbruciaferri/cosolvkit/results/polar_far
