@@ -151,3 +151,8 @@ simulation_results.tar.gz
 results/lysozyme/system.inpcrd
 results/lysozyme/system.prmtop
 results/lysozyme/system.xml
+*.prmtop
+*.inpcrd
+*.mol2
+*.lib
+*.frcmod

@@ -443,6 +443,7 @@ def _add_cosolvent_as_copies(wat_xyzs, cosolvents, box_origin, box_size, target_
         kdtree = spatial.cKDTree(wat_xyzs)
 
         cosolv_xyz = generate_rotation(cosolvents[cosolv_name].positions)
+        # cosolv_xyz = cosolvents[cosolv_name].positions
         if center_positions[cosolv_name] is None:
             # Choose a random water molecule
             wat_o = wat_xyzs[::3]
