@@ -15,7 +15,7 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     if radius is not None:
         radius = radius * openmmunit.angstrom
     cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=10*openmmunit.angstrom, radius=radius)
-    cosolv.build(solvent_smiles=None, use_halton=True)
+    cosolv.build(use_halton=True)
     # cosolv.modeller.addMembrane(cosolv.forcefield, 
     #                             lipidType='POPC',
     #                             minimumPadding=1*openmmunit.nanometer)
