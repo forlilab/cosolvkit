@@ -109,6 +109,6 @@ if __name__ == "__main__":
     prmtop_file, inpcrd_file = build_cosolvent_box(receptor_path, cosolvents, output_path)
     # print("Starting simulation")
     # # 10 ps
-    # run_simulation(output_path, prmtop_file, inpcrd_file, "simulation", simulation_time=50000000)
+    run_simulation(output_path, prmtop_file, inpcrd_file, "simulation", simulation_time=25000000)
     # print("Simulation finished! Time to analyse the results!")
     # print(f"Simulation finished - simulation time: {time.time() - start}.")

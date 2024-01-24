@@ -120,5 +120,5 @@ if __name__ == "__main__":
     print("Starting simulation")
     # start = time.time()
     # 10 ps
-    run_simulation(output_path, cosolv_system, simulation_time=50000000, simulation_engine=simulation_engine)
+    run_simulation(output_path, cosolv_system, simulation_time=25000000, simulation_engine=simulation_engine)
     print(f"Simulation finished - simulation time: {time.time() - start}.")
