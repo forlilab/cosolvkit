@@ -15,10 +15,10 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     if radius is not None:
         radius = radius * openmmunit.angstrom
     cosolv = CosolventSystem(cosolvents, forcefields, simulation_engine, receptor_path, padding=10*openmmunit.angstrom, radius=radius)
-    cosolv.build(solvent_smiles=None)
-    cosolv.modeller.addMembrane(cosolv.forcefield, 
-                                lipidType='POPC',
-                                minimumPadding=1*openmmunit.nanometer)
+    cosolv.build(solvent_smiles=None, use_halton=True)
+    # cosolv.modeller.addMembrane(cosolv.forcefield, 
+    #                             lipidType='POPC',
+    #                             minimumPadding=1*openmmunit.nanometer)
     return cosolv
 
 def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_engine="Amber", output_filename="simulation"):
@@ -52,7 +52,7 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
 
     print("Setting positions for the simulation")
     simulation.context.setPositions(cosolv_system.modeller.positions)
-    simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
+    # simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
 
     print("Minimizing system's energy")
     simulation.minimizeEnergy()
