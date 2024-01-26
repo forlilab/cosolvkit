@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from collections import defaultdict
 import numpy as np
 from scipy import spatial
@@ -200,8 +201,8 @@ class CosolventSystem:
             print("Cleaning protein")
             top, pos = fix_pdb(receptor)
             self.modeller = app.Modeller(top, pos)
-            if self.modeller.getTopology() is not None:
-                self.modeller.deleteWater()
+            # if self.modeller.getTopology() is not None:
+            #     self.modeller.deleteWater()
         
         if self.receptor is None:
             assert radius is not None, "Error! If no receptor is passed, the radius parameter has to be set and it needs to be in angstrom openmm.unit"
@@ -246,7 +247,6 @@ class CosolventSystem:
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
         receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
-        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions, use_halton)
         cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions, use_halton)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
         if solvent_smiles == "H2O":

@@ -29,41 +29,34 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
     results_path = out_path
 
     try:
-        platform = Platform.getPlatformByName("OpenCL")
-        properties = {"Precision": "mixed"}
-        print("Using GPU.")
+        platform = Platform.getPlatformByName("CUDA")
+        platform.setPropertyDefaultValue('DeterministicForces', 'true')
+        platform.setPropertyDefaultValue('CudaPrecision', 'mixed')
+        platform.setPropertyDefaultValue('CudaDeviceIndex', '0')
+        print('Using GPU:CUDA')
     except: 
-        properties = {}
-        platform = Platform.getPlatformByName("CPU")
-        print("Switching to CPU, no GPU available.")
+        try:
+            platform = Platform.getPlatformByName("OpenCL")
+            platform.setPropertyDefaultValue('DeterministicForces', 'true')
+            platform.setPropertyDefaultValue('Precision', 'mixed')
+            print('Using GPU:OpenCL')
+        except:
+            platform = Platform.getPlatformByName("CPU")
+            print("Switching to CPU, no GPU available.")
 
-    properties = {}
+
+
     platform = Platform.getPlatformByName("CPU")
     print("Switching to CPU, no GPU available.")
-    cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
     integrator = LangevinMiddleIntegrator(300 * openmmunit.kelvin,
                                             1 / openmmunit.picosecond,
                                             0.004 * openmmunit.picosecond)
-
-    if len(properties) > 0:
-        simulation = Simulation(cosolv_system.modeller.topology, cosolv_system.system, integrator, platform, properties)
-    else:
-        simulation = Simulation(cosolv_system.modeller.topology, cosolv_system.system, integrator, platform)
+    integrator.setRandomNumberSeed(42)
+    simulation = Simulation(cosolv_system.modeller.topology, cosolv_system.system, integrator, platform)
 
     print("Setting positions for the simulation")
     simulation.context.setPositions(cosolv_system.modeller.positions)
     # simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
-
-    print("Minimizing system's energy")
-    simulation.minimizeEnergy()
-
-    # MD simulations - equilibration (1ns)
-    print("Equilibrating system")
-    simulation.step(25000)
-
-    # cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
-    # simulation.context.reinitialize(preserveState=True)
-    # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
 
     simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 250))
     simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 250))
@@ -71,6 +64,16 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, simulation_eng
     simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
                                                 potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
                                                 temperature=True, volume=True, density=True, speed=True))
+
+    print("Minimizing system's energy")
+    simulation.minimizeEnergy()
+    # Small simulation in NVT
+    simulation.step(250)
+    
+    # Now set the NPT
+    cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, 300 * openmmunit.kelvin))
+    simulation.context.reinitialize(preserveState=True)
+    # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
 
     # #100 ns = 25000000
     print("Running simulation")

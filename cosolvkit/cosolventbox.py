@@ -342,10 +342,11 @@ def _add_cosolvent_as_concentrations(wat_xyzs, cosolvents, box_origin, box_size,
             wat_id = np.random.choice(range(0, wat_o.shape[0]))
             wat_xyz = wat_o[wat_id]
 
+            cosolv_xyz = cosolvents[cosolv_name].positions
+            cosolv_xyz = generate_rotation(cosolv_xyz)
             # Translate fragment on the top of the selected water molecule
-            cosolv_xyz = cosolvents[cosolv_name].positions + wat_xyz
+            cosolv_xyz = cosolv_xyz + wat_xyz
 
-            cosolv_xyz = generate_rotation(cosolv_xyzs)
             # Add fragment to list
             cosolv_xyzs[cosolv_name].append(cosolv_xyz)
 
@@ -912,6 +913,7 @@ class CoSolventBox:
         self._center_positions[name] = center_positions
     
     def build(self):
+        import time
         """Build the cosolvent box. It involves the following steps:
 
         1. Create the water box (if not using an existing one)
@@ -946,7 +948,7 @@ class CoSolventBox:
                 print("Box type                     : %s" % self._box)
             print("Box center                   : x %8.3f y %8.3f z %8.3f (A)" % (self._center[0], self._center[1], self._center[2]))
             print("Box dimensions               : x %8d y %8d z %8d (A)" % (self._box_size[0], self._box_size[1], self._box_size[2]))
-
+            start = time.time()
             if self._cosolvents and self._added_as_copies:
                 # Select only cosolvents that are added as copies
                 cosolvents = {k: v for k, v in self._cosolvents.items() if k in self._added_as_copies}
@@ -1003,6 +1005,7 @@ class CoSolventBox:
             sys.exit(1)
 
         print("----------------------------------------------")
+        return time.time() - start
 
     def export_pdb(self, filename='cosolv_system.pdb'):
         """Export pdb file (hybrid-36 format) of the whole system.
