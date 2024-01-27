@@ -5,7 +5,9 @@ from collections import defaultdict
 import mdtraj
 import numpy as np
 import pandas as pd
-import freud
+import MDAnalysis as mda
+from MDAnalysis.analysis import rdf
+# import freud
 import matplotlib.pyplot as plt
 
 from cosolvkit.cosolvent_system import CoSolvent
@@ -42,72 +44,97 @@ def plot_temp_vol_pot(pot_e, temp, vol, outpath=None):
     # plt.show()
     return
 
-def radial_distribution_function(cosolvents, traj, atoms_cosolvents, outpath=None, n_frames=None):
-    for cosolvent in atoms_cosolvents:
-        if cosolvent == "HOH":
-            r_max = 1
-        else:
-            r_max = 1.5
+def rdf_mda(traj, top, cosolvents, outpath=None, n_frames=250):
+    u = mda.Universe(top, traj)
+    oxygen_atoms = u.select_atoms("name O and resname HOH")
+    sim_frames = len(u.trajectory)
+        
+    for cosolvent in cosolvents:
+        cosolvent_name = cosolvent.resname
+        r_max = 15
+            
+        cosolvent_residues = u.select_atoms(f'resname {cosolvent_name}')
+        atoms_names = cosolvent_residues.residues[0].atoms.names
         # if cosolvent != "HOH": continue
-        for cosolvent_atom in atoms_cosolvents[cosolvent]:
-            freud_rdf = freud.density.RDF(bins=300, r_min=0.01, r_max=r_max)
-            indices = [atom.index for atom in traj.top.atoms if atom.name == cosolvent_atom and atom.residue.name == cosolvent]
-            if n_frames is None:
-                for system in zip(np.asarray(traj.unitcell_vectors), traj.xyz[:, indices, :]):
-                    freud_rdf.compute(system, reset=False)
-            else:
-                for system in zip(np.asarray(traj.unitcell_vectors), traj.xyz[:n_frames, indices, :]):
-                    freud_rdf.compute(system, reset=False)
+        for cosolvent_atom in set(atoms_names):
+            if "H" in cosolvent_atom: continue
+            print(f"Analysing {cosolvent_name}-{cosolvent_atom}")
+            fig, ax = plt.subplots(3, 2, sharex=True, sharey=True)
+            plt.tight_layout(pad=2.0)
+            # Here compute RDF between same atoms and different molecules
+            atoms = cosolvent_residues.select_atoms(f'name {cosolvent_atom}')
+            irdf = rdf.InterRDF(atoms, atoms, nbins=100, range=(0.0, r_max), exclusion_block=(1, 1))
+            irdf.run(start=0, step=1000)
+            ax[0][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+            ax[0][0].set_xlabel(r'$r$ $\AA$')
+            ax[0][0].set_ylabel("$g(r)$")
+            ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} every 1k frames")
+            ax[0][0].legend()
 
-            fig, ax = plt.subplots()
-            ax.plot(freud_rdf.bin_centers, freud_rdf.rdf, label="freud", alpha=0.5)
-            ax.set_xlabel("$r$")
-            ax.set_ylabel("$g(r)$")
-            ax.set_title(f"RDF-{cosolvent} {cosolvent_atom}")
-            ax.legend()
+            irdf = rdf.InterRDF(atoms, atoms, nbins=100, range=(0.0, r_max), exclusion_block=(1, 1))
+            irdf.run(start=0, stop=250)
+            ax[1][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+            ax[1][0].set_xlabel(r'$r$ $\AA$')
+            ax[1][0].set_ylabel("$g(r)$")
+            ax[1][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} first 250 frames")
+            ax[1][0].legend()
+            
+            # last frames
+            irdf = rdf.InterRDF(atoms, atoms, nbins=100, range=(0.0, r_max), exclusion_block=(1, 1))
+            irdf.run(start=sim_frames-n_frames, stop=sim_frames)
+            ax[2][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+            ax[2][0].set_xlabel(r'$r$ $\AA$')
+            ax[2][0].set_ylabel("$g(r)$")
+            ax[2][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} last 250 frames")
+            ax[2][0].legend()
+            
+            # Here compute RDF between atom and water's oxygen
+            irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=100, range=(0.0, r_max))
+            irdf.run(start=0, step=1000)
+            ax[0][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+            ax[0][1].set_xlabel(r'$r$ $\AA$')
+            ax[0][1].set_ylabel("$g(r)$")
+            ax[0][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O every 1k frames")
+            ax[0][1].legend()
+
+            irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=100, range=(0.0, r_max))
+            irdf.run(start=0, stop=250)
+            ax[1][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+            ax[1][1].set_xlabel(r'$r$ $\AA$')
+            ax[1][1].set_ylabel("$g(r)$")
+            ax[1][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O first 250 frames")
+            ax[1][1].legend()
+            
+            # last frames
+            irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=100, range=(0.0, r_max))
+            irdf.run(start=sim_frames-n_frames, stop=sim_frames)
+            ax[2][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+            ax[2][1].set_xlabel(r'$r$ $\AA$')
+            ax[2][1].set_ylabel("$g(r)$")
+            ax[2][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O last 250 frames")
+            ax[2][1].legend()
+            
+            for ax in fig.get_axes():
+                ax.label_outer()
+                
             if outpath is not None:
-                if n_frames is not None:
-                    plt.savefig(f"{outpath}/rdf_{cosolvent}_{cosolvent_atom}_{n_frames}.png")
-                else:
-                    plt.savefig(f"{outpath}/rdf_{cosolvent}_{cosolvent_atom}_{n_frames}.png")
-
-            
-            plt.close("all")
-            # Time for the last frames
-            if n_frames is not None:
-                freud_rdf = freud.density.RDF(bins=300, r_min=0.01, r_max=r_max)
-                for system in zip(np.asarray(traj.unitcell_vectors), traj.xyz[-n_frames:, indices, :]):
-                    freud_rdf.compute(system, reset=False)
-
-                fig, ax = plt.subplots()
-                ax.plot(freud_rdf.bin_centers, freud_rdf.rdf, label="freud", alpha=0.5)
-                ax.set_xlabel("$r$")
-                ax.set_ylabel("$g(r)$")
-                ax.set_title(f"RDF-{cosolvent} {cosolvent_atom}")
-                ax.legend()
-
-                if outpath is not None:
-                    plt.savefig(f"{outpath}/rdf_{cosolvent}_{cosolvent_atom}_last_{n_frames}.png")
-            # plt.show()
-            
-            if cosolvent != "HOH":
-                freud_rdf = freud.density.RDF(bins=300, r_min=0.01, r_max=r_max)
-                indices = [atom.index for atom in traj.top.atoms if atom.name == cosolvent_atom and atom.residue.name == cosolvent]
-                if n_frames is None:
-                    for system in zip(np.asarray(traj.unitcell_vectors), traj.xyz[0::100, indices, :]):
-                        freud_rdf.compute(system, reset=False)
-
-                fig, ax = plt.subplots()
-                ax.plot(freud_rdf.bin_centers, freud_rdf.rdf, label="freud", alpha=0.5)
-                ax.set_xlabel("$r$")
-                ax.set_ylabel("$g(r)$")
-                ax.set_title(f"RDF-{cosolvent} {cosolvent_atom}")
-                ax.legend()
-                if outpath is not None:
-                    if n_frames is not None:
-                        plt.savefig(f"{outpath}/rdf_{cosolvent}_{cosolvent_atom}_{n_frames}.png")
-                    else:
-                        plt.savefig(f"{outpath}/rdf_{cosolvent}_{cosolvent_atom}_{n_frames}.png")
+                plt.savefig(f"{outpath}/rdf_{cosolvent_name}_{cosolvent_atom}.png")
+            plt.close()
+    
+    # Finally do waters
+    print("Analysing water")
+    r_max = 8.5
+    fig, ax = plt.subplots()
+    irdf = rdf.InterRDF(oxygen_atoms, oxygen_atoms, nbins=300, range=(0.0, r_max), exclusion_block=(1, 1))
+    irdf.run(start=0, step=50)
+    ax.plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+    ax.set_xlabel("$r$")
+    ax.set_ylabel("$g(r)$")
+    ax.set_title(f"RDF-HOH O every 50 frames")
+    ax.legend()
+    if outpath is not None:
+        plt.savefig(f"{outpath}/rdf_HOH_O.png")
+    plt.close()
     return
 
 def cmd_lineparser():
@@ -139,18 +166,9 @@ if __name__ == "__main__":
     cosolvents = list()
     for cosolvent in cosolvents_d:
         cosolvents.append(CoSolvent(**cosolvent))
-
-    cosolvents_names = [cosolvent.resname for cosolvent in cosolvents]
     if not os.path.exists(out_path):
         os.makedirs(out_path)
-    traj = mdtraj.load(traj_file, top=top_file)
-    print("Traj loaded in memory")
-    atoms = set([(atom.name, atom.residue.name) for atom in traj.top.atoms if atom.residue.name in  cosolvents_names and "H" not in atom.name])
-    atoms_cosolvents = defaultdict(list)
-    for pair in atoms:
-        atoms_cosolvents[pair[1]].append(pair[0])
-    atoms_cosolvents["HOH"].append("O")
+
     pot_e, temp, vol = get_temp_vol_pot(log_file)
-    # plot_temp_vol_pot(pot_e, temp, vol, outpath=out_path+"/equilibration_plot.png")
-    # radial_distribution_function(cosolvents, traj, atoms_cosolvents,outpath=out_path, n_frames=250)
-    rdf_mdtraj(traj, atoms_cosolvents, out_path)
+    plot_temp_vol_pot(pot_e, temp, vol, outpath=out_path+"/equilibration_plot.png")
+    rdf_mda(traj_file, top_file, cosolvents, out_path)
