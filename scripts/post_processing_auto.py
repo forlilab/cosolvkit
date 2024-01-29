@@ -16,6 +16,6 @@ for result in os.listdir(base_path):
     else:
         top_file = os.path.join(result_path, "system.pdb")
     
-    cmd = f"python ~/phd/cosolvkit/scripts/post_simulation_processing.py -l {os.path.join(result_path, 'simulation.log')} -traj {os.path.join(result_path, 'simulation.dcd')} -top {top_file} -o {os.path.join(result_path, 'analysis_high')} -c {cosolvent_file}"
+    cmd = f"python ~/phd/cosolvkit/scripts/post_simulation_processing.py -l {os.path.join(result_path, 'simulation.log')} -traj {os.path.join(result_path, 'simulation.dcd')} -top {top_file} -o {os.path.join(result_path, 'report')} -c {cosolvent_file}"
     print(f"running:\n\t{cmd}")
     os.system(cmd)

@@ -20,17 +20,17 @@ def get_temp_vol_pot(log_file):
     return pot_e, temp, vol
 
 def plot_temp_vol_pot(pot_e, temp, vol, outpath=None):
-    t = range(1, len(pot_e)+1)
+    t = range(0, 75)
     plt.close("all")
     fig, ax = plt.subplots()
-    ax.plot(t, [x / 1000 for x in pot_e], label="potential")
-    ax.plot(t, [x for x in vol], label="volume")
-    ax.plot(t, [x for x in temp], label="temperature")
+    ax.plot(t, [pot_e[x] / 1000 for x in range(0, 75)], label="potential")
+    ax.plot(t, [vol[x] for x in range(0, 75)], label="volume")
+    ax.plot(t, [temp[x] for x in range(0, 75)], label="temperature")
 
     ax.set(**{
         "title": "Energy",
         "xlabel": "time / ps",
-        "xlim": (0, len(temp)),
+        "xlim": (0, 75),
         # "ylabel": "energy / 10$^{3}$ kJ mol$^{-1}$"
         })
 
@@ -44,9 +44,13 @@ def plot_temp_vol_pot(pot_e, temp, vol, outpath=None):
     # plt.show()
     return
 
-def rdf_mda(traj, top, cosolvents, outpath=None, n_frames=250):
+def rdf_mda(traj: str, top: str, cosolvents: list, outpath=None, n_frames=250):
+    np.seterr(divide='ignore', invalid='ignore')
     u = mda.Universe(top, traj)
-    oxygen_atoms = u.select_atoms("name O and resname HOH")
+    wat_resname = "HOH"
+    if top.endswith("cosolv_system.prmtop"):
+        wat_resname = "WAT"
+    oxygen_atoms = u.select_atoms(f"resname {wat_resname} and name O")
     sim_frames = len(u.trajectory)
         
     for cosolvent in cosolvents:
