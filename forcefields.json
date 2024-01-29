@@ -3,7 +3,7 @@
         "amber14-all.xml", 
         "amber14/tip3pfb.xml"
     ],
-    "GRPOMACS":[
+    "GROMACS":[
         "amber14-all.xml", 
         "amber14/tip3pfb.xml"
     ],
@@ -12,6 +12,6 @@
         "charmm36/water.xml"
     ],
     "small_molecules":[
-        "gaff"
+        "espaloma"
     ]
 }
