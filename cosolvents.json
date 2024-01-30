@@ -1,9 +1,9 @@
 [
     {
         "name": "benzene",
-        "copies": 50,
         "smiles": "c1ccccc1",
-        "concentration": 1.5
+        "concentration": 1.5.
+        "resname": "BEN"
     },
     {
         "name": "methanol", 
