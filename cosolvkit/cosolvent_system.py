@@ -157,9 +157,9 @@ class CosolventSystem:
                     Path to the cosolvents.json file
                 forcefields : str
                     Path to the forcefields.json file
-                simulation_engine : str
-                    Engine that want to be used for the simulation.
-                    Supported engines: Amber, Gromacs, CHARMM
+                simulation_format : str
+                    MD format that want to be used for the simulation.
+                    Supported formats: Amber, Gromacs, CHARMM or openMM
                 receptor : None | str
                     Path to the pdb file of the receptor. 
                     By default is None to allow cosolvent
@@ -173,7 +173,7 @@ class CosolventSystem:
         """ 
         
         # Private
-        self._available_engines = ["AMBER", "GROMACS", "CHARMM"]
+        self._available_formats = ["AMBER", "GROMACS", "CHARMM", "OPENMM"]
         self._cosolvent_positions = defaultdict(list)
         self._box = None
         self._periodic_box_vectors = None
@@ -186,7 +186,7 @@ class CosolventSystem:
         self.receptor = receptor
         self.cosolvents = dict()
         
-        assert (simulation_engine.upper() in self._available_engines), "Error! The simulation engine supplied is not supported!"
+        assert (simulation_engine.upper() in self._available_formats), f"Error! The simulation format supplied is not supported! Available simulation engines:\n\t{self._available_formats}"
 
         # Creating the cosolvent molecules from json file
         with open(cosolvents) as fi:
@@ -314,7 +314,7 @@ class CosolventSystem:
             system = XmlSerializer.deserialize(fi.read())
         return system
 
-    def save_topology(self, topology: app.Topology, positions: list, system: System, simulation_engine: str, forcefield: app.ForceField, out_path: str):
+    def save_topology(self, topology: app.Topology, positions: list, system: System, simulation_format: str, forcefield: app.ForceField, out_path: str):
         """Save the topology files necessary for MD simulations according to the simulation engine specified.
 
         Args:
@@ -328,16 +328,14 @@ class CosolventSystem:
         new_system = forcefield.createSystem(topology,
                                              nonbondedMethod=app.PME,
                                              nonbondedCutoff=10*openmmunit.angstrom,
-                                             constraints=app.HBonds,
+                                             removeCMMotion=False,
                                              rigidWater=False,
                                              hydrogenMass=1.5*openmmunit.amu)
         
         parmed_structure = parmed.openmm.load_topology(topology, new_system, positions)
 
-        simulation_engine = simulation_engine.upper()
-        if simulation_engine == "AMBER":
-            for bond in parmed_structure.bonds:
-                print(bond, bond.type)
+        simulation_format = simulation_format.upper()
+        if simulation_format == "AMBER":
             # Add dummy bond type for None ones so that parmed doesn't trip
             # bond_type = parmed.BondType(1.0, 1.0, list=parmed_structure.bond_types)
             # parmed_structure.bond_types.append(bond_type)
@@ -348,16 +346,19 @@ class CosolventSystem:
             parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
             parmed_structure.save(f'{out_path}/system.inpcrd', overwrite=True)
 
-        elif simulation_engine == "GROMACS":
+        elif simulation_format == "GROMACS":
             parmed_structure.save(f'{out_path}/system.top', overwrite=True)
             parmed_structure.save(f'{out_path}/system.gro', overwrite=True)
 
-        elif simulation_engine == "CHARMM":
+        elif simulation_format == "CHARMM":
             parmed_structure.save(f'{out_path}/system.psf', overwrite=True)
-
+            parmed_structure.save(f'{out_path}/system.crd', overwrite=True)
+        elif simulation_format == "OPENMM":
+            self.save_system(out_path, system)
+            self.save_pdb(topology, positions, f"{out_path}/system.pdb")
         else:
             print("The specified simulation engine is not supported!")
-            print(f"Available simulation engines:\n\t{self._available_engines}")
+            print(f"Available simulation engines:\n\t{self._available_formats}")
         return
 #endregion
     
