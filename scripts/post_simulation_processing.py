@@ -20,12 +20,19 @@ def get_temp_vol_pot(log_file):
     return pot_e, temp, vol
 
 def plot_temp_vol_pot(pot_e, temp, vol, outpath=None):
-    t = range(0, 75)
+    lim = len(pot_e)
+    if len(pot_e) > 75:
+        lim = 75
+
+    t = range(0, lim)
     plt.close("all")
     fig, ax = plt.subplots()
-    ax.plot(t, [pot_e[x] / 1000 for x in range(0, 75)], label="potential")
-    ax.plot(t, [vol[x] for x in range(0, 75)], label="volume")
-    ax.plot(t, [temp[x] for x in range(0, 75)], label="temperature")
+    ax.plot(t, [pot_e[x] / 1000 for x in range(0, lim)], label="potential")
+    ax.plot(t, [vol[x] for x in range(0, lim)], label="volume")
+    ax.plot(t, [temp[x] for x in range(0, lim)], label="temperature")
+    # ax.plot(t, [pot_e[x] / 1000 for x in range(0, len(pot_e))], label="potential")
+    # ax.plot(t, [vol[x] for x in range(0, len(pot_e))], label="volume")
+    # ax.plot(t, [temp[x] for x in range(0, len(pot_e))], label="temperature")
 
     ax.set(**{
         "title": "Energy",
@@ -59,16 +66,17 @@ def rdf_mda(traj: str, top: str, cosolvents: list, outpath=None, n_frames=250):
             
         cosolvent_residues = u.select_atoms(f'resname {cosolvent_name}')
         atoms_names = cosolvent_residues.residues[0].atoms.names
-        # if cosolvent != "HOH": continue
         for cosolvent_atom in set(atoms_names):
             if "H" in cosolvent_atom: continue
             print(f"Analysing {cosolvent_name}-{cosolvent_atom}")
             fig, ax = plt.subplots(3, 2, sharex=True, sharey=True)
+            plt.setp(ax, ylim=(0, 4.5), xlim=(0, r_max+1))
             plt.tight_layout(pad=2.0)
             # Here compute RDF between same atoms and different molecules
             atoms = cosolvent_residues.select_atoms(f'name {cosolvent_atom}')
             irdf = rdf.InterRDF(atoms, atoms, nbins=100, range=(0.0, r_max), exclusion_block=(1, 1))
             irdf.run(start=0, step=1000)
+            # irdf.run()
             ax[0][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
             ax[0][0].set_xlabel(r'$r$ $\AA$')
             ax[0][0].set_ylabel("$g(r)$")
@@ -95,6 +103,7 @@ def rdf_mda(traj: str, top: str, cosolvents: list, outpath=None, n_frames=250):
             # Here compute RDF between atom and water's oxygen
             irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=100, range=(0.0, r_max))
             irdf.run(start=0, step=1000)
+            # irdf.run()
             ax[0][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
             ax[0][1].set_xlabel(r'$r$ $\AA$')
             ax[0][1].set_ylabel("$g(r)$")
@@ -129,10 +138,12 @@ def rdf_mda(traj: str, top: str, cosolvents: list, outpath=None, n_frames=250):
     print("Analysing water")
     r_max = 8.5
     fig, ax = plt.subplots()
+    plt.setp(ax, ylim=(0, 4.5), xlim=(0, r_max+1))
     irdf = rdf.InterRDF(oxygen_atoms, oxygen_atoms, nbins=300, range=(0.0, r_max), exclusion_block=(1, 1))
     irdf.run(start=0, step=50)
+    # irdf.run()
     ax.plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
-    ax.set_xlabel("$r$")
+    ax.set_xlabel(r'$r$ $\AA$')
     ax.set_ylabel("$g(r)$")
     ax.set_title(f"RDF-HOH O every 50 frames")
     ax.legend()

@@ -109,7 +109,7 @@ if __name__ == "__main__":
                            f"{output_path}/system.pdb")
     # Good habit to save the topology files
     print("Saving topology file")
-    cosolv_system.save_topology(cosolv_system.modeller.topology, 
+    cosolv_system.save_topology(cosolv_system.modeller.getTopology(), 
                                 cosolv_system.modeller.positions,
                                 cosolv_system.system,
                                 simulation_engine,
@@ -120,5 +120,5 @@ if __name__ == "__main__":
     print("Starting simulation")
     # start = time.time()
     # 10 ps
-    run_simulation(output_path, cosolv_system, simulation_time=25000000, simulation_engine=simulation_engine)
+    run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
     print(f"Simulation finished - simulation time: {time.time() - start}.")

@@ -95,7 +95,7 @@ class CoSolvent:
         positions = positions - np.mean(positions, axis=0)
         self.positions = positions
         self.mol_filename = mol_filename
-        # self.pdb_conect = _get_pdb_conect(mol)
+        self.pdb_conect = self._get_pdb_conect(mol)
         return
     
     
@@ -314,7 +314,7 @@ class CosolventSystem:
             system = XmlSerializer.deserialize(fi.read())
         return system
 
-    def save_topology(self, topology: app.Topology, positions: list, system: System, simulation_engine: str, out_path: str):
+    def save_topology(self, topology: app.Topology, positions: list, system: System, simulation_engine: str, forcefield: app.ForceField, out_path: str):
         """Save the topology files necessary for MD simulations according to the simulation engine specified.
 
         Args:
@@ -322,18 +322,28 @@ class CosolventSystem:
             positions (list): list of 3D coordinates of the topology
             system (System): openmm system
             simulation_engine (str): name of the simulation engine
+            forcefield (app.Forcefield): openmm forcefield
             out_path (str): output path to where to save the topology files
         """
-        parmed_structure = parmed.openmm.load_topology(topology, system, positions)
+        new_system = forcefield.createSystem(topology,
+                                             nonbondedMethod=app.PME,
+                                             nonbondedCutoff=10*openmmunit.angstrom,
+                                             constraints=app.HBonds,
+                                             rigidWater=False,
+                                             hydrogenMass=1.5*openmmunit.amu)
+        
+        parmed_structure = parmed.openmm.load_topology(topology, new_system, positions)
 
         simulation_engine = simulation_engine.upper()
         if simulation_engine == "AMBER":
-            # Add dummy bond type for None ones so that parmed doesn't trip
-            bond_type = parmed.BondType(1.0, 1.0, list=parmed_structure.bond_types)
-            parmed_structure.bond_types.append(bond_type)
             for bond in parmed_structure.bonds:
-                if bond.type is None:
-                    bond.type = bond_type
+                print(bond, bond.type)
+            # Add dummy bond type for None ones so that parmed doesn't trip
+            # bond_type = parmed.BondType(1.0, 1.0, list=parmed_structure.bond_types)
+            # parmed_structure.bond_types.append(bond_type)
+            # for bond in parmed_structure.bonds:
+            #     if bond.type is None:
+            #         bond.type = bond_type
 
             parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
             parmed_structure.save(f'{out_path}/system.inpcrd', overwrite=True)
@@ -392,7 +402,9 @@ class CosolventSystem:
         for cosolvent in cosolvents_positions:
             for i in range(len(cosolvents_positions[cosolvent])):
                 cosolvent_names.append(cosolvent.resname)
-                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.resname))
+                mol = Molecule.from_smiles(cosolvent.smiles, name=cosolvent.resname)
+                mol.generate_conformers(n_conformers=1)
+                molecules.append(mol)
                 [molecules_positions.append(x) for x in cosolvents_positions[cosolvent][i]]
 
         molecules_positions = np.array(molecules_positions)
@@ -550,7 +562,7 @@ class CosolventSystem:
             else: 
                 return False
         else:
-            return False
+            return self.is_in_box(new_coords, self.lowerBound, self.vectors)
 
     def accept_reject(self, 
                       xyz: np.ndarray, 
