@@ -392,6 +392,7 @@ class CosolventSystem:
         elif simulation_format == "OPENMM":
             self.save_system(out_path, system)
             self.save_pdb(topology, positions, f"{out_path}/system.pdb")
+            parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
         else:
             print("The specified simulation engine is not supported!")
             print(f"Available simulation engines:\n\t{self._available_formats}")

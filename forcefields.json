@@ -1,4 +1,8 @@
 {
+    "OPENMM":[
+        "amber14-all.xml", 
+        "amber14/tip3pfb.xml"
+    ],
     "AMBER":[
         "amber14-all.xml", 
         "amber14/tip3pfb.xml"
