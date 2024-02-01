@@ -8,7 +8,7 @@ from scipy.stats import qmc
 import math 
 from itertools import product
 import parmed
-from openmm import Vec3, unit, XmlSerializer, System
+from openmm import Vec3, unit, XmlSerializer, System, CustomNonbondedForce, NonbondedForce
 import openmm.app as app
 import openmm.unit as openmmunit
 from rdkit import Chem
@@ -274,6 +274,41 @@ class CosolventSystem:
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
+    def add_repulsive_forces(self, residues_names: list):
+        """
+            This function adds a LJ repulsive potential between the specified molecules.
+
+            Args:
+                residues_names (list): list of residue names.
+        """
+        epsilon = -0.01
+        sigma = 12
+        epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
+        epsilon = epsilon.value_in_unit_system(openmmunit.md_unit_system)
+        sigma = sigma * openmmunit.angstroms
+        sigma = sigma.value_in_unit_system(openmmunit.md_unit_system)
+
+        forces = { force.__class__.__name__ : force for force in self.system.getForces()}
+        nb_force = forces['NonbondedForce']
+        repulsive_force = CustomNonbondedForce("4*epsilon*((sigma/r)^12-(sigma/r)^6); sigma=0.5*(sigma1+sigma2); epsilon=sqrt(epsilon1*epsilon2)")
+        repulsive_force.addPerParticleParameter("sigma")
+        repulsive_force.addPerParticleParameter("epsilon")
+        repulsive_force.setNonbondedMethod(NonbondedForce.CutoffPeriodic)
+        repulsive_force.setCutoffDistance(nb_force.getCutoffDistance())
+        repulsive_force.setUseSwitchingFunction(use=True)
+        repulsive_force.setSwitchingDistance(2.0*openmmunit.angstrom)
+        for i, atom in enumerate(self.modeller.getTopology().atoms()):
+            if not atom.residue.name in residues_names:
+                charge, sigma, epsilon = nb_force.getParticleParameters(i)
+            repulsive_force.addParticle([sigma, epsilon])
+        
+        for index in range(nb_force.getNumExceptions()):
+            idx, jdx, c, s, eps = nb_force.getExceptionParameters(index)
+            repulsive_force.addExclusion(idx, jdx)
+
+        self.system.addForce(repulsive_force)
+        return
+
     def save_pdb(self, topology: app.Topology, positions: list, out_path: str):
         """Saves the specified topology and position to the out_path file.
 

@@ -21,7 +21,10 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     #                             minimumPadding=1*openmmunit.nanometer)
     return cosolv
 
-def run_simulation(out_path, cosolv_system, simulation_time=None, output_filename="simulation"):
+def run_simulation(out_path, 
+                   cosolv_system, 
+                   simulation_time=None, 
+                   output_filename="simulation"):
     # results_path = os.path.join(out_path, "results")
     if simulation_time is None:
         simulation_time = 25000000
@@ -46,7 +49,7 @@ def run_simulation(out_path, cosolv_system, simulation_time=None, output_filenam
 
     integrator = LangevinMiddleIntegrator(300 * openmmunit.kelvin,
                                             1 / openmmunit.picosecond,
-                                            0.004 * openmmunit.picosecond)
+                                            0.001 * openmmunit.picosecond)
     integrator.setRandomNumberSeed(42)
     simulation = Simulation(cosolv_system.modeller.topology, cosolv_system.system, integrator, platform)
 
@@ -203,13 +206,24 @@ if __name__ == "__main__":
                                 output_path)
     # If you want to save the system as well
     # cosolv_system.save_system(output_path, cosolv_system.system)
-    
+    # cosolv_system.add_repulsive_forces("BEN")
     print("Starting simulation")
     start = time.time()
-    # run_simulation(output_path, cosolv_system, simulation_time=250000, simulation_engine=simulation_engine)
-    run_simulation_from_topology_and_positions(output_path,
-                                               topology="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.prmtop",
-                                               positions="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.inpcrd",
-                                               simulation_time=25000,
-                                               simulation_format=output_format)
+    run_simulation(output_path+"/no_rep", cosolv_system, simulation_time=2500000)
+    # run_simulation_from_topology_and_positions(output_path,
+    #                                            topology="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.prmtop",
+    #                                            positions="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.inpcrd",
+    #                                            simulation_time=25000,
+    #                                            simulation_format=output_format)
+    print(f"Simulation finished - simulation time: {time.time() - start}.")
+
+    cosolv_system.add_repulsive_forces("BEN")
+    print("Starting simulation")
+    start = time.time()
+    run_simulation(output_path+"/rep", cosolv_system, simulation_time=2500000)
+    # run_simulation_from_topology_and_positions(output_path,
+    #                                            topology="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.prmtop",
+    #                                            positions="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.inpcrd",
+    #                                            simulation_time=25000,
+    #                                            simulation_format=output_format)
     print(f"Simulation finished - simulation time: {time.time() - start}.")
