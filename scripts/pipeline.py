@@ -57,7 +57,7 @@ def run_simulation(out_path,
     simulation.context.setPositions(cosolv_system.modeller.positions)
     # simulation.context.setVelocitiesToTemperature(300 * openmmunit.kelvin)
 
-    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 250))
+    # simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 250))
     simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 250))
     simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_filename + ".chk"), 250))
     simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
@@ -143,7 +143,7 @@ def run_simulation_from_topology_and_positions(out_path,
     print("Setting positions for the simulation")
     simulation.context.setPositions(positions.positions)
 
-    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 250))
+    # simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_filename + ".nc"), 250))
     simulation.reporters.append(DCDReporter(os.path.join(results_path, output_filename + ".dcd"), 250))
     simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_filename + ".chk"), 250))
     simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_filename + ".log"), 250, step=True, time=True,
@@ -196,6 +196,9 @@ if __name__ == "__main__":
     output_path = args.outpath
     print("Building cosolvent box")
     cosolv_system = build_cosolvent_box(receptor_path, cosolvents, forcefields, output_format, output_path, radius)
+    cosolv_system.save_pdb(cosolv_system.modeller.topology,
+                           cosolv_system.modeller.positions,
+                           output_path+"/system.pdb")
     # Save topologies
     print("Saving topology file")
     cosolv_system.save_topology(cosolv_system.modeller.topology, 
@@ -207,23 +210,23 @@ if __name__ == "__main__":
     # If you want to save the system as well
     # cosolv_system.save_system(output_path, cosolv_system.system)
     # cosolv_system.add_repulsive_forces("BEN")
-    print("Starting simulation")
-    start = time.time()
-    run_simulation(output_path+"/no_rep", cosolv_system, simulation_time=2500000)
-    # run_simulation_from_topology_and_positions(output_path,
-    #                                            topology="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.prmtop",
-    #                                            positions="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.inpcrd",
-    #                                            simulation_time=25000,
-    #                                            simulation_format=output_format)
-    print(f"Simulation finished - simulation time: {time.time() - start}.")
+    # print("Starting simulation")
+    # start = time.time()
+    # run_simulation(output_path+"/no_rep", cosolv_system, simulation_time=25000)
+    # # run_simulation_from_topology_and_positions(output_path,
+    # #                                            topology="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.prmtop",
+    # #                                            positions="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.inpcrd",
+    # #                                            simulation_time=25000,
+    # #                                            simulation_format=output_format)
+    # print(f"Simulation finished - simulation time: {time.time() - start}.")
 
-    cosolv_system.add_repulsive_forces("BEN")
-    print("Starting simulation")
-    start = time.time()
-    run_simulation(output_path+"/rep", cosolv_system, simulation_time=2500000)
-    # run_simulation_from_topology_and_positions(output_path,
-    #                                            topology="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.prmtop",
-    #                                            positions="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.inpcrd",
-    #                                            simulation_time=25000,
-    #                                            simulation_format=output_format)
-    print(f"Simulation finished - simulation time: {time.time() - start}.")
+    # cosolv_system.add_repulsive_forces("BEN")
+    # print("Starting simulation")
+    # start = time.time()
+    # run_simulation(output_path+"/rep", cosolv_system, simulation_time=25000)
+    # # run_simulation_from_topology_and_positions(output_path,
+    # #                                            topology="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.prmtop",
+    # #                                            positions="/mnt/bigdisk1/validation_cosolvkit/results/water_tip3p_ff/system.inpcrd",
+    # #                                            simulation_time=25000,
+    # #                                            simulation_format=output_format)
+    # print(f"Simulation finished - simulation time: {time.time() - start}.")

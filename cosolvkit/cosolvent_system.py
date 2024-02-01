@@ -282,30 +282,38 @@ class CosolventSystem:
                 residues_names (list): list of residue names.
         """
         epsilon = -0.01
-        sigma = 12
         epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
-        epsilon = epsilon.value_in_unit_system(openmmunit.md_unit_system)
-        sigma = sigma * openmmunit.angstroms
-        sigma = sigma.value_in_unit_system(openmmunit.md_unit_system)
+        sigma = 12
+        sigma = sigma * openmmunit.angstrom
 
         forces = { force.__class__.__name__ : force for force in self.system.getForces()}
         nb_force = forces['NonbondedForce']
-        repulsive_force = CustomNonbondedForce("4*epsilon*((sigma/r)^12-(sigma/r)^6); sigma=0.5*(sigma1+sigma2); epsilon=sqrt(epsilon1*epsilon2)")
+        cutoff_distance = nb_force.getCutoffDistance()
+        energy_expression = "4*epsilon * ((sigma / r)^12 * (sigma / r)^6);"
+        energy_expression += f"epsilon = {epsilon.value_in_unit_system(openmmunit.md_unit_system)};"
+        energy_expression += f"sigma = {sigma.value_in_unit_system(openmmunit.md_unit_system)};"
+        repulsive_force = CustomNonbondedForce(energy_expression)
         repulsive_force.addPerParticleParameter("sigma")
         repulsive_force.addPerParticleParameter("epsilon")
         repulsive_force.setNonbondedMethod(NonbondedForce.CutoffPeriodic)
-        repulsive_force.setCutoffDistance(nb_force.getCutoffDistance())
-        repulsive_force.setUseSwitchingFunction(use=True)
-        repulsive_force.setSwitchingDistance(2.0*openmmunit.angstrom)
+        repulsive_force.setCutoffDistance(cutoff_distance)
+        repulsive_force.setUseLongRangeCorrection(False)
+        repulsive_force.setUseSwitchingFunction(True)
+        repulsive_force.setSwitchingDistance(cutoff_distance - 1.0*unit.angstroms)
+
+        target_indices = []
         for i, atom in enumerate(self.modeller.getTopology().atoms()):
             if not atom.residue.name in residues_names:
                 charge, sigma, epsilon = nb_force.getParticleParameters(i)
+            else:
+                target_indices.append(i)
             repulsive_force.addParticle([sigma, epsilon])
         
         for index in range(nb_force.getNumExceptions()):
             idx, jdx, c, s, eps = nb_force.getExceptionParameters(index)
             repulsive_force.addExclusion(idx, jdx)
 
+        repulsive_force.addInteractionGroup(target_indices, target_indices)
         self.system.addForce(repulsive_force)
         return
 
@@ -500,7 +508,7 @@ class CosolventSystem:
             dict: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvents molecules
         """
         protein_radius = 3.5*openmmunit.angstrom
-        edge_cutoff = 4.5*openmmunit.angstrom
+        edge_cutoff = 2.5*openmmunit.angstrom
         prot_kdtree = None
         # This is used to update the kdtree of the placed cosolvents
         placed_atoms_positions = []
@@ -585,20 +593,33 @@ class CosolventSystem:
         """
         protein_radius = 3.5*openmmunit.angstrom
         cosolv_radius = 2.5*openmmunit.angstrom
-        if protein_kdtree is not None and not any(protein_kdtree.query_ball_point(new_coords, protein_radius.value_in_unit(openmmunit.nanometer))):
-            if cosolvent_kdtree is not None:
-                if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
-                    return True
-                else: return False
-            else:
+        cosolvent_clashes = False
+        protein_clashes = False
+        check_clashes = cosolvent_kdtree is not None or protein_kdtree is not None
+        if cosolvent_kdtree is not None:
+            cosolvent_clashes = any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer)))
+        if protein_kdtree is not None:
+            protein_clashes = any(protein_kdtree.query_ball_point(new_coords, protein_radius.value_in_unit(openmmunit.nanometer)))
+        if check_clashes:
+            if not protein_clashes and not cosolvent_clashes:
                 return True
-        elif protein_kdtree is None and cosolvent_kdtree is not None:
-            if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
-                return True
-            else: 
-                return False
+            else: return False
         else:
             return self.is_in_box(new_coords, self.lowerBound, self.vectors)
+        # if protein_kdtree is not None and not protein_clashes and not cosolvent_clashes:
+        #     if cosolvent_kdtree is not None:
+        #         if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
+        #             return True
+        #         else: return False
+        #     else:
+        #         return True
+        # elif protein_kdtree is None and cosolvent_kdtree is not None:
+        #     if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
+        #         return True
+        #     else: 
+        #         return False
+        # else:
+        #     return self.is_in_box(new_coords, self.lowerBound, self.vectors)
 
     def accept_reject(self, 
                       xyz: np.ndarray, 
@@ -636,8 +657,8 @@ class CosolventSystem:
             halton_idx = np.random.choice(len(halton))
             rotated_xyz = self.generate_rotation(xyz)
             cosolv_xyz = rotated_xyz + halton[halton_idx]
+            valid_ids = np.delete(valid_ids, halton_idx)
             if self.check_coordinates_to_add(cosolv_xyz, kdtree, protein_kdtree):
-                valid_ids = np.delete(valid_ids, halton_idx)
                 accepted = True
                 coords_to_return = cosolv_xyz
             else:
