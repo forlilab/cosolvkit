@@ -274,16 +274,16 @@ class CosolventSystem:
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
-    def add_repulsive_forces(self, residues_names: list):
+    def add_repulsive_forces(self, residues_names: list, epsilon: float=-0.01, sigma: float=12.0):
         """
             This function adds a LJ repulsive potential between the specified molecules.
 
             Args:
                 residues_names (list): list of residue names.
+                epsilon (float): depth of the potential well in kcal/mol (default: -0.01 kcal/mol)
+                sigma (float): inter-particle distance in Angstrom (default: 12 A)      
         """
-        epsilon = -0.01
         epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
-        sigma = 12
         sigma = sigma * openmmunit.angstrom
 
         forces = { force.__class__.__name__ : force for force in self.system.getForces()}
@@ -379,13 +379,6 @@ class CosolventSystem:
 
         simulation_format = simulation_format.upper()
         if simulation_format == "AMBER":
-            # Add dummy bond type for None ones so that parmed doesn't trip
-            # bond_type = parmed.BondType(1.0, 1.0, list=parmed_structure.bond_types)
-            # parmed_structure.bond_types.append(bond_type)
-            # for bond in parmed_structure.bonds:
-            #     if bond.type is None:
-            #         bond.type = bond_type
-
             parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
             parmed_structure.save(f'{out_path}/system.inpcrd', overwrite=True)
 
@@ -606,20 +599,6 @@ class CosolventSystem:
             else: return False
         else:
             return self.is_in_box(new_coords, self.lowerBound, self.vectors)
-        # if protein_kdtree is not None and not protein_clashes and not cosolvent_clashes:
-        #     if cosolvent_kdtree is not None:
-        #         if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
-        #             return True
-        #         else: return False
-        #     else:
-        #         return True
-        # elif protein_kdtree is None and cosolvent_kdtree is not None:
-        #     if not any(cosolvent_kdtree.query_ball_point(new_coords, cosolv_radius.value_in_unit(openmmunit.nanometer))):
-        #         return True
-        #     else: 
-        #         return False
-        # else:
-        #     return self.is_in_box(new_coords, self.lowerBound, self.vectors)
 
     def accept_reject(self, 
                       xyz: np.ndarray, 
