@@ -145,12 +145,14 @@ class CosolventSystem:
     def __init__(self, 
                  cosolvents: str,
                  forcefields: str,
-                 simulation_engine: str, 
+                 simulation_format: str, 
                  receptor: str = None,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
                  radius: openmmunit.Quantity = None ):
         """
             Create cosolvent system.
+            By default it accepts a pdb string for the receptor, otherwise can call
+            the from_filename method and pass a pdb file path.
 
             Args:
                 cosolvents : str
@@ -161,7 +163,7 @@ class CosolventSystem:
                     MD format that want to be used for the simulation.
                     Supported formats: Amber, Gromacs, CHARMM or openMM
                 receptor : None | str
-                    Path to the pdb file of the receptor. 
+                    PDB string of the protein. 
                     By default is None to allow cosolvent
                     simulations without receptor
                 padding : openmm.unit.Quantity
@@ -186,7 +188,7 @@ class CosolventSystem:
         self.receptor = receptor
         self.cosolvents = dict()
         
-        assert (simulation_engine.upper() in self._available_formats), f"Error! The simulation format supplied is not supported! Available simulation engines:\n\t{self._available_formats}"
+        assert (simulation_format.upper() in self._available_formats), f"Error! The simulation format supplied is not supported! Available simulation engines:\n\t{self._available_formats}"
 
         # Creating the cosolvent molecules from json file
         with open(cosolvents) as fi:
@@ -201,8 +203,6 @@ class CosolventSystem:
             print("Cleaning protein")
             top, pos = fix_pdb(receptor)
             self.modeller = app.Modeller(top, pos)
-            # if self.modeller.getTopology() is not None:
-            #     self.modeller.deleteWater()
         
         if self.receptor is None:
             assert radius is not None, "Error! If no receptor is passed, the radius parameter has to be set and it needs to be in angstrom openmm.unit"
@@ -220,10 +220,44 @@ class CosolventSystem:
         vX, vY, vZ = self.modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
         self.box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
-        self.forcefield = self._parametrize_system(forcefields, simulation_engine, self.cosolvents)
+        self.forcefield = self._parametrize_system(forcefields, simulation_format, self.cosolvents)
         print(f"Box Volume: {self.box_volume} nm**3")
         print(f"\t{self.box_volume*1000} A^3")
         return
+    
+    @classmethod
+    def from_filename(cls, 
+                      cosolvents: str,
+                      forcefields: str,
+                      simulation_format: str, 
+                      receptor: str,  
+                      padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
+                      radius: openmmunit.Quantity = None):
+        """
+            Create a CosolventSystem with receptor from the pdb file path.
+
+            Args:
+                    cosolvents : str
+                        Path to the cosolvents.json file
+                    forcefields : str
+                        Path to the forcefields.json file
+                    simulation_format : str
+                        MD format that want to be used for the simulation.
+                        Supported formats: Amber, Gromacs, CHARMM or openMM
+                    receptor : None | str
+                        PDB string of the protein. 
+                        By default is None to allow cosolvent
+                        simulations without receptor
+                    padding : openmm.unit.Quantity
+                        Specifies the padding used to create the simulation box 
+                        if no receptor is provided. Default to 12 Angstrom
+                    radius : openmm.unit.Quantity
+                        Specifies the radius to create the box without receptor.
+                        Default is None
+        """
+        with open(receptor) as fi:
+            pdb_string = fi.read()
+        return cls(cosolvents, forcefields, simulation_format, pdb_string, padding, radius)
     
 #region Public
     def build(self, 
@@ -364,7 +398,7 @@ class CosolventSystem:
             topology (app.Topology): openmm topology 
             positions (list): list of 3D coordinates of the topology
             system (System): openmm system
-            simulation_engine (str): name of the simulation engine
+            simulation_format (str): name of the simulation engine
             forcefield (app.Forcefield): openmm forcefield
             out_path (str): output path to where to save the topology files
         """

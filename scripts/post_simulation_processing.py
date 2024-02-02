@@ -1,17 +1,15 @@
 import os
 import argparse
 import json
-from collections import defaultdict
-import mdtraj
 import numpy as np
 import pandas as pd
 import MDAnalysis as mda
 from MDAnalysis.analysis import rdf
 # import freud
 import matplotlib.pyplot as plt
-import pandas as pd
 
 from cosolvkit.cosolvent_system import CoSolvent
+from cosolvkit.analysis import Report
 
 def bo(data):
     from pymbar import timeseries
@@ -179,34 +177,18 @@ def autocorrelation(data):
     return autocorr[n - 1:]
 
 def plot_autocorrelation(data, cosolvent_name1=None, cosolvent_atom1=None, cosolvent_name2=None, cosolvent_atom2=None, outpath=""):
-    equilibration = cosolvent_name1 is None and cosolvent_atom1 is None and cosolvent_name2 is None and cosolvent_atom2 is None
-    if equilibration:
-        figname = f"{outpath}/ac_equilibration.png"
-        title = f"Equilibration Auto correlation"
-    else:
-        figname = f"{outpath}/ac_{cosolvent_name1}_{cosolvent_atom1}_{cosolvent_name2}_{cosolvent_atom2}.png"
-        title = f"{cosolvent_name1} {cosolvent_atom1}-{cosolvent_name2} {cosolvent_atom2}"
-    if equilibration:
-        labels = ["Potential Energy", "Volume", "Temperature"]
-        colors = ["g", "b", "r"]
-        for d in range(len(data)):
-            sparse_data = data[d][0::10]
-            autocorr_values = autocorrelation(sparse_data)
-            # Normalize autocorrelation values for better plotting
-            normalized_autocorr = autocorr_values / np.max(np.abs(autocorr_values))
-            lags = np.arange(0, len(autocorr_values))
-            plt.stem(lags, normalized_autocorr, colors[d], markerfmt='D', label=labels[d])
-    else:
-        data = data[0::2]
-        autocorr_values = autocorrelation(data)
-        # Normalize autocorrelation values for better plotting
-        normalized_autocorr = autocorr_values / np.max(np.abs(autocorr_values))
-        lags = np.arange(0, len(autocorr_values))
-        # markerline, stemlines, baseline = plt.stem(lags, normalized_autocorr, linefmt='grey', markerfmt='D')
-        # markerline.set_markerfacecolor('none')
-        ax = pd.plotting.autocorrelation_plot(pd.Series(normalized_autocorr))
-        ax.set_xlim([0, len(autocorr_values)])
+    """
 
+    """
+    figname = f"{outpath}/ac_{cosolvent_name1}_{cosolvent_atom1}_{cosolvent_name2}_{cosolvent_atom2}.png"
+    title = f"{cosolvent_name1} {cosolvent_atom1}-{cosolvent_name2} {cosolvent_atom2}"
+    data = data[0::2]
+    autocorr_values = autocorrelation(data)
+    # Normalize autocorrelation values for better plotting
+    normalized_autocorr = autocorr_values / np.max(np.abs(autocorr_values))
+    lags = np.arange(0, len(autocorr_values))
+    ax = pd.plotting.autocorrelation_plot(pd.Series(normalized_autocorr))
+    ax.set_xlim([0, len(autocorr_values)])
     plt.title(title)
     plt.legend()
     plt.xlabel('Lag')
@@ -238,35 +220,33 @@ if __name__ == "__main__":
     out_path = args.out_path
     cosolvents_path = args.cosolvents
 
-    with open(cosolvents_path) as fi:
-        cosolvents_d = json.load(fi)
+    report = Report(log_file, traj_file, top_file, cosolvents_path)
+    report.generate_report(out_path=out_path, analysis_selection_string="")
+    # with open(cosolvents_path) as fi:
+    #     cosolvents_d = json.load(fi)
     
-    cosolvents = list()
-    for cosolvent in cosolvents_d:
-        cosolvents.append(CoSolvent(**cosolvent))
-    rdf_path = os.path.join(out_path, "rdf")
-    ac_path = os.path.join(out_path, "autocorrelation")
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
-    if not os.path.exists(rdf_path):
-        os.makedirs(rdf_path)
-    if not os.path.exists(ac_path):
-        os.makedirs(ac_path)
+    # cosolvents = list()
+    # for cosolvent in cosolvents_d:
+    #     cosolvents.append(CoSolvent(**cosolvent))
+    # rdf_path = os.path.join(out_path, "rdf")
+    # ac_path = os.path.join(out_path, "autocorrelation")
+    # if not os.path.exists(out_path):
+    #     os.makedirs(out_path)
+    # if not os.path.exists(rdf_path):
+    #     os.makedirs(rdf_path)
+    # if not os.path.exists(ac_path):
+    #     os.makedirs(ac_path)
 
-    # Equilibration
-    pot_e, temp, vol = get_temp_vol_pot(log_file)
-    plot_temp_vol_pot(pot_e, temp, vol, outpath=out_path+"/equilibration_plot.png")
+    # # Equilibration
+    # pot_e, temp, vol = get_temp_vol_pot(log_file)
+    # plot_temp_vol_pot(pot_e, temp, vol, outpath=out_path+"/equilibration_plot.png")
     
-    irdf_results = rdf_mda(traj_file, top_file, cosolvents, rdf_path)
-    for pair in irdf_results:
-        cosolvent_name1, cosolvent_atom1, cosolvent_name2, cosolvent_atom2 = pair
-        plot_autocorrelation(data=irdf_results[pair],
-                             cosolvent_name1=cosolvent_name1,
-                             cosolvent_atom1=cosolvent_atom1,
-                             cosolvent_name2=cosolvent_name2,
-                             cosolvent_atom2=cosolvent_atom2,
-                             outpath=ac_path)
-    # plot_autocorrelation([pot_e, vol, temp], outpath=ac_path)
-    # plot_autocorrelation(data=pot_e, parameter="Potential Energy", outpath=ac_path)
-    # plot_autocorrelation(data=temp, parameter="Temperature (K)", outpath=ac_path)
-    # plot_autocorrelation(data=vol, parameter="Volume", outpath=ac_path)
+    # irdf_results = rdf_mda(traj_file, top_file, cosolvents, rdf_path)
+    # for pair in irdf_results:
+    #     cosolvent_name1, cosolvent_atom1, cosolvent_name2, cosolvent_atom2 = pair
+    #     plot_autocorrelation(data=irdf_results[pair],
+    #                          cosolvent_name1=cosolvent_name1,
+    #                          cosolvent_atom1=cosolvent_atom1,
+    #                          cosolvent_name2=cosolvent_name2,
+    #                          cosolvent_atom2=cosolvent_atom2,
+    #                          outpath=ac_path)
