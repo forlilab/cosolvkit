@@ -9,6 +9,7 @@ import MDAnalysis as mda
 from MDAnalysis.analysis import rdf
 # import freud
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from cosolvkit.cosolvent_system import CoSolvent
 
@@ -71,7 +72,7 @@ def rdf_mda(traj: str, top: str, cosolvents: list, outpath=None, n_frames=250):
         wat_resname = "WAT"
     oxygen_atoms = u.select_atoms(f"resname {wat_resname} and name O")
     sim_frames = len(u.trajectory)
-    n_bins = sim_frames
+    n_bins = 300
     irdf_results = {}
     for cosolvent in cosolvents:
         cosolvent_name = cosolvent.resname
@@ -95,7 +96,7 @@ def rdf_mda(traj: str, top: str, cosolvents: list, outpath=None, n_frames=250):
             ax[0][0].set_xlabel(r'$r$ $\AA$')
             ax[0][0].set_ylabel("$g(r)$")
             ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} every 1k frames")
-            ax[0][0].legend()
+            ax[0][0].legend()         
 
             irdf = rdf.InterRDF(atoms, atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
             irdf.run(start=0, stop=250)
@@ -189,17 +190,23 @@ def plot_autocorrelation(data, cosolvent_name1=None, cosolvent_atom1=None, cosol
         labels = ["Potential Energy", "Volume", "Temperature"]
         colors = ["g", "b", "r"]
         for d in range(len(data)):
-            autocorr_values = autocorrelation(data[d])
+            sparse_data = data[d][0::10]
+            autocorr_values = autocorrelation(sparse_data)
             # Normalize autocorrelation values for better plotting
             normalized_autocorr = autocorr_values / np.max(np.abs(autocorr_values))
             lags = np.arange(0, len(autocorr_values))
-            plt.stem(lags, normalized_autocorr, colors[d], markerfmt='o', label=labels[d])
+            plt.stem(lags, normalized_autocorr, colors[d], markerfmt='D', label=labels[d])
     else:
+        data = data[0::2]
         autocorr_values = autocorrelation(data)
         # Normalize autocorrelation values for better plotting
         normalized_autocorr = autocorr_values / np.max(np.abs(autocorr_values))
         lags = np.arange(0, len(autocorr_values))
-        plt.stem(lags, normalized_autocorr, basefmt="k-")
+        # markerline, stemlines, baseline = plt.stem(lags, normalized_autocorr, linefmt='grey', markerfmt='D')
+        # markerline.set_markerfacecolor('none')
+        ax = pd.plotting.autocorrelation_plot(pd.Series(normalized_autocorr))
+        ax.set_xlim([0, len(autocorr_values)])
+
     plt.title(title)
     plt.legend()
     plt.xlabel('Lag')
@@ -259,7 +266,7 @@ if __name__ == "__main__":
                              cosolvent_name2=cosolvent_name2,
                              cosolvent_atom2=cosolvent_atom2,
                              outpath=ac_path)
-    plot_autocorrelation([pot_e, vol, temp], outpath=ac_path)
+    # plot_autocorrelation([pot_e, vol, temp], outpath=ac_path)
     # plot_autocorrelation(data=pot_e, parameter="Potential Energy", outpath=ac_path)
     # plot_autocorrelation(data=temp, parameter="Temperature (K)", outpath=ac_path)
     # plot_autocorrelation(data=vol, parameter="Volume", outpath=ac_path)

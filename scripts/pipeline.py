@@ -80,7 +80,9 @@ def run_simulation( simulation_format: str = 'OPENMM',
     integrator = LangevinMiddleIntegrator(Tstart * openmmunit.kelvin,
                                           1 / openmmunit.picosecond,
                                           0.001 * openmmunit.picosecond)
-    integrator.setRandomNumberSeed(seed)
+    if seed is not None:
+        integrator.setRandomNumberSeed(seed)
+        
     simulation = Simulation(topology, system, integrator, platform)
 
     print('Adding reporters to the simulation')
