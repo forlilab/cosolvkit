@@ -133,7 +133,7 @@ def run_simulation( simulation_format: str = 'OPENMM',
     integrator.setStepSize(0.004 * openmmunit.picoseconds)
 
     print(f'Adding a Montecarlo Barostat to the system')
-    cosolv_system.system.addForce(MonteCarloBarostat(1 * openmmunit.bar, Tend * openmmunit.kelvin))
+    system.addForce(MonteCarloBarostat(1 * openmmunit.bar, Tend * openmmunit.kelvin))
     simulation.context.reinitialize(preserveState=True)
 
     print(f"Running simulation in NPT ensemble for {simulation_steps*0.004/1000} ns")
