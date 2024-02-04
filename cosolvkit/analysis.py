@@ -22,7 +22,7 @@ from MDAnalysis.analysis.base import AnalysisBase
 import matplotlib.pyplot as plt
 import pandas as pd
 from pymol import cmd, stored
-from cosolvkit.cosolvent_system import CoSolvent
+from cosolvkit.cosolvent_system import CosolventMolecule
 
 
 BOLTZMANN_CONSTANT_KB = 0.0019872041
@@ -215,7 +215,7 @@ class Report:
         with open(cosolvents_path) as fi:
             cosolvents_d = json.load(fi)
         for cosolvent in cosolvents_d:
-            self.cosolvents.append(CoSolvent(**cosolvent))
+            self.cosolvents.append(CosolventMolecule(**cosolvent))
     
     def generate_report(self, out_path, analysis_selection_string=""):
         print("Generating report...")

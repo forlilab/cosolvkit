@@ -133,9 +133,9 @@ You already have your system ready and it contains a super fancy lipid membrane 
 **Disclaimer**: You will have issue with systems prepared with CHARMM-GUI. The conversion step to the amber format using `charmmlipid2amber.py` does not produce a readable file by `tleap` (at least on my side...).
 
 ```python
-from cosolvkit import CoSolventBox
+from cosolvkit import CosolventBox
 
-cosolv = CoSolventBox(use_existing_waterbox=True)
+cosolv = CosolventBox(use_existing_waterbox=True)
 cosolv.add_receptor("bilayer_protein.pdb")
 cosolv.add_cosolvent(name='benzene', concentration=1.0, smiles='c1ccccc1')
 cosolv.build()

@@ -1,14 +1,4 @@
-import os
 import argparse
-import json
-import numpy as np
-import pandas as pd
-import MDAnalysis as mda
-from MDAnalysis.analysis import rdf
-# import freud
-import matplotlib.pyplot as plt
-
-from cosolvkit.cosolvent_system import CoSolvent
 from cosolvkit.analysis import Report
 
 def cmd_lineparser():

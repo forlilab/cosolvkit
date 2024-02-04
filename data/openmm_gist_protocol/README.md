@@ -9,10 +9,10 @@ $ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --dry --nohyd --pdb
 
 ### Water box preparation
 ```python
-from cosolvkit import CoSolventBox
+from cosolvkit import CosolventBox
 
 # Will add a padding of 5 A in each dimension to the 20x20x20 box, plus 12 A of padding for the water 
-cosolv = CoSolventBox(concentration=0, cutoff=12, box="orthorombic", center=[10, 0, -12], box_size=[20, 20, 20])
+cosolv = CosolventBox(concentration=0, cutoff=12, box="orthorombic", center=[10, 0, -12], box_size=[20, 20, 20])
 cosolv.add_receptor("protein_prepared.pdb") # Otherwise `protein_clean.pdb` if fails
 cosolv.build()
 cosolv.export(prefix="gist")

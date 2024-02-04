@@ -130,29 +130,3 @@ dmypy.json
 
 #VSCode
 .vscode
-
-#PDB Files
-*.pdb
-results/simulation.chk
-results/simulation.dcd
-results/simulation.nc
-results/system.inpcrd
-results/system.prmtop
-*.ipynb
-*.mol
-cosolvents_diogo.json
-cosolvents_small.json
-results/system.xml
-results/.DS_Store
-data/.DS_Store
-.DS_Store
-simulation_results
-simulation_results.tar.gz
-results/lysozyme/system.inpcrd
-results/lysozyme/system.prmtop
-results/lysozyme/system.xml
-*.prmtop
-*.inpcrd
-*.mol2
-*.lib
-*.frcmod

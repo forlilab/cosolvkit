@@ -18,10 +18,10 @@ from openmmforcefields.generators import EspalomaTemplateGenerator, GAFFTemplate
 from openmmforcefields.generators.template_generators import SmallMoleculeTemplateGenerator
 from cosolvkit.utils import fix_pdb
 
-class CoSolvent:
+class CosolventMolecule:
 
     def __init__(self, name, smiles=None, mol_filename=None, resname=None, copies=None, concentration=None):
-        """Create a CoSolvent object.
+        """Create a Cosolvent object.
 
         Parameters
         ----------
@@ -195,7 +195,7 @@ class CosolventSystem:
         with open(cosolvents) as fi:
             cosolvents_dict = json.load(fi)
         for c in cosolvents_dict:
-            cosolvent = CoSolvent(**c)
+            cosolvent = CosolventMolecule(**c)
             cosolvent_xyz = cosolvent.positions*openmmunit.angstrom
             cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
             self.cosolvents[cosolvent] = cosolvent_xyz
@@ -294,7 +294,7 @@ class CosolventSystem:
         elif solvent_smiles is not None:
             c = {"name": "solvent",
                  "smiles": solvent_smiles}
-            solvent_mol = CoSolvent(**c)
+            solvent_mol = CosolventMolecule(**c)
             cosolv_xyz = solvent_mol.positions*openmmunit.angstrom
             if n_solvent_molecules is not None:
                 solvent_mol.copies = n_solvent_molecules
