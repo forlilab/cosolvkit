@@ -44,10 +44,10 @@ Cosolvent System definition
 import openmm.unit as openmmunit
 from cosolvkit.cosolvent_system import CosolventSystem
 # If starting from PDB file path
-cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, radius=None)
 
 # If starting from a pdb string or without receptor
-cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=None)
 
 # If creating a cosolvent box without receptor
 cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, None, radius=10*openmmunit.angstrom)
@@ -144,80 +144,19 @@ cosolv.prepare_system_for_amber(filename='tleap.cmd', prmtop_filename='cosolv_sy
                                 inpcrd_filename='cosolv_system.inpcrd')
 ```
 
-## Keep existing water molecules
-
-You already placed water molecules at some very strategic positions around a ligand, for example, and you want to keep them. That's also easy to do!
-
-```python
-from cosolvkit import CoSolventBox
-
-cosolv = CoSolventBox(box='orthorombic', cutoff=12, keep_existing_water=True)
-cosolv.add_receptor("complex_protein_ligand.pdb")
-cosolv.build()
-cosolv.export_pdb(filename='system.pdb')
-cosolv.prepare_system_for_amber(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
-                                inpcrd_filename='cosolv_system.inpcrd')
-```
-
-## Add centroid-repulsive potential with OpenMM
+## Add centroid-repulsive potential
 
 To overcome aggregation of small hydrophobic molecules at high concentration (1 M), a repulsive interaction energy between fragments can be added, insuring a faster sampling. This repulsive potential is applied only to the selected fragments, without perturbing the interactions between fragments and the protein. The repulsive potential is implemented by adding a virtual site (massless particle) at the geometric center of each fragment, and the energy is described using a Lennard-Jones potential (epsilon = -0.01 kcal/mol and sigma = 12 Angstrom).
 
-Luckily for us, OpenMM is flexible enough to make the addition of this repulsive potential between fragments effortless (for you). The addition of centroids in fragments and the repulsive potential to the `System` holds in one line using the `add_repulsive_centroid_force` function. Thus making the integration very easy in existing OpenMM protocols. In this example, a mixture of benzene (`BEN`) and propane (`PRP`) was generated at approximately 1 M in a small box of 40 x 40 x 40 Angstrom (see `data` directory). The MD simulation will be run in NPT condition at 300 K during 100 ps using periodic boundary conditions.
+Luckily for us, OpenMM is flexible enough to make the addition of this repulsive potential between fragments effortless (for you). The addition of centroids in fragments and the repulsive potential to the `System` holds in one line using the `add_repulsive_centroid_force` function. Thus making the integration very easy in existing OpenMM protocols. In this example, we are adding repulsive forces between `BEN` and `PRP` molecules.
 
 ```python
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
+from cosolvkit.cosolvent_system import CosolventSystem
 
-from openmm.app import *
-from openmm import *
-from mdtraj.reporters import DCDReporter
-
-from cosolvkit import utils
-
-
-# Read file
-prmtop = AmberPrmtopFile('cosolv_ben_prp_system.prmtop')
-inpcrd = AmberInpcrdFile('cosolv_ben_prp_system.inpcrd')
-
-# Configuration system
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=12 * unit.angstrom, constraints=HBonds, hydrogenMass=3 * unit.amu)
-
-# This is where the magic is happening!
-# Add harmonic constraints on protein if present
-#atom_idxs = utils.add_harmonic_restraints(prmtop, inpcrd, system, "protein and not element H", 2.5)
-#print('Number of particles constrainted: %d' % len(atom_idxs))
-
-# Add centroids and repulsive forces
-n_particles, virtual_site_idxs, repulsive_force_id = utils.add_repulsive_centroid_force(prmtop, inpcrd, system, residue_names=["BEN", "PRP"])
-print("Number of particles before adding centroids: %d" % n_particles)
-print('Number of centroids added: %d' % len(virtual_site_idxs))
-# The magic ends here.
-
-# NPT
-properties = {"Precision": "mixed"}
-platform = Platform.getPlatformByName('OpenCL')
-system.addForce(MonteCarloBarostat(1 * unit.bar, 300 * unit.kelvin))
-integrator = LangevinMiddleIntegrator(300 * unit.kelvin, 1 / unit.picosecond, 4 * unit.femtoseconds)
-simulation = Simulation(prmtop.topology, system, integrator, platform, properties)
-simulation.context.setPositions(inpcrd.positions)
-
-# Energy minimization
-simulation.minimizeEnergy()
-
-# MD simulations - equilibration(10 ps)
-simulation.step(2500)
-
-# MD simulations - production (200 ps, of course it has to be much more!)
-# Write every atoms except centroids
-simulation.reporters.append(DCDReporter('cosolv_repulsive.dcd', 250, atomSubset=range(n_particles)))
-simulation.reporters.append(CheckpointReporter('cosolv_repulsive.chk', 2500))
-simulation.reporters.append(StateDataReporter("openmm.log" 250, step=True, time=True, 
-                                              potentialEnergy=True, kineticEnergy=True, 
-                                              totalEnergy=True, temperature=True, volume=True, 
-                                              density=True, speed=True))
-simulation.step(25000)
+cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+# build the system in water
+cosolv.build(neutralize=True)
+cosolv.add_repulsive_forces(resiude_names=["BEN", "PRP"])
 ```
 
 ## List of cosolvent molecules
