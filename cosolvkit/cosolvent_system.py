@@ -1,6 +1,6 @@
 import json
 import os
-import time
+import io
 from collections import defaultdict
 import numpy as np
 from scipy import spatial
@@ -148,7 +148,8 @@ class CosolventSystem:
                  simulation_format: str, 
                  receptor: str = None,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
-                 radius: openmmunit.Quantity = None ):
+                 radius: openmmunit.Quantity = None,
+                 clean_protein: bool=False):
         """
             Create cosolvent system.
             By default it accepts a pdb string for the receptor, otherwise can call
@@ -201,7 +202,11 @@ class CosolventSystem:
 
         if receptor is not None:
             print("Cleaning protein")
-            top, pos = fix_pdb(receptor)
+            if clean_protein:
+                top, pos = fix_pdb(receptor)
+            else:
+                pdbfile = app.PDBFile(io.StringIO(receptor))
+                top, pos = pdbfile.topology, pdbfile.positions
             self.modeller = app.Modeller(top, pos)
         
         if self.receptor is None:

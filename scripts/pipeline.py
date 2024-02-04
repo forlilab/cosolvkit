@@ -16,10 +16,10 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
         radius = radius * openmmunit.angstrom
         
     # If starting from PDB file path
-    # cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+    cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path)
 
     # If starting from a pdb string or without receptor
-    cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+    # cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
 
     cosolv.build(use_halton=True)
     # cosolv.modeller.addMembrane(cosolv.forcefield, 

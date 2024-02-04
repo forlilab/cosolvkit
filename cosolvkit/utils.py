@@ -305,7 +305,7 @@ def fix_pdb(pdb_string: str, save=False):
         pdb_filename (str): pdb string
     """
     # path = os.getcwd()
-    fixer = pdbfixer.PDBFixer(pdb_file=pdb_string)
+    fixer = pdbfixer.PDBFixer(pdbfile=pdb_string)
     fixer.findMissingResidues()
 
     chains = list(fixer.topology.chains())
