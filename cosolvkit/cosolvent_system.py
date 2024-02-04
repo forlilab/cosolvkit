@@ -231,8 +231,7 @@ class CosolventSystem:
                       forcefields: str,
                       simulation_format: str, 
                       receptor: str,  
-                      padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
-                      radius: openmmunit.Quantity = None):
+                      padding: openmmunit.Quantity = 12*openmmunit.angstrom):
         """
             Create a CosolventSystem with receptor from the pdb file path.
 
@@ -257,14 +256,13 @@ class CosolventSystem:
         """
         with open(receptor) as fi:
             pdb_string = fi.read()
-        return cls(cosolvents, forcefields, simulation_format, pdb_string, padding, radius)
+        return cls(cosolvents, forcefields, simulation_format, pdb_string, padding, None)
     
 #region Public
-    def build(self, 
-              
+    def build(self,
               solvent_smiles: str="H2O", 
-              
               n_solvent_molecules: int=None,
+              neutralize: bool=False,
               use_halton: bool=True):
         """This function adds thd cosolvents specified in the CosolvSystem
         and solvates with the desired solvent. If n_solvent_molecules is not passed
@@ -275,6 +273,7 @@ class CosolventSystem:
         Args:
             solvent_smiles (str, optional): smiles string defining the desired solvent to use. Defaults to "H2O".
             n_solvent_molecules (int, optional): number of mulecules of solvent to add. Defaults to None.
+            neutralize (bool, optional): if True, the system charge will be neutralized by OpenMM. Defaults to False.
             use_halton (bool, optional): if True, it'll use halton sequence to generate cosolvent placement, otherwise
                                          it'll use normal random python module. Defaults to True.
         """
@@ -284,8 +283,8 @@ class CosolventSystem:
         cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions, use_halton)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
         if solvent_smiles == "H2O":
-            if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=False)
-            else: self.modeller.addSolvent(self.forcefield, numAdded=n_solvent_molecules, neutralize=False)
+            if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=neutralize)
+            else: self.modeller.addSolvent(self.forcefield, numAdded=n_solvent_molecules, neutralize=neutralize)
             print(f"Waters added: {self._get_n_waters()}")
         elif solvent_smiles is not None:
             c = {"name": "solvent",
