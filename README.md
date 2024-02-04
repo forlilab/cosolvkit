@@ -74,7 +74,7 @@ cosolv.save_topology(cosolv.modeller.topology,
 3. **Run MD simulations**
 If you don't want to setup your own simulation, we provide a standard simulation protocol using `OpenMM`
 
-```pyhton
+```python
 from cosolvkit.simulation import run_simulation
 
 print("Running MD simulation")
