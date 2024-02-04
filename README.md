@@ -1,7 +1,7 @@
 [![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE)
 
-# CoSolvKit
-The python package for creating cosolvent box
+# CosolvKit
+The python package for creating cosolvent system
 
 ## Prerequisites
 
@@ -16,16 +16,20 @@ You need, at a minimum (requirements):
 * griddataformats
 * MDTraj
 * OpenMM
+* PDBFixer
+* espaloma
+* pymol
 
 ## Installation
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
 $ conda create -n cosolvkit -c conda-forge python=3 numpy scipy mkl \
-rdkit ambertools parmed mdanalysis griddataformats openmm mdtraj
+rdkit ambertools parmed mdanalysis griddataformats openmm pdbfixer \
+mdtraj espaloma pymol-open-source
 $ conda activate cosolvkit
 ```
 
-Finally, we can install the `CoSolvKit` package
+Finally, we can install the `CosolvKit` package
 ```bash
 $ git clone https://github.com/forlilab/cosolvkit
 $ cd cosolvkit
@@ -35,54 +39,90 @@ $ pip install -e .
 ## Quick tutorial
 
 1. **Preparation**
+Cosolvent System definition
 ```python
-from cosolvkit import CoSolventBox
+import openmm.unit as openmmunit
+from cosolvkit.cosolvent_system import CosolventSystem
+# If starting from PDB file path
+cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
 
-cosolv = CoSolventBox(box='cubic', cutoff=12)
-cosolv.add_receptor("protein.pdb")
-cosolv.add_cosolvent(name='benzene', concentration=0.5, smiles='c1ccccc1')
-cosolv.add_cosolvent(name='methanol', concentration=1.0, smiles='CO', resname="MEH")
-cosolv.add_cosolvent(name='propane', concentration=0.5, smiles='CCC', resname="PRP")
-cosolv.add_cosolvent(name='imidazole', concentration=1.0, smiles='C1=CN=CN1')
-cosolv.add_cosolvent(name='acetamide', copies=10, smiles='CC(=O)NC', resname="ACM")
-cosolv.build()
-cosolv.export_pdb(filename="cosolv_system.pdb")
-cosolv.prepare_system_for_amber(filename="tleap.cmd", prmtop_filename="cosolv_system.prmtop",
-                                inpcrd_filename="cosolv_system.inpcrd")
+# If starting from a pdb string or without receptor
+cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+
+# If creating a cosolvent box without receptor
+cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, None, radius=10*openmmunit.angstrom)
+```
+Cosolvent System creation
+```python
+# If using water as solvent
+cosolv.build(neutralize=True)
+
+# If using different solvent i.e. methanol
+cosolv.build(solvent_smiles="CH3OH")
 ```
 
-2. **Run tleap to create Amber topology and coordinates files**
-```bash
-tleap -s -f tleap.cmd # Here you can specify disulfide bridges, salt concentration, etc...
+Saving Cosolvent System according to the simulation_format
+```python
+cosolv.save_topology(cosolv.modeller.topology, 
+                     cosolv.modeller.positions,
+                     cosolv.system,
+                     simulation_format,
+                     cosolv.forcefield,
+                     output_path)
 ```
 
 3. **Run MD simulations**
-```
-See Amber/OpenMM input files in the data/amber_protocol and data/openmm_protocol directory.
+If you don't want to setup your own simulation, we provide a standard simulation protocol using ```OpenMM```
+```pyhton
+from cosolvkit.simulation import run_simulation
+
+print("Running MD simulation")
+start = time.time()
+# Depending on the simulation format you would pass either a topology and positions file or a pdb and system file
+run_simulation(
+                simulation_format = simulation_format,
+                topology = None,
+                positions = None,
+                pdb = 'system.pdb',
+                system = 'system.xml',
+                warming_steps = 100000,
+                simulation_steps = 6250000, # 25ns
+                results_path = results_path, # This should be the name of system being simulated
+                seed=None
+    )
+print(f"Simulation finished after {(time.time() - start)/60:.2f} min.")
 ```
 
 4. **Analysis**
 ```python
-from MDAnalysis import Universe
+from cosolvkit.analysis import Report
+"""
+Report class:
+    log_file: is the statistics.csv or whatever log_file produced during the simulation.
+        At least Volume, Temperature and Pot_e should be reported on this log file.
+    traj_file: trajectory file
+    top_file: topology file
+    cosolvents_file: json file describing the cosolvents
 
-from cosolvkit import Analysis
+generate_report_():
+    out_path: where to save the results. 3 folders will be created:
+        - report
+            - autocorrelation
+            - rdf
+    analysis_selection_string: selection string of cosolvents you want to analyse. This
+        follows MDAnalysis selection strings style. If no selection string, one density file
+        for each cosolvent will be created.
 
-u = Universe("cosolvent_system.prmtop", ["traj_1.nc", "traj_2.nc"])
-# Volume occupied by the water molecules, obtained during the preparation
-volume = 423700.936 # A**3
-temperature = 300. # K
-
-a = Analysis(u.select_atoms("(resname BEN or resname PRP)"), verbose=True)
-a.run()
-a.atomic_grid_free_energy(volume, temperature)
-a.export_density("map_density_hydrophobe.dx")
-a.export_atomic_grid_free_energy("map_agfe_hydrophobe.dx")
-
-a = Analysis(u.select_atoms("(resname MEH or resname ACM) and name O*"), verbose=True)
-a.run()
-a.atomic_grid_free_energy(volume, temperature)
-a.export_density("map_density_O.dx")
-a.export_atomic_grid_free_energy("map_agfe_O.dx")
+generate_pymol_report()
+    selection_string: important residues to select and show in the PyMol session.
+"""
+report = Report(log_file, traj_file, top_file, cosolvents_file)
+report.generate_report(out_path=out_path, analysis_selection_string="")
+report.generate_pymol_reports(report.topology, 
+                              report.trajectory, 
+                              density_file=report.density_file, 
+                              selection_string='', 
+                              out_path=out_path)
 ```
 
 ## Add cosolvent molecules to pre-existing waterbox

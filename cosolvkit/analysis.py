@@ -21,6 +21,7 @@ from MDAnalysis.analysis import rdf
 from MDAnalysis.analysis.base import AnalysisBase
 import matplotlib.pyplot as plt
 import pandas as pd
+from pymol import cmd, stored
 from cosolvkit.cosolvent_system import CoSolvent
 
 
@@ -208,6 +209,7 @@ class Report:
         self.trajectory = traj_file
         self.topology = top_file
         self.universe = Universe(self.topology, self.trajectory)
+        self.density_file = None
         self.cosolvents = list()
 
         with open(cosolvents_path) as fi:
@@ -248,26 +250,80 @@ class Report:
                 self._run_analysis(selection_string=selection_string,
                                    volume=volume,
                                    temperature=temperature,
+                                   out_path=out_path,
                                    cosolvent_name=cosolvent.resname)
         else:
             print(f"Generating density maps for the following selection string: {analysis_selection_string}")
             self._run_analysis(selection_string=analysis_selection_string, 
                                volume=volume,
                                temperature=temperature,
+                               out_path=out_path,
                                cosolvent_name=None)
         return
     
-    def _run_analysis(self, selection_string, volume, temperature, cosolvent_name=None):
-        fig_density_name = f"map_density.dx"
-        fig_energy_name =  f"map_agfe.dx"
+    def generate_pymol_reports(self, topology, trajectory, density_file, selection_string, out_path):
+        # Load topology and first frame of the trajectory
+        cmd.load(topology, "structure")
+        cmd.load_traj(trajectory, start=0, stop=1)
+        # Load density
+        cmd.load(density_file, "density_map")
+        # Set structure's color
+        cmd.color("grey80", "structure and name C*")
+        # Remove solvent and organic molecules
+        cmd.remove("solvent")
+        cmd.remove("org")
+        # Create isomesh for hydrogen bond probes
+        cmd.isomesh("hbonds", "density_map", 10)
+        # Color the hydrgen bond isomesh
+        cmd.color("marine", "hbonds")
+        # Show sticks for the residues of interest
+        cmd.show("sticks", selection_string)
+        # Set valence to 0 - no double bonds
+        cmd.set("valence", 0)
+        # Set cartoon_side_chain_helper to 1 - less messy
+        cmd.set("cartoon_side_chain_helper", 1)
+        # Set background color
+        cmd.bg_color("white")
+        
+        cmd_string = f"cmd.load('{topology}', 'structure')\n\
+                      cmd.load_traj('{trajectory}', start=0, stop=1)\n\
+                      # Load density\n\
+                      cmd.load('{density_file}', 'density_map')\n\
+                      # Set structure's color\n\
+                      cmd.color('grey80', 'structure and name C*')\n\
+                      # Remove solvent and organic molecules\n\
+                      cmd.remove('solvent')\n\
+                      cmd.remove('org')\n\
+                      # Create isomesh for hydrogen bond probes\n\
+                      cmd.isomesh('hbonds', 'density_map', 10)\n\
+                      # Color the hydrgen bond isomesh\n\
+                      cmd.color('marine', 'hbonds')\n\
+                      # Show sticks for the residues of interest\n\
+                      cmd.show('sticks', '{selection_string}')\n\
+                      # Set valence to 0 - no double bonds\n\
+                      cmd.set('valence', 0)\n\
+                      # Set cartoon_side_chain_helper to 1 - less messy\n\
+                      cmd.set('cartoon_side_chain_helper', 1)\n\
+                      # Set background color\n\
+                      cmd.bg_color('white')"
+        with open(os.path.join(out_path, "pymol_session_cmd.pml"), "w") as fo:
+            fo.write(cmd_string)
+            
+        cmd.save(os.path.join(out_path, "pymol_results_session.pse"))
+        return
+    
+    def _run_analysis(self, selection_string, volume, temperature, out_path, cosolvent_name=None):
+        fig_density_name = os.path.join(out_path, f"map_density.dx")
+        fig_energy_name =  os.path.join(out_path, f"map_agfe.dx")
         if cosolvent_name is not None:
-            fig_density_name = f"map_density_{cosolvent_name}.dx"
-            fig_energy_name =  f"map_agfe_{cosolvent_name}.dx"
+            fig_density_name = os.path.join(out_path, f"map_density_{cosolvent_name}.dx")
+            fig_energy_name =  os.path.join(out_path, f"map_agfe_{cosolvent_name}.dx")
         analysis = Analysis(self.universe.select_atoms(selection_string), verbose=True)
         analysis.run()
         analysis.atomic_grid_free_energy(volume, temperature)
         analysis.export_density(fig_density_name)
         analysis.export_atomic_grid_free_energy(fig_energy_name)
+        self.density_file = fig_density_name
         return
         
 
