@@ -16,6 +16,8 @@ You need, at a minimum (requirements):
 * griddataformats
 * MDTraj
 * OpenMM
+* OpenMM-ForceFields
+* OpenFF-toolkit
 * PDBFixer
 * espaloma
 * pymol
@@ -24,8 +26,8 @@ You need, at a minimum (requirements):
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
 $ conda create -n cosolvkit -c conda-forge python=3 numpy scipy mkl \
-rdkit ambertools parmed mdanalysis griddataformats openmm pdbfixer \
-mdtraj espaloma pymol-open-source
+rdkit ambertools parmed mdanalysis griddataformats openmm openmmforcefields \
+openff-toolkit pdbfixer mdtraj espaloma pymol-open-source
 $ conda activate cosolvkit
 ```
 

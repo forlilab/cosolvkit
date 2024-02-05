@@ -25,7 +25,7 @@ def run_simulation( simulation_format: str = 'OPENMM',
         raise ValueError(f"Unknown simulation_format {simulation_format}. It must be one of 'OPENMM', 'AMBER', 'GROMACS', or 'CHARMM'.")
     
     if simulation_format.upper() != "OPENMM":
-        assert topology is not None and positions is not None, "If the simulation format specified is OpenMM be sure to pass both pdb file and system.xml"
+        assert topology is not None and positions is not None, "If the simulation format specified is not OpenMM be sure to pass both topology and positions files"
         if simulation_format.upper() == "AMBER":
             topology = AmberPrmtopFile(topology)
             positions = AmberInpcrdFile(positions)
@@ -35,6 +35,10 @@ def run_simulation( simulation_format: str = 'OPENMM',
         elif simulation_format.upper() == "CHARMM":
             topology = CharmmPsfFile(topology)
             positions = CharmmCrdFile(positions)
+        system = topology.createSystem(nonbondedMethod=PME,
+                                       nonbondedCutoff=10*openmmunit.angstrom,
+                                       constraints=HBonds,
+                                       hydrogenMass=1.5*openmmunit.amu)
     else:
         assert pdb is not None and system is not None, "If the simulation format specified is OpenMM be sure to pass both pdb file and system.xml"
         pdb = PDBFile(f'{results_path}/system.pdb')
@@ -86,7 +90,11 @@ def run_simulation( simulation_format: str = 'OPENMM',
     simulation.reporters.append(CheckpointReporter(os.path.join(results_path,"simualtion.chk"), 250000)) 
 
     print("Setting positions for the simulation")
-    simulation.context.setPositions(positions)
+    try:
+        simulation.context.setPositions(positions)
+    except ValueError:
+        # This is probably a bug in openmm that raises when loading inpcrd files for positions
+        simulation.context.setPositions(positions.positions.value_in_unit(openmmunit.nanometer))
 
     print("Minimizing system's energy")
     simulation.minimizeEnergy()

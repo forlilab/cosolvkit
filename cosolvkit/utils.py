@@ -307,7 +307,7 @@ def fix_pdb(pdb_string: str, save=False):
     # path = os.getcwd()
     fixer = pdbfixer.PDBFixer(pdbfile=pdb_string)
     fixer.findMissingResidues()
-
+    
     chains = list(fixer.topology.chains())
     keys = fixer.missingResidues.keys()
     for key in list(keys):
@@ -315,9 +315,9 @@ def fix_pdb(pdb_string: str, save=False):
         if key[1] == 0 or key[1] == len(list(chain.residues())):
             del fixer.missingResidues[key]
 
-    fixer.removeHeterogens(keepWater=True)
+    # fixer.removeHeterogens(keepWater=False)
 
-    fixer.findMissingAtoms()
+    fixer.findMissingAtoms() 
     fixer.addMissingAtoms()
     fixer.addMissingHydrogens(7)
     # if save:

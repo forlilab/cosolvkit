@@ -173,6 +173,10 @@ class CosolventSystem:
                 radius : openmm.unit.Quantity
                     Specifies the radius to create the box without receptor.
                     Default is None
+                clean_protein : bool
+                    Determines if the protein will be cleaned and prepared
+                    with PDBFixer or not.
+                    Default is False
         """ 
         
         # Private
@@ -205,7 +209,7 @@ class CosolventSystem:
             if clean_protein:
                 top, pos = fix_pdb(receptor)
             else:
-                pdbfile = app.PDBFile(io.StringIO(receptor))
+                pdbfile = app.PDBFile(receptor)
                 top, pos = pdbfile.topology, pdbfile.positions
             self.modeller = app.Modeller(top, pos)
         
@@ -236,7 +240,8 @@ class CosolventSystem:
                       forcefields: str,
                       simulation_format: str, 
                       receptor: str,  
-                      padding: openmmunit.Quantity = 12*openmmunit.angstrom):
+                      padding: openmmunit.Quantity = 12*openmmunit.angstrom,
+                      clean_protein: bool=False):
         """
             Create a CosolventSystem with receptor from the pdb file path.
 
@@ -258,10 +263,14 @@ class CosolventSystem:
                     radius : openmm.unit.Quantity
                         Specifies the radius to create the box without receptor.
                         Default is None
+                    clean_protein : bool
+                        Determines if the protein will be cleaned and prepared
+                        with PDBFixer or not.
+                        Default is False
         """
         with open(receptor) as fi:
             pdb_string = fi.read()
-        return cls(cosolvents, forcefields, simulation_format, pdb_string, padding, None)
+        return cls(cosolvents, forcefields, simulation_format, io.StringIO(pdb_string), padding, None, clean_protein)
     
 #region Public
     def build(self,
@@ -491,6 +500,8 @@ class CosolventSystem:
         new_mod = app.Modeller(new_top, molecules_positions)
         if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
             new_mod.add(receptor_topology, receptor_positions)
+        print(receptor_topology)
+        print(new_mod.topology)
         new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
         return new_mod
     
