@@ -154,7 +154,7 @@ class CosolventSystem(object):
                  receptor: str = None,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
                  radius: openmmunit.Quantity = None,
-                 clean_protein: bool=False):
+                 clean_protein: bool=True):
         """
             Create cosolvent system.
             By default it accepts a pdb string for the receptor, otherwise can call
@@ -181,7 +181,7 @@ class CosolventSystem(object):
                 clean_protein : bool
                     Determines if the protein will be cleaned and prepared
                     with PDBFixer or not.
-                    Default is False
+                    Default is True
         """ 
         
         # Private
@@ -233,7 +233,6 @@ class CosolventSystem(object):
         # the cosolvent molecules.
         self.modeller.topology.setPeriodicBoxVectors(self.vectors)
         self._periodic_box_vectors = self.modeller.topology.getPeriodicBoxVectors().value_in_unit(openmmunit.nanometer)
-        print(self.vectors, self._periodic_box_vectors)
         vX, vY, vZ = self.modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
         self.box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")

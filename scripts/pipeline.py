@@ -18,7 +18,7 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     
     if not membrane:
         # If starting from PDB file path
-        cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, clean_protein=False)
+        cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path)
 
         # If starting from a pdb string or without receptor
         # cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
@@ -83,12 +83,12 @@ if __name__ == "__main__":
     
     print("Running MD simulation")
     start = time.time()
-    topology = os.path.join(results_path, "system.prmtop"),
-    positions = os.path.join(results_path, "system.inpcrd")
+    topo = os.path.join(results_path, "system.prmtop"),
+    pos = os.path.join(results_path, "system.inpcrd")
     run_simulation(
                     simulation_format = simulation_format,
-                    topology = os.path.join(results_path, "system.prmtop"),
-                    positions = os.path.join(results_path, "system.inpcrd"),
+                    topology = topo,
+                    positions = pos,
                     pdb = None,
                     system = None,
                     warming_steps = 100000,
