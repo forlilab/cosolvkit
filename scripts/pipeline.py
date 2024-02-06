@@ -12,25 +12,28 @@ import openmm.unit as openmmunit
 def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, simulation_format: str, results_path: str, radius: float) -> CosolventSystem:
     os.makedirs(results_path, exist_ok=True)
     
+    membrane = False
     if radius is not None:
         radius = radius * openmmunit.angstrom
-        
-    # If starting from PDB file path
-    # cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, clean_protein=False)
-
-    # If starting from a pdb string or without receptor
-    # cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
-    # cosolv.build()
     
-    # Membranes
-    cosolv = CosolventMembraneSystem.from_filename(cosolvents, 
-                                                   forcefields, 
-                                                   simulation_format, 
-                                                   receptor_path, 
-                                                   clean_protein=True, 
-                                                   lipid_type="POPC")
-    cosolv.add_membrane_and_cosolvents(cosolvent_placement=0, neutralize=True, waters_to_keep=[])
-    cosolv.build(neutralize=True)
+    if not membrane:
+        # If starting from PDB file path
+        cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, clean_protein=False)
+
+        # If starting from a pdb string or without receptor
+        # cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+        cosolv.build()
+    
+    else:
+        # Membranes
+        cosolv = CosolventMembraneSystem.from_filename(cosolvents, 
+                                                    forcefields, 
+                                                    simulation_format, 
+                                                    receptor_path, 
+                                                    clean_protein=True, 
+                                                    lipid_type="POPC")
+        cosolv.add_membrane(cosolvent_placement=0, neutralize=True, waters_to_keep=[])
+        cosolv.build(neutralize=True)
     return cosolv
 
 def cmd_lineparser():
@@ -80,18 +83,17 @@ if __name__ == "__main__":
     
     print("Running MD simulation")
     start = time.time()
-    # topology = os.path.join(results_path, "system.prmtop"),
-    # positions = os.path.join(results_path, "system.inpcrd")
-    # run_simulation(
-    #                 simulation_format = simulation_format,
-    #                 topology = os.path.join(results_path, "system.prmtop"),
-    #                 positions = os.path.join(results_path, "system.inpcrd"),
-    #                 pdb = None,
-    #                 system = None,
-    #                 warming_steps = 100000,
-    #                 simulation_steps = 6250000, # 25ns
-    #                 results_path = results_path, # This should be the name of system being simulated
-    #                 seed=None
-    # )
-
+    topology = os.path.join(results_path, "system.prmtop"),
+    positions = os.path.join(results_path, "system.inpcrd")
+    run_simulation(
+                    simulation_format = simulation_format,
+                    topology = os.path.join(results_path, "system.prmtop"),
+                    positions = os.path.join(results_path, "system.inpcrd"),
+                    pdb = None,
+                    system = None,
+                    warming_steps = 100000,
+                    simulation_steps = 6250000, # 25ns
+                    results_path = results_path, # This should be the name of system being simulated
+                    seed=None
+    )
     print(f"Simulation finished after {(time.time() - start)/60:.2f} min.")

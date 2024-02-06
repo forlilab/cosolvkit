@@ -53,6 +53,15 @@ cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_pa
 
 # If creating a cosolvent box without receptor
 cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, None, radius=10*openmmunit.angstrom)
+
+# If creating a membrane system
+cosolv_membrane = CosolventMembraneSystem.from_filename(cosolvents, 
+                                            forcefields, 
+                                            simulation_format, 
+                                            receptor_path, 
+                                            clean_protein=True, 
+                                            lipid_type="POPC")
+cosolv_membrane.add_membrane(cosolvent_placement=0, neutralize=True, waters_to_keep=[])
 ```
 Cosolvent System creation
 ```python
@@ -61,6 +70,9 @@ cosolv.build(neutralize=True)
 
 # If using different solvent i.e. methanol
 cosolv.build(solvent_smiles="CH3OH")
+
+# If building a membrane system
+cosolv_membrane.build(neutralize=True)
 ```
 
 Saving Cosolvent System according to the simulation_format
@@ -126,24 +138,6 @@ report.generate_pymol_reports(report.topology,
                               density_file=report.density_file, 
                               selection_string='', 
                               out_path=out_path)
-```
-
-## Add cosolvent molecules to pre-existing waterbox
-
-You already have your system ready and it contains a super fancy lipid membrane built with [`packmol-memgen`](https://github.com/callumjd/AMBER-Membrane_protein_tutorial)? Well, no worry you can still add cosolvent molecules to it!
-
-**Disclaimer**: You will have issue with systems prepared with CHARMM-GUI. The conversion step to the amber format using `charmmlipid2amber.py` does not produce a readable file by `tleap` (at least on my side...).
-
-```python
-from cosolvkit import CosolventBox
-
-cosolv = CosolventBox(use_existing_waterbox=True)
-cosolv.add_receptor("bilayer_protein.pdb")
-cosolv.add_cosolvent(name='benzene', concentration=1.0, smiles='c1ccccc1')
-cosolv.build()
-cosolv.export_pdb(filename='cosolv_system.pdb')
-cosolv.prepare_system_for_amber(filename='tleap.cmd', prmtop_filename='cosolv_system.prmtop',
-                                inpcrd_filename='cosolv_system.inpcrd')
 ```
 
 ## Add centroid-repulsive potential

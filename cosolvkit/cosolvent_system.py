@@ -1047,7 +1047,7 @@ class CosolventMembraneSystem(CosolventSystem):
                    lipid_type, 
                    lipid_patch_path)
     
-    def add_membrane_and_cosolvents(self, cosolvent_placement: int=0, neutralize: bool=True, waters_to_keep: list=[]):
+    def add_membrane(self, cosolvent_placement: int=0, neutralize: bool=True, waters_to_keep: list=[]):
         """Create the membrane system.
 
         Args:
