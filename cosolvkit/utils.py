@@ -20,6 +20,8 @@ from openmm.app import *
 from openmm import *
 import pdbfixer
 
+class MutuallyExclusiveParametersError(Exception):
+        pass   
 
 def path_module(module_name):
     specs = importlib.machinery.PathFinder().find_spec(module_name)
