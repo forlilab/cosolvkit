@@ -20,14 +20,13 @@ def find_files(directory):
 setup(name="cosolvkit",
       version='0.3.3',
       description="CoSolvKit",
-      author="Jerome Eberhardt",
+      author="Niccolo Bruciaferri, Jerome Eberhardt",
       author_email="forli@scripps.edu",
       url="https://github.com/forlilab/cosolvkit",
       packages=find_packages(),
-      scripts=["scripts/wk_prepare_receptor.py"],
-      package_data={
-            "cosolvkit" : ["data/*"]
-      },
+      scripts=["scripts/wk_prepare_receptor.py",
+               "scripts/pipeline.py",
+               "scripts/post_simulation_processing.py"],
       data_files=[("", ["README.md", "LICENSE"]),
                   ("scripts", find_files("scripts"))],
       include_package_data=True,

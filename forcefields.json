@@ -1,0 +1,21 @@
+{
+    "OPENMM":[
+        "amber14-all.xml", 
+        "amber14/tip3pfb.xml"
+    ],
+    "AMBER":[
+        "amber14-all.xml", 
+        "amber14/tip3pfb.xml"
+    ],
+    "GROMACS":[
+        "amber14-all.xml", 
+        "amber14/tip3pfb.xml"
+    ],
+    "CHARMM": [
+        "charmm36.xml",
+        "charmm36/water.xml"
+    ],
+    "small_molecules":[
+        "gaff2"
+    ]
+}

@@ -18,7 +18,10 @@ import mdtraj
 from MDAnalysis import Universe
 from openmm.app import *
 from openmm import *
+import pdbfixer
 
+class MutuallyExclusiveParametersError(Exception):
+        pass   
 
 def path_module(module_name):
     specs = importlib.machinery.PathFinder().find_spec(module_name)
@@ -292,3 +295,38 @@ def find_disulfide_bridges(pdb_filename):
     cyx_cyx_pairs = sorted(list(cyx_cyx_pairs))
 
     return cyx_cyx_pairs
+
+def fix_pdb(pdb_string: str, save=False):
+    """ Fixes common problems in PDB such as:
+            - missing atoms
+            - missing residues
+            - missing hydrogens
+            - remove nonstandard residues
+    
+    Args:
+        pdb_filename (str): pdb string
+    """
+    # path = os.getcwd()
+    fixer = pdbfixer.PDBFixer(pdbfile=pdb_string)
+    fixer.findMissingResidues()
+    
+    chains = list(fixer.topology.chains())
+    keys = fixer.missingResidues.keys()
+    for key in list(keys):
+        chain = chains[key[0]]
+        if key[1] == 0 or key[1] == len(list(chain.residues())):
+            del fixer.missingResidues[key]
+
+    fixer.removeHeterogens(keepWater=False)
+
+    fixer.findMissingAtoms() 
+    fixer.addMissingAtoms()
+    fixer.addMissingHydrogens(7)
+    # if save:
+    #     PDBFile.writeFile(
+    #         fixer.topology,
+    #         fixer.positions,
+    #         open(os.path.join(path, f"{pdb_filename.split('.')[0]}_clean.pdb"),
+    #                 "w"),
+    #         keepIds=True)
+    return fixer.topology, fixer.positions

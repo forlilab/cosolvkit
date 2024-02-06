@@ -1,114 +1,99 @@
 import os
-import json
+import time
 import argparse
+from sys import stdout
+from cosolvkit.cosolvent_system import CosolventSystem, CosolventMembraneSystem
+from cosolvkit.simulation import run_simulation
+from openmm.app import *
+from openmm import *
+import openmm.unit as openmmunit
 
-from cosolvkit import CoSolventBox
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
-from mdtraj.reporters import DCDReporter, NetCDFReporter
 
+def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, simulation_format: str, results_path: str, radius: float) -> CosolventSystem:
+    os.makedirs(results_path, exist_ok=True)
+    
+    membrane = False
+    if radius is not None:
+        radius = radius * openmmunit.angstrom
+    
+    if not membrane:
+        # If starting from PDB file path
+        cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path)
 
-def build_cosolvent_box(receptor_path: str, cosolvents: list, output_path: str) -> str:
-    receptor = receptor_path.split('/')[-1].split(".")[0]
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-
-    cosolv = CoSolventBox(cutoff=12, box='cubic')
-    cosolv.add_receptor(receptor_path)
-    print("Adding cosolvents...")
-    for cosolvent in cosolvents:
-        cosolv.add_cosolvent(**cosolvent)
-    cosolv.build()
-    cosolv.export_pdb(filename=f"cosolv_system_{receptor}.pdb")
-
-    print("Generating tleap files")
-    tleap_filename = os.path.join(output_path, "tleap.cmd")
-    prmtop_filename = os.path.join(output_path, "cosolv_system.prmtop")
-    inpcrd_filename = os.path.join(output_path, "cosolv_system.inpcrd")
-    cosolv.prepare_system_for_amber(filename=tleap_filename,
-                                    prmtop_filename=prmtop_filename,
-                                    inpcrd_filename=inpcrd_filename,
-                                    run_tleap=True)
-    return prmtop_filename, inpcrd_filename
-
-def run_simulation(out_path, prmtop_file, inpcrd_file, output_file_name, simulation_time=None):
-    # results_path = os.path.join(out_path, "results")
-    if simulation_time is None:
-        simulation_time = 25000000
-
-    results_path = out_path
-
-    prmtop = AmberPrmtopFile(prmtop_file)
-    inpcrd = AmberInpcrdFile(inpcrd_file)
-
-    system = prmtop.createSystem(nonbondedMethod=PME, 
-                                nonbondedCutoff=12 * angstrom,
-                                constraints=HBonds,
-                                hydrogenMass=3 * amu)
-    try:
-        platform = Platform.getPlatformByName("OpenCL")
-        properties = {"Precision": "mixed"}
-        print("Using GPU.")
-    except:
-        platform = Platform.getPlatformByName("CPU")
-        print("Switching to CPU, no GPU available.")
-        
-    system.addForce(MonteCarloBarostat(1 * bar, 300 * kelvin))
-    integrator = LangevinIntegrator(300 * kelvin,
-                                    1 / picosecond,
-                                    4 * femtoseconds)
-
-    if len(properties) > 0:
-        simulation = Simulation(prmtop.topology, system, integrator, platform, properties)
+        # If starting from a pdb string or without receptor
+        # cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
+        cosolv.build()
+    
     else:
-        simulation = Simulation(prmtop.topology, system, integrator, platform)
-
-    print("Setting positions for the simulation")
-    simulation.context.setPositions(inpcrd.positions)
-
-    print("Minimizing system's energy")
-    simulation.minimizeEnergy()
-
-    # MD simulations - equilibration (1ns)
-    print("Equilibrating system")
-    simulation.step(int(simulation_time/100))
-
-    # cosolvkit.utils.update_harmonic_restraints(simulation, 0.1)
-
-    simulation.reporters.append(NetCDFReporter(os.path.join(results_path, output_file_name + ".nc"), 250))
-    simulation.reporters.append(DCDReporter(os.path.join(results_path, output_file_name + ".dcd"), 250))
-    simulation.reporters.append(CheckpointReporter(os.path.join(results_path, output_file_name + ".chk"), 250))
-    simulation.reporters.append(StateDataReporter(os.path.join(results_path, output_file_name + ".log"), 250, step=True, time=True,
-                                                potentialEnergy=True, kineticEnergy=True, totalEnergy=True,
-                                                temperature=True, volume=True, density=True, speed=True))
-
-    #100 ns
-    print("Running simulation")
-    simulation.step(simulation_time)
-    return
-
+        # Membranes
+        cosolv = CosolventMembraneSystem.from_filename(cosolvents, 
+                                                    forcefields, 
+                                                    simulation_format, 
+                                                    receptor_path, 
+                                                    clean_protein=True, 
+                                                    lipid_type="POPC")
+        cosolv.add_membrane(cosolvent_placement=0, neutralize=True, waters_to_keep=[])
+        cosolv.build(neutralize=True)
+    return cosolv
 
 def cmd_lineparser():
     parser = argparse.ArgumentParser(description="Runs cosolvkit and MD simulation afterwards.")
     parser.add_argument('-c', '--cosolvents_list', dest='cosolvents', required=True,
                         action='store', help='path to the json file defining the cosolvents to add')
-    parser.add_argument('-r', '--receptor', dest='receptor_path', required=True,
-                        action='store', help='path to the receptor file')
-    parser.add_argument('-o', '--output_path', dest='outpath', required=True,
+    parser.add_argument('-f', '--forcefields', dest='ffs', required=True,
+                        action='store', help='path to the json file defining the forcefields to add')
+    parser.add_argument('-mdout', '--mdoutputformat', dest='output_format', required=True,
+                        action='store', help='MD output formats <AMBER [prmtop, inpcrd], GROMACS [top, gro], CHARMM [psf, crd], OPENMM [xml]>')
+    parser.add_argument('-o', '--results_path', dest='outpath', required=True,
                         action='store', help='path where to store output of the MD simulation')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-p', '--receptor', dest='receptor_path',
+                        action='store', help='path to the receptor file')
+    group.add_argument('-r', '--radius', dest='radius', action='store',
+                       help='radius (in Angstrom) to build the box if receptor not specified.')
+
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = cmd_lineparser()
+    cosolvents = args.cosolvents
+    forcefields = args.ffs
+    simulation_format = args.output_format
+    results_path = args.outpath
 
-    with open(args.cosolvents) as fi:
-        cosolvents = json.load(fi)
+    if args.receptor_path:
+        receptor_path = args.receptor_path
+    else:
+        receptor_path = None
+    if args.radius:
+        radius = float(args.radius)
+    else:
+        radius = None
 
-    receptor_path = args.receptor_path
-    output_path = args.outpath
     print("Building cosolvent box")
-    prmtop_file, inpcrd_file = build_cosolvent_box(receptor_path, cosolvents, output_path)
-    print("Starting simulation")
-    run_simulation(output_path, prmtop_file, inpcrd_file, "simulation")
-    print("Simulation finished! Time to analyse the results!")
+    cosolv_system = build_cosolvent_box(receptor_path, cosolvents, forcefields, simulation_format, results_path, radius)
+
+    print("Saving topology file")
+    cosolv_system.save_topology(cosolv_system.modeller.topology, 
+                                cosolv_system.modeller.positions,
+                                cosolv_system.system,
+                                simulation_format,
+                                cosolv_system.forcefield,
+                                results_path)
+    
+    print("Running MD simulation")
+    start = time.time()
+    topo = os.path.join(results_path, "system.prmtop"),
+    pos = os.path.join(results_path, "system.inpcrd")
+    run_simulation(
+                    simulation_format = simulation_format,
+                    topology = topo,
+                    positions = pos,
+                    pdb = None,
+                    system = None,
+                    warming_steps = 100000,
+                    simulation_steps = 6250000, # 25ns
+                    results_path = results_path, # This should be the name of system being simulated
+                    seed=None
+    )
+    print(f"Simulation finished after {(time.time() - start)/60:.2f} min.")
