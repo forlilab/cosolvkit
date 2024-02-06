@@ -18,8 +18,12 @@ from openmmforcefields.generators import EspalomaTemplateGenerator, GAFFTemplate
 from openmmforcefields.generators.template_generators import SmallMoleculeTemplateGenerator
 from cosolvkit.utils import fix_pdb
 
-class CosolventMolecule:
 
+proteinResidues = ['ALA', 'ASN', 'CYS', 'GLU', 'HIS', 'LEU', 'MET', 'PRO', 'THR', 'TYR', 'ARG', 'ASP', 'GLN', 'GLY', 'ILE', 'LYS', 'PHE', 'SER', 'TRP', 'VAL']
+rnaResidues = ['A', 'G', 'C', 'U', 'I']
+dnaResidues = ['DA', 'DG', 'DC', 'DT', 'DI']
+
+class CosolventMolecule(object):
     def __init__(self, name, smiles=None, mol_filename=None, resname=None, copies=None, concentration=None):
         """Create a Cosolvent object.
 
@@ -141,7 +145,7 @@ class CosolventMolecule:
 
         return conect
 
-class CosolventSystem:
+class CosolventSystem(object):
     def __init__(self, 
                  cosolvents: str,
                  forcefields: str,
@@ -230,6 +234,8 @@ class CosolventSystem:
         self.box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
         self.forcefield = self._parametrize_system(forcefields, simulation_format, self.cosolvents)
+        if not clean_protein:
+            self.modeller.addHydrogens(self.forcefield)
         print(f"Box Volume: {self.box_volume} nm**3")
         print(f"\t{self.box_volume*1000} A^3")
         return
@@ -500,8 +506,6 @@ class CosolventSystem:
         new_mod = app.Modeller(new_top, molecules_positions)
         if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
             new_mod.add(receptor_topology, receptor_positions)
-        print(receptor_topology)
-        print(new_mod.topology)
         new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
         return new_mod
     
@@ -944,3 +948,85 @@ class CosolventSystem:
         return vectors, box, lowerBound, upperBound
 #endregion
 #endregion
+    
+
+class CosolventMembraneSystem(CosolventSystem):
+    def __init__(self, cosolvents: str,
+                 forcefields: str,
+                 simulation_format: str, 
+                 receptor: str = None,  
+                 padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
+                 radius: openmmunit.Quantity = None,
+                 clean_protein: bool=False,
+                 lipid_type: str="POPC",
+                 cosolvent_placement: int=0):
+        
+        super().__init__(cosolvents=cosolvents,
+                         forcefields=forcefields,
+                         simulation_format=simulation_format,
+                         receptor=receptor,
+                         padding=padding,
+                         radius=radius,
+                         clean_protein=clean_protein)
+               
+        self.lipid_type = lipid_type
+        self._available_lipids = ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"]
+
+        assert self.lipid_type in self._available_lipids, print(f"Error! The specified lipid is not supported! Please choose between the following lipid types:\n\t{self._available_lipids}")
+
+        if cosolvent_placement == 0: print("No preference of what side of the membrane to place the cosolvents")
+        elif cosolvent_placement == 1: print("Placing cosolvent molecules outside of the membrane")
+        elif cosolvent_placement == -1: print("Placing cosolvent molecules inside the membrane")
+        else: 
+            print("Error! Available options for <cosolvent_placement> are [0 -> no preference, 1 -> outside, -1 -> inside]")
+            raise SystemError
+
+    
+    def add_membrane_and_cosolvents(self, lipid_type, cosolvent_placement, neutralize=False, waters_to_keep=[]):
+        waters_residue_names = ["HOH", "WAT"]
+        # OpenMM default
+        padding = 1 * openmmunit.nanometer
+        self.modeller.addMembrane(forcefield=self.forcefield,
+                                  lipidType=lipid_type,
+                                  neutralize=neutralize,
+                                  minimumPadding=padding)
+        waters_to_delete = [atom for atom in self.modeller.topology.atoms() if atom.residue.index not in waters_to_keep and atom.residue.name in waters_residue_names]
+        self.modeller.delete(waters_to_delete)
+        # Doesn't work Need to DEBUG!
+        # Update periodic box vectors and box volume
+        # self._periodic_box_vectors, self._box, self.lowerBound, self.upperBound = self._build_box(self.modeller.positions,
+        #                                                                                           padding)
+        # vX, vY, vZ = self.modeller.topology.getUnitCellDimensions().value_in_unit(openmmunit.nanometer)
+        # self.box_volume = vX * vY * vZ
+        return
+
+    def build(self, neutralize, cosolvent_placement):
+        if cosolvent_placement != 0:
+            lipid_positions = list()
+            atoms = list(self.modeller.topology.atoms())
+            positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
+            for i in range(len(atoms)):
+                if atoms[i].residue.name not in proteinResidues and atoms[i].residue.name not in dnaResidues and atoms[i].residue.name not in rnaResidues:
+                    lipid_positions.append(positions[i])
+            minRange = min((pos[2] for pos in lipid_positions))
+            maxRange = max((pos[2] for pos in lipid_positions))
+            if cosolvent_placement == -1:
+                upperBound = Vec3(0, 0, minRange)
+                lowerBound = self.lowerBound
+            else:
+                upperBound = self.upperBound
+                lowerBound = Vec3(0, 0, maxRange)
+        else:
+            upperBound = self.upperBound
+            lowerBound = self.lowerBound
+        print(upperBound, lowerBound)
+        volume_not_occupied_by_cosolvent = self.fitting_checks()
+        assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
+        receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
+        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, lowerBound, upperBound, receptor_positions, False)
+        self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
+        self.modeller.addSolvent(forcefield=self.forcefield, neutralize=neutralize)
+            
+        self.system = self._create_system(self.forcefield, self.modeller.topology)
+        return
+        

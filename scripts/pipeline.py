@@ -2,7 +2,7 @@ import os
 import time
 import argparse
 from sys import stdout
-from cosolvkit.cosolvent_system import CosolventSystem
+from cosolvkit.cosolvent_system import CosolventSystem, CosolventMembraneSystem
 from cosolvkit.simulation import run_simulation
 from openmm.app import *
 from openmm import *
@@ -20,11 +20,14 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
 
     # If starting from a pdb string or without receptor
     # cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
-
+    
+    # Membranes
+    # cosolv = CosolventMembraneSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, clean_protein=True)
+    # cosolv.add_membrane_and_cosolvents(lipid_type=cosolv.lipid_type, cosolvent_placement=0, neutralize=True, waters_to_keep=[1500, 1501])
+    # cosolv.build(neutralize=True, cosolvent_placement=1)
+    
+    
     cosolv.build(use_halton=True)
-    # cosolv.modeller.addMembrane(cosolv.forcefield, 
-    #                             lipidType='POPC',
-    #                             minimumPadding=1*openmmunit.nanometer)
     return cosolv
 
 def cmd_lineparser():
@@ -76,16 +79,16 @@ if __name__ == "__main__":
     start = time.time()
     # topology = os.path.join(results_path, "system.prmtop"),
     # positions = os.path.join(results_path, "system.inpcrd")
-    # run_simulation(
-    #                 simulation_format = simulation_format,
-    #                 topology = os.path.join(results_path, "system.prmtop"),
-    #                 positions = os.path.join(results_path, "system.inpcrd"),
-    #                 pdb = None,
-    #                 system = None,
-    #                 warming_steps = 100000,
-    #                 simulation_steps = 6250000, # 25ns
-    #                 results_path = results_path, # This should be the name of system being simulated
-    #                 seed=None
-    # )
+    run_simulation(
+                    simulation_format = simulation_format,
+                    topology = os.path.join(results_path, "system.prmtop"),
+                    positions = os.path.join(results_path, "system.inpcrd"),
+                    pdb = None,
+                    system = None,
+                    warming_steps = 100000,
+                    simulation_steps = 6250000, # 25ns
+                    results_path = results_path, # This should be the name of system being simulated
+                    seed=None
+    )
 
     print(f"Simulation finished after {(time.time() - start)/60:.2f} min.")

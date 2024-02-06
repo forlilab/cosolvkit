@@ -315,7 +315,7 @@ def fix_pdb(pdb_string: str, save=False):
         if key[1] == 0 or key[1] == len(list(chain.residues())):
             del fixer.missingResidues[key]
 
-    # fixer.removeHeterogens(keepWater=False)
+    fixer.removeHeterogens(keepWater=False)
 
     fixer.findMissingAtoms() 
     fixer.addMissingAtoms()
