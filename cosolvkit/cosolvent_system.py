@@ -250,7 +250,7 @@ class CosolventSystem(object):
                       simulation_format: str, 
                       receptor: str,  
                       padding: openmmunit.Quantity = 12*openmmunit.angstrom,
-                      clean_protein: bool=False):
+                      clean_protein: bool=True):
         """
             Create a CosolventSystem with receptor from the pdb file path.
 
@@ -1046,7 +1046,7 @@ class CosolventMembraneSystem(CosolventSystem):
                    lipid_type, 
                    lipid_patch_path)
     
-    def add_membrane(self, cosolvent_placement: int=0, neutralize: bool=True, waters_to_keep: list=[]):
+    def add_membrane(self, cosolvent_placement: int=0, neutralize: bool=True, waters_to_keep: list=None):
         """Create the membrane system.
 
         Args:
@@ -1057,7 +1057,7 @@ class CosolventMembraneSystem(CosolventSystem):
                                        Defaults to 0.
             neutralize (bool, optional): If neutralize the system when solvating the membrane. Defaults to True.
             waters_to_keep (list, optional): A list of the indices of key waters that should not be deleted. 
-                                             Defaults to [].
+                                             Defaults to None.
 
         Raises:
             SystemError: If OpenMM is not able to relax the system after adding the membrane a SystemError is raised.
@@ -1083,7 +1083,10 @@ class CosolventMembraneSystem(CosolventSystem):
                                         lipidType=self.lipid_patch,
                                         neutralize=neutralize,
                                         minimumPadding=padding)
-            waters_to_delete = [atom for atom in self.modeller.topology.atoms() if atom.residue.index not in waters_to_keep and atom.residue.name in waters_residue_names]
+            if waters_to_keep is not None:
+                waters_to_delete = [atom for atom in self.modeller.topology.atoms() if atom.residue.index not in waters_to_keep and atom.residue.name in waters_residue_names]
+            else:
+                waters_to_delete = [atom for atom in self.modeller.topology.atoms() if atom.residue.name in waters_residue_names]
             self.modeller.delete(waters_to_delete)
         except OpenMMException as e:
             print("Something went wrong during the relaxation of the membrane.\nProbably a problem related to particle's coordinates.")

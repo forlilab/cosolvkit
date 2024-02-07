@@ -86,9 +86,9 @@ def run_simulation( simulation_format: str = 'OPENMM',
                                                 progress=True, remainingTime=True, speed=True, totalSteps=total_steps, separator='\t'))
     
     #every 0.1ns
-    # simulation.reporters.append(app.DCDReporter(os.path.join(results_path, "trajectory.dcd"),
-    #                                         reportInterval=25000, enforcePeriodicBox=None))
-    simulation.reporters.append(DCDReporter(os.path.join(results_path, "trajectory.dcd"), reportInterval=25000))
+    simulation.reporters.append(app.DCDReporter(os.path.join(results_path, "trajectory.dcd"),
+                                            reportInterval=25000, enforcePeriodicBox=None))
+    # simulation.reporters.append(DCDReporter(os.path.join(results_path, "trajectory.dcd"), reportInterval=25000))
     
     # simulation.reporters.append(NetCDFReporter(os.path.join(results_path, "trajectory.nc"),
     #                                         reportInterval=25000))

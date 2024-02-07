@@ -83,7 +83,7 @@ if __name__ == "__main__":
     
     print("Running MD simulation")
     start = time.time()
-    topo = os.path.join(results_path, "system.prmtop"),
+    topo = os.path.join(results_path, "system.prmtop")
     pos = os.path.join(results_path, "system.inpcrd")
     run_simulation(
                     simulation_format = simulation_format,
