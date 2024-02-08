@@ -23,7 +23,7 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
 
         # If starting from a pdb string or without receptor
         # cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=radius)
-        cosolv.build()
+        cosolv.build(neutralize=True)
     
     else:
         # Membranes

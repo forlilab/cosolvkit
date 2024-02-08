@@ -51,7 +51,7 @@ def run_simulation( simulation_format: str = 'OPENMM',
 
     print('Selecting simulation platform')
     try:
-        platform = openmm.Platform.getPlatformByName("GPU")
+        platform = openmm.Platform.getPlatformByName("CUDA")
         platform.setPropertyDefaultValue('DeterministicForces', 'true')
         platform.setPropertyDefaultValue('CudaPrecision', 'mixed')
         platform.setPropertyDefaultValue('CudaDeviceIndex', '0')

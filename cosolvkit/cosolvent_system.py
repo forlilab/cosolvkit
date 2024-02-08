@@ -285,7 +285,7 @@ class CosolventSystem(object):
     def build(self,
               solvent_smiles: str="H2O", 
               n_solvent_molecules: int=None,
-              neutralize: bool=False):
+              neutralize: bool=True):
         """This function adds thd cosolvents specified in the CosolvSystem
         and solvates with the desired solvent. If n_solvent_molecules is not passed
         the function will try to fill the box with the desired solvent to a certain extent.
@@ -295,7 +295,7 @@ class CosolventSystem(object):
         Args:
             solvent_smiles (str, optional): smiles string defining the desired solvent to use. Defaults to "H2O".
             n_solvent_molecules (int, optional): number of mulecules of solvent to add. Defaults to None.
-            neutralize (bool, optional): if True, the system charge will be neutralized by OpenMM. Defaults to False.
+            neutralize (bool, optional): if True, the system charge will be neutralized by OpenMM. Defaults to True.
         """
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
