@@ -13,6 +13,7 @@ def build_cosolvent_box(receptor_path: str, cosolvents: str, forcefields: str, s
     os.makedirs(results_path, exist_ok=True)
     
     membrane = False
+    
     if radius is not None:
         radius = radius * openmmunit.angstrom
     
@@ -83,14 +84,24 @@ if __name__ == "__main__":
     
     print("Running MD simulation")
     start = time.time()
+    # Change the next two lines depending on the simulation_format you chose
     topo = os.path.join(results_path, "system.prmtop")
-    pos = os.path.join(results_path, "system.inpcrd")
+    pos = os.path.join(results_path, "system.rst7")
+    # This is for openmm
+    pdb = None
+    system = None
+    
+    if simulation_format.upper() == "OPENMM":
+        print(f"Starting MD simulation from the files: {pdb}, {system}")
+    else:
+        print(f"Starting MD simulation from the files: {topo}, {pos}")
+    
     run_simulation(
                     simulation_format = simulation_format,
                     topology = topo,
                     positions = pos,
-                    pdb = None,
-                    system = None,
+                    pdb = pdb,
+                    system = system,
                     warming_steps = 100000,
                     simulation_steps = 6250000, # 25ns
                     results_path = results_path, # This should be the name of system being simulated

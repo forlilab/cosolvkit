@@ -428,12 +428,12 @@ class CosolventSystem(object):
                                              rigidWater=False,
                                              hydrogenMass=1.5*openmmunit.amu)
         
-        parmed_structure = parmed.openmm.load_topology(topology, new_system, positions)
-
+        parmed_structure = parmed.openmm.topsystem.load_topology(topology, new_system, positions)   
+        
         simulation_format = simulation_format.upper()
         if simulation_format == "AMBER":
-            parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
-            parmed_structure.save(f'{out_path}/system.inpcrd', overwrite=True)
+            parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True, format="amber")
+            parmed_structure.save(f'{out_path}/system.rst7', overwrite=True, format="rst7")
 
         elif simulation_format == "GROMACS":
             parmed_structure.save(f'{out_path}/system.top', overwrite=True)

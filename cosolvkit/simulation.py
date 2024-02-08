@@ -21,12 +21,13 @@ def run_simulation( simulation_format: str = 'OPENMM',
     Tend = 300
     Tstep = 5
     
+    openmm_flag = simulation_format == "OPENMM"
     total_steps = warming_steps + simulation_steps
 
     if simulation_format.upper() not in ['OPENMM', 'AMBER', 'GROMACS', 'CHARMM']:
         raise ValueError(f"Unknown simulation_format {simulation_format}. It must be one of 'OPENMM', 'AMBER', 'GROMACS', or 'CHARMM'.")
     
-    if simulation_format.upper() != "OPENMM":
+    if not openmm_flag:
         assert topology is not None and positions is not None, "If the simulation format specified is not OpenMM be sure to pass both topology and positions files"
         if simulation_format.upper() == "AMBER":
             positions = app.AmberInpcrdFile(positions)
@@ -50,7 +51,7 @@ def run_simulation( simulation_format: str = 'OPENMM',
 
     print('Selecting simulation platform')
     try:
-        platform = openmm.Platform.getPlatformByName("CUDA")
+        platform = openmm.Platform.getPlatformByName("GPU")
         platform.setPropertyDefaultValue('DeterministicForces', 'true')
         platform.setPropertyDefaultValue('CudaPrecision', 'mixed')
         platform.setPropertyDefaultValue('CudaDeviceIndex', '0')
@@ -70,9 +71,12 @@ def run_simulation( simulation_format: str = 'OPENMM',
                                           0.001 * openmmunit.picosecond)
     if seed is not None:
         integrator.setRandomNumberSeed(seed)
+    
+    if not openmm_flag:
+        simulation = app.Simulation(topology.topology, system, integrator, platform)
+    else:
+        simulation = app.Simulation(topology, system, integrator, platform)
         
-    simulation = app.Simulation(topology, system, integrator, platform)
-
     print('Adding reporters to the simulation')
     #every 0.1ns
     simulation.reporters.append(app.StateDataReporter(os.path.join(results_path, "statistics.csv"), 25000, step=True, time=True,
@@ -88,20 +92,16 @@ def run_simulation( simulation_format: str = 'OPENMM',
     #every 0.1ns
     simulation.reporters.append(app.DCDReporter(os.path.join(results_path, "trajectory.dcd"),
                                             reportInterval=25000, enforcePeriodicBox=None))
-    # simulation.reporters.append(DCDReporter(os.path.join(results_path, "trajectory.dcd"), reportInterval=25000))
-    
-    # simulation.reporters.append(NetCDFReporter(os.path.join(results_path, "trajectory.nc"),
-    #                                         reportInterval=25000))
+
     
     #every 1ns
     simulation.reporters.append(app.CheckpointReporter(os.path.join(results_path,"simualtion.chk"), 250000)) 
 
     print("Setting positions for the simulation")
-    try:
-        simulation.context.setPositions(positions)
-    except ValueError:
-        # This is probably a bug in openmm that raises when loading inpcrd files for positions
+    if not openmm_flag:
         simulation.context.setPositions(positions.positions.value_in_unit(openmmunit.nanometer))
+    else:
+        simulation.context.setPositions(positions)
 
     print("Minimizing system's energy")
     simulation.minimizeEnergy()
@@ -114,11 +114,11 @@ def run_simulation( simulation_format: str = 'OPENMM',
     simulation.context.setVelocitiesToTemperature(Tstart)
     
     # Warm up the system gradually
-    # for i in range(nT):
-    #     temperature = Tstart + i * Tstep
-    #     integrator.setTemperature(temperature)
-    #     print(f"Temperature set to {temperature} K.")
-    #     simulation.step(int(warming_steps / nT))
+    for i in range(nT):
+        temperature = Tstart + i * Tstep
+        integrator.setTemperature(temperature)
+        print(f"Temperature set to {temperature} K.")
+        simulation.step(int(warming_steps / nT))
 
     # Increase the timestep for production simulations
     integrator.setStepSize(0.004 * openmmunit.picoseconds)
