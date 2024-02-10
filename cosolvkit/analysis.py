@@ -217,7 +217,7 @@ class Report:
         for cosolvent in cosolvents_d:
             self.cosolvents.append(CosolventMolecule(**cosolvent))
     
-    def generate_report(self, out_path, analysis_selection_string=""):
+    def generate_report(self, out_path, analysis_selection_string="", ):
         print("Generating report...")
         # setup results folders
         report_path = os.path.join(out_path, "report")
@@ -286,26 +286,27 @@ class Report:
         cmd.bg_color("white")
         
         cmd_string = f"cmd.load('{topology}', 'structure')\n\
-                      cmd.load_traj('{trajectory}', start=0, stop=1)\n\
-                      # Load density\n\
-                      cmd.load('{density_file}', 'density_map')\n\
-                      # Set structure's color\n\
-                      cmd.color('grey80', 'structure and name C*')\n\
-                      # Remove solvent and organic molecules\n\
-                      cmd.remove('solvent')\n\
-                      cmd.remove('org')\n\
-                      # Create isomesh for hydrogen bond probes\n\
-                      cmd.isomesh('hbonds', 'density_map', 10)\n\
-                      # Color the hydrgen bond isomesh\n\
-                      cmd.color('marine', 'hbonds')\n\
-                      # Show sticks for the residues of interest\n\
-                      cmd.show('sticks', '{selection_string}')\n\
-                      # Set valence to 0 - no double bonds\n\
-                      cmd.set('valence', 0)\n\
-                      # Set cartoon_side_chain_helper to 1 - less messy\n\
-                      cmd.set('cartoon_side_chain_helper', 1)\n\
-                      # Set background color\n\
-                      cmd.bg_color('white')"
+        cmd.load_traj('{trajectory}', start=0, stop=1)\n\
+        # Load density\n\
+        cmd.load('{density_file}', 'density_map')\n\
+        # Set structure's color\n\
+        cmd.color('grey80', 'structure and name C*')\n\
+        # Remove solvent and organic molecules\n\
+        cmd.remove('solvent')\n\
+        cmd.remove('org')\n\
+        # Create isomesh for hydrogen bond probes\n\
+        cmd.isomesh('hbonds', 'density_map', 10)\n\
+        # Color the hydrgen bond isomesh\n\
+        cmd.color('marine', 'hbonds')\n\
+        # Show sticks for the residues of interest\n\
+        cmd.show('sticks', '{selection_string}')\n\
+        # Set valence to 0 - no double bonds\n\
+        cmd.set('valence', 0)\n\
+        # Set cartoon_side_chain_helper to 1 - less messy\n\
+        cmd.set('cartoon_side_chain_helper', 1)\n\
+        # Set background color\n\
+        cmd.bg_color('white')"
+
         with open(os.path.join(out_path, "pymol_session_cmd.pml"), "w") as fo:
             fo.write(cmd_string)
             
@@ -380,10 +381,10 @@ class Report:
             cosolvent_residues = universe.select_atoms(f'resname {cosolvent_name}')
             atoms_names = cosolvent_residues.residues[0].atoms.names
             for cosolvent_atom in set(atoms_names):
+                max_y = 0
                 if "H" in cosolvent_atom: continue
                 print(f"Analysing {cosolvent_name}-{cosolvent_atom}")
                 fig, ax = plt.subplots(3, 2, sharex=True, sharey=True)
-                plt.setp(ax, ylim=(0, 4.5), xlim=(0, r_max+1))
                 plt.tight_layout(pad=2.0)
                 # Here compute RDF between same atoms and different molecules
                 atoms = cosolvent_residues.select_atoms(f'name {cosolvent_atom}')
@@ -391,6 +392,7 @@ class Report:
                 irdf.run(start=0, step=1000)
                 irdf_results[(cosolvent_name, cosolvent_atom, cosolvent_name, cosolvent_atom)] = irdf.results.rdf
                 # irdf.run()
+                max_y = max(irdf.results.rdf)
                 ax[0][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
                 ax[0][0].set_xlabel(r'$r$ $\AA$')
                 ax[0][0].set_ylabel("$g(r)$")
@@ -417,6 +419,7 @@ class Report:
                 # Here compute RDF between atom and water's oxygen
                 irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max))
                 irdf.run(start=0, step=1000)
+                max_y = max(max_y, max(irdf.results.rdf))
                 irdf_results[(cosolvent_name, cosolvent_atom, "HOH", "O")] = irdf.results.rdf
                 # irdf.run()
                 ax[0][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
@@ -442,6 +445,8 @@ class Report:
                 ax[2][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O last 250 frames")
                 ax[2][1].legend()
                 
+                plt.setp(ax, ylim=(0, max_y), xlim=(0, r_max+1))
+
                 for ax in fig.get_axes():
                     ax.label_outer()
                     
