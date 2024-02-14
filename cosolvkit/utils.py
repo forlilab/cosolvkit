@@ -11,7 +11,7 @@ import os
 import tempfile
 import shutil
 import subprocess
-import importlib
+import importlib 
 
 import numpy as np
 import mdtraj
@@ -296,7 +296,7 @@ def find_disulfide_bridges(pdb_filename):
 
     return cyx_cyx_pairs
 
-def fix_pdb(pdb_string: str, save=False):
+def fix_pdb(pdb_string: str, keep_heterogens: bool=False, variants: list=list()) -> tuple[Topology, list]:
     """ Fixes common problems in PDB such as:
             - missing atoms
             - missing residues
@@ -305,8 +305,11 @@ def fix_pdb(pdb_string: str, save=False):
     
     Args:
         pdb_filename (str): pdb string
+        keep_heterogens (bool): if False all the heterogen atoms but waters are deleted.
+                                Defaults to False.
+        variants (list): list of variants to apply for the protonation states. 
+                         The ones to leave untouched are passed as None.
     """
-    # path = os.getcwd()
     fixer = pdbfixer.PDBFixer(pdbfile=pdb_string)
     fixer.findMissingResidues()
     
@@ -317,16 +320,15 @@ def fix_pdb(pdb_string: str, save=False):
         if key[1] == 0 or key[1] == len(list(chain.residues())):
             del fixer.missingResidues[key]
 
-    fixer.removeHeterogens(keepWater=False)
+    if not keep_heterogens:
+        fixer.removeHeterogens(keepWater=True)
 
     fixer.findMissingAtoms() 
     fixer.addMissingAtoms()
-    fixer.addMissingHydrogens(7)
-    # if save:
-    #     PDBFile.writeFile(
-    #         fixer.topology,
-    #         fixer.positions,
-    #         open(os.path.join(path, f"{pdb_filename.split('.')[0]}_clean.pdb"),
-    #                 "w"),
-    #         keepIds=True)
-    return fixer.topology, fixer.positions
+    if len(variants) < 1:
+        fixer.addMissingHydrogens(7)
+        return fixer.topology, fixer.positions
+    else:
+        modeller = Modeller(fixer.topology, fixer.positions)
+        added_variants = modeller.addHydrogens(variants=variants)
+        return modeller.topology, modeller.positions

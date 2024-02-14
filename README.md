@@ -40,49 +40,35 @@ $ pip install -e .
 
 ## Quick tutorial
 
+The script `create_cosolvent_system.py` provide all the necessary tools to build a cosolvent system and optionally run an MD simulation with standard setup.
+The main entry point of the script is the file `config.json` where all the necessary flags and command line options are specified.
+
+| Argument          | Description                                           | Default value   |
+|:------------------------|:-------------------------------------------------|:----------------|
+|cosolvents            | Path to the json file containing the cosolvents to add to the system. | no default |
+|forcefields           | Path to the json file containing the forcefields to use. | no default |
+|md_format             | Format to use for the MD simulations and topology files. Supported formats: [OPENMM, AMBER, GROMACS, CHARMM] | no default |
+|receptor              | Boolean describing if the receptor is present or not. | no default |
+|protein_path          | If receptor is `true` this should be the path to the protein structure. | no default |
+|clean_protein         | Flag indicating if cleaning the protein with `PDBFixer` | TRUE |
+|keep_heterogens       | Flag indicating if keeping the heterogen atoms while cleaning the protein. Waters will be always kept. | FALSE |
+|variants              | List of residues for which a variant is requested (different protonation state), `None` for the rest of the residues. | empty list |
+|add_repulsive         | Flag indicating if adding repulsive forces between certain residues or not. | FALSE |
+|repulsive_resiudes    | List of residues for which applying the repulsive forces. | empty list |
+|solvent_smiles        | Smiles string of the solvent to use. | H2O |
+|solvent_copies        | If specified, the box won't be filled up with solvent, but will have the exact number of solvent molecules specified. | no default |
+|membrane              | Flag indicating if the system has membranes or not. | FALSE |
+|lipid_type            | If membrane is TRUE specify the lipid to use. Supported lipids: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"] | "POPC" |
+|lipid_patch_path      | If the lipid required is not in the available, it is possible to pass a pre-equilibrated patch of the lipid of interest. | no default |
+|cosolvent_placement   | Integer deciding on which side of the membrane to place the cosolvents. Available options: [0 -> no preference, 1 -> outside, -1 -> inside] | 0 |
+|waters_to_keep        | List of indices of waters of interest in a membrane system. | no default |
+|radius                | If no receptor, the radius is necessary to set the size of the simulation box. | no default |
+|output                | Path to where save the results. | no default |
+|run_md                | Flag indicating if running the md simulation after creating the system or not. | FALSE |
+
 1. **Preparation**
-Cosolvent System definition
-```python
-import openmm.unit as openmmunit
-from cosolvkit.cosolvent_system import CosolventSystem
-# If starting from PDB file path
-cosolv = CosolventSystem.from_filename(cosolvents, forcefields, simulation_format, receptor_path, radius=None)
-
-# If starting from a pdb string or without receptor
-cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, receptor_path, radius=None)
-
-# If creating a cosolvent box without receptor
-cosolv = CosolventSystem(cosolvents, forcefields, simulation_format, None, radius=10*openmmunit.angstrom)
-
-# If creating a membrane system
-cosolv_membrane = CosolventMembraneSystem.from_filename(cosolvents, 
-                                            forcefields, 
-                                            simulation_format, 
-                                            receptor_path, 
-                                            clean_protein=True, 
-                                            lipid_type="POPC")
-cosolv_membrane.add_membrane(cosolvent_placement=0, neutralize=True, waters_to_keep=[])
-```
-Cosolvent System creation
-```python
-# If using water as solvent
-cosolv.build(neutralize=True)
-
-# If using different solvent i.e. methanol
-cosolv.build(solvent_smiles="CH3OH")
-
-# If building a membrane system
-cosolv_membrane.build(neutralize=True)
-```
-
-Saving Cosolvent System according to the simulation_format
-```python
-cosolv.save_topology(cosolv.modeller.topology, 
-                     cosolv.modeller.positions,
-                     cosolv.system,
-                     simulation_format,
-                     cosolv.forcefield,
-                     output_path)
+```bash
+$ python create_cosolvent_system.py -c config.json
 ```
 
 3. **Run MD simulations**

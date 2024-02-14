@@ -151,10 +151,9 @@ class CosolventSystem(object):
                  cosolvents: str,
                  forcefields: str,
                  simulation_format: str, 
-                 receptor: str = None,  
+                 modeller: app.Modeller,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
-                 radius: openmmunit.Quantity = None,
-                 clean_protein: bool=True):
+                 radius: openmmunit.Quantity = None):
         """
             Create cosolvent system.
             By default it accepts a pdb string for the receptor, otherwise can call
@@ -168,20 +167,14 @@ class CosolventSystem(object):
                 simulation_format : str
                     MD format that want to be used for the simulation.
                     Supported formats: Amber, Gromacs, CHARMM or openMM
-                receptor : None | str
-                    PDB string of the protein. 
-                    By default is None to allow cosolvent
-                    simulations without receptor
+                modeller : app.Modeller
+                    Modeller containing topology and positions information.
                 padding : openmm.unit.Quantity
                     Specifies the padding used to create the simulation box 
                     if no receptor is provided. Default to 12 Angstrom
                 radius : openmm.unit.Quantity
                     Specifies the radius to create the box without receptor.
                     Default is None
-                clean_protein : bool
-                    Determines if the protein will be cleaned and prepared
-                    with PDBFixer or not.
-                    Default is True
         """ 
         
         # Private
@@ -197,8 +190,9 @@ class CosolventSystem(object):
         self.cosolvents_radius = 2.5*openmmunit.angstrom
         self.modeller = None
         self.system = None
-        self.receptor = receptor
+        self.modeller = None
         self.cosolvents = dict()
+        self.radius = radius
         
         assert (simulation_format.upper() in self._available_formats), f"Error! The simulation format supplied is not supported! Available simulation engines:\n\t{self._available_formats}"
 
@@ -211,22 +205,14 @@ class CosolventSystem(object):
             cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
             self.cosolvents[cosolvent] = cosolvent_xyz
 
-        if receptor is not None:
-            print("Cleaning protein")
-            if clean_protein:
-                top, pos = fix_pdb(receptor)
-            else:
-                pdbfile = app.PDBFile(receptor)
-                top, pos = pdbfile.topology, pdbfile.positions
-            self.modeller = app.Modeller(top, pos)
+        self.modeller = modeller
         
-        if self.receptor is None:
-            assert radius is not None, "Error! If no receptor is passed, the radius parameter has to be set and it needs to be in angstrom openmm.unit"
+        if self.radius is not None:
             assert (isinstance(radius, openmmunit.Quantity)) and (radius.unit == openmmunit.angstrom), \
                 "Error! If no receptor is passed, the radius parameter has to be set and it needs to be in angstrom openmm.unit"
             self.vectors, self.box, self.lowerBound, self.upperBound = self._build_box(None, padding, radius=radius)
-            self.modeller = app.Modeller(app.Topology(), None)
         else:
+            self.receptor = True
             self.vectors, self.box, self.lowerBound, self.upperBound = self._build_box(self.modeller.positions, padding, radius=None)
         
         # Setting up the box - This has to be done before building the system with
@@ -237,49 +223,47 @@ class CosolventSystem(object):
         self.box_volume = vX * vY * vZ
         print("Parametrizing system with forcefields")
         self.forcefield = self._parametrize_system(forcefields, simulation_format, self.cosolvents)
-        if not clean_protein:
-            self.modeller.addHydrogens(self.forcefield)
         print(f"Box Volume: {self.box_volume} nm**3")
         print(f"\t{self.box_volume*1000} A^3")
         return
     
-    @classmethod
-    def from_filename(cls, 
-                      cosolvents: str,
-                      forcefields: str,
-                      simulation_format: str, 
-                      receptor: str,  
-                      padding: openmmunit.Quantity = 12*openmmunit.angstrom,
-                      clean_protein: bool=True):
-        """
-            Create a CosolventSystem with receptor from the pdb file path.
+    # @classmethod
+    # def from_filename(cls, 
+    #                   cosolvents: str,
+    #                   forcefields: str,
+    #                   simulation_format: str, 
+    #                   receptor: str,  
+    #                   padding: openmmunit.Quantity = 12*openmmunit.angstrom,
+    #                   clean_protein: bool=True):
+    #     """
+    #         Create a CosolventSystem with receptor from the pdb file path.
 
-            Args:
-                    cosolvents : str
-                        Path to the cosolvents.json file
-                    forcefields : str
-                        Path to the forcefields.json file
-                    simulation_format : str
-                        MD format that want to be used for the simulation.
-                        Supported formats: Amber, Gromacs, CHARMM or openMM
-                    receptor : None | str
-                        PDB string of the protein. 
-                        By default is None to allow cosolvent
-                        simulations without receptor
-                    padding : openmm.unit.Quantity
-                        Specifies the padding used to create the simulation box 
-                        if no receptor is provided. Default to 12 Angstrom
-                    radius : openmm.unit.Quantity
-                        Specifies the radius to create the box without receptor.
-                        Default is None
-                    clean_protein : bool
-                        Determines if the protein will be cleaned and prepared
-                        with PDBFixer or not.
-                        Default is False
-        """
-        with open(receptor) as fi:
-            pdb_string = fi.read()
-        return cls(cosolvents, forcefields, simulation_format, io.StringIO(pdb_string), padding, None, clean_protein)
+    #         Args:
+    #                 cosolvents : str
+    #                     Path to the cosolvents.json file
+    #                 forcefields : str
+    #                     Path to the forcefields.json file
+    #                 simulation_format : str
+    #                     MD format that want to be used for the simulation.
+    #                     Supported formats: Amber, Gromacs, CHARMM or openMM
+    #                 receptor : None | str
+    #                     PDB string of the protein. 
+    #                     By default is None to allow cosolvent
+    #                     simulations without receptor
+    #                 padding : openmm.unit.Quantity
+    #                     Specifies the padding used to create the simulation box 
+    #                     if no receptor is provided. Default to 12 Angstrom
+    #                 radius : openmm.unit.Quantity
+    #                     Specifies the radius to create the box without receptor.
+    #                     Default is None
+    #                 clean_protein : bool
+    #                     Determines if the protein will be cleaned and prepared
+    #                     with PDBFixer or not.
+    #                     Default is False
+    #     """
+    #     with open(receptor) as fi:
+    #         pdb_string = fi.read()
+    #     return cls(cosolvents, forcefields, simulation_format, io.StringIO(pdb_string), padding, None, clean_protein)
     
 #region Public
     def build(self,
@@ -944,10 +928,9 @@ class CosolventMembraneSystem(CosolventSystem):
                  cosolvents: str,
                  forcefields: str,
                  simulation_format: str, 
-                 receptor: str = None,  
+                 modeller: app.Modeller,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
                  radius: openmmunit.Quantity = None,
-                 clean_protein: bool=False,
                  lipid_type: str=None,
                  lipid_patch_path: str=None):
         """
@@ -958,9 +941,7 @@ class CosolventMembraneSystem(CosolventSystem):
             forcefields (str): Path to the forcefields.json file
             simulation_format (str): MD format that want to be used for the simulation.
                                      Supported formats: Amber, Gromacs, CHARMM or openMM
-            receptor (str, optional): PDB string of the protein. 
-                                      By default is None to allow cosolvent
-                                      simulations without receptor. Defaults to None.
+            modeller (app.Modeller): Modeller containing topology and positions information.                                                                          
             padding (openmmunit.Quantity, optional): Specifies the padding used to create the simulation box 
                                                      if no receptor is provided. Default to 12 Angstrom. 
                                                      Defaults to 12*openmmunit.angstrom.
@@ -980,10 +961,9 @@ class CosolventMembraneSystem(CosolventSystem):
         super().__init__(cosolvents=cosolvents,
                          forcefields=forcefields,
                          simulation_format=simulation_format,
-                         receptor=receptor,
+                         modeller=modeller,
                          padding=padding,
-                         radius=radius,
-                         clean_protein=clean_protein)
+                         radius=radius)
         
         self.protein_raidus = 1.5 * openmmunit.angstrom
         self.cosolvents_radius = 2.5*openmmunit.angstrom           
@@ -1000,51 +980,51 @@ class CosolventMembraneSystem(CosolventSystem):
         else:
             raise MutuallyExclusiveParametersError("Error! <lipid_type> and <lipid_patch_path> are mutually exclusive parameters. Please pass just one of them.")
     
-    @classmethod
-    def from_filename(cls, 
-                      cosolvents: str,
-                      forcefields: str,
-                      simulation_format: str, 
-                      receptor: str,  
-                      padding: openmmunit.Quantity = 12*openmmunit.angstrom,
-                      clean_protein: bool=False,
-                      lipid_type: str=None,
-                      lipid_patch_path: str=None):
-        """
-        Create a CosolventMembraneSystem with receptor from the pdb file path.
+    # @classmethod
+    # def from_filename(cls, 
+    #                   cosolvents: str,
+    #                   forcefields: str,
+    #                   simulation_format: str, 
+    #                   receptor: str,  
+    #                   padding: openmmunit.Quantity = 12*openmmunit.angstrom,
+    #                   clean_protein: bool=False,
+    #                   lipid_type: str=None,
+    #                   lipid_patch_path: str=None):
+    #     """
+    #     Create a CosolventMembraneSystem with receptor from the pdb file path.
 
-        Args:
-            cosolvents (str): Path to the cosolvents.json file
-            forcefields (str): Path to the forcefields.json file
-            simulation_format (str): MD format that want to be used for the simulation.
-                                     Supported formats: Amber, Gromacs, CHARMM or openMM
-            receptor (str, optional): PDB string of the protein. 
-                                      By default is None to allow cosolvent
-                                      simulations without receptor. Defaults to None.
-            padding (openmmunit.Quantity, optional): Specifies the padding used to create the simulation box 
-                                                     if no receptor is provided. Default to 12 Angstrom. 
-                                                     Defaults to 12*openmmunit.angstrom.
-            clean_protein (bool, optional): Determines if the protein will be cleaned and prepared with PDBFixer or not. 
-                                            Defaults to False.
-            lipid_type (str, optional): Lipid type to use to build the membrane system, 
-                                        supported types: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"]. 
-                                        Mutually exclusive with <lipid_patch_path>.
-                                        Defaults to None.
-            lipid_patch_path (str, optional): If lipid type is None the path to a pre-equilibrated patch of custom
-                                              lipids membrane can be passed. Mutually exclusive with <lipid_type>.
-                                              Defaults to None.
-        """
-        with open(receptor) as fi:
-            pdb_string = fi.read()
-        return cls(cosolvents, 
-                   forcefields, 
-                   simulation_format, 
-                   io.StringIO(pdb_string), 
-                   padding, 
-                   None, 
-                   clean_protein, 
-                   lipid_type, 
-                   lipid_patch_path)
+    #     Args:
+    #         cosolvents (str): Path to the cosolvents.json file
+    #         forcefields (str): Path to the forcefields.json file
+    #         simulation_format (str): MD format that want to be used for the simulation.
+    #                                  Supported formats: Amber, Gromacs, CHARMM or openMM
+    #         receptor (str, optional): PDB string of the protein. 
+    #                                   By default is None to allow cosolvent
+    #                                   simulations without receptor. Defaults to None.
+    #         padding (openmmunit.Quantity, optional): Specifies the padding used to create the simulation box 
+    #                                                  if no receptor is provided. Default to 12 Angstrom. 
+    #                                                  Defaults to 12*openmmunit.angstrom.
+    #         clean_protein (bool, optional): Determines if the protein will be cleaned and prepared with PDBFixer or not. 
+    #                                         Defaults to False.
+    #         lipid_type (str, optional): Lipid type to use to build the membrane system, 
+    #                                     supported types: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"]. 
+    #                                     Mutually exclusive with <lipid_patch_path>.
+    #                                     Defaults to None.
+    #         lipid_patch_path (str, optional): If lipid type is None the path to a pre-equilibrated patch of custom
+    #                                           lipids membrane can be passed. Mutually exclusive with <lipid_type>.
+    #                                           Defaults to None.
+    #     """
+    #     with open(receptor) as fi:
+    #         pdb_string = fi.read()
+    #     return cls(cosolvents, 
+    #                forcefields, 
+    #                simulation_format, 
+    #                io.StringIO(pdb_string), 
+    #                padding, 
+    #                None, 
+    #                clean_protein, 
+    #                lipid_type, 
+    #                lipid_patch_path)
     
     def add_membrane(self, cosolvent_placement: int=0, neutralize: bool=True, waters_to_keep: list=None):
         """Create the membrane system.
