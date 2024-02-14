@@ -43,11 +43,21 @@ if __name__ == "__main__":
             pdb_string = f.read()
         pdb_string = io.StringIO(pdb_string)
         if config.clean_protein:
-            protein_topology, protein_positions = fix_pdb(pdb_string, 
-                                                          config.keep_heterogens, 
-                                                          config.variants)
+            pdbfile = None
+            pdbxfile = None
+            if config.protein_path.endswith(".pdb"):
+                pdbfile = pdb_string
+            else:
+                pdbxfile = pdb_string
+            protein_topology, protein_positions = fix_pdb(pdbfile=pdbfile,
+                                                          pdbxfile=pdbxfile, 
+                                                          keep_heterogens=config.keep_heterogens, 
+                                                          variants=config.variants)
         else:
-            pdb = PDBFile(pdb_string)
+            if not config.protein_path.endswith(".pdb"):
+                pdb = PDBxFile(pdb_string)
+            else:
+                pdb = PDBFile(pdb_string)
             protein_topology, protein_positions = pdb.topology, pdb.positions
     else:
         assert config.radius is not None, "radius is None in the config"

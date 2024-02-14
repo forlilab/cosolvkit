@@ -296,7 +296,7 @@ def find_disulfide_bridges(pdb_filename):
 
     return cyx_cyx_pairs
 
-def fix_pdb(pdb_string: str, keep_heterogens: bool=False, variants: list=list()) -> tuple[Topology, list]:
+def fix_pdb(pdbfile: str, pdbxfile: str, keep_heterogens: bool=False, variants: list=list()) -> tuple[Topology, list]:
     """ Fixes common problems in PDB such as:
             - missing atoms
             - missing residues
@@ -304,13 +304,14 @@ def fix_pdb(pdb_string: str, keep_heterogens: bool=False, variants: list=list())
             - remove nonstandard residues
     
     Args:
-        pdb_filename (str): pdb string
+        pdbfile (str): pdb string old format
+        pdbxfile (str): pdb string new format
         keep_heterogens (bool): if False all the heterogen atoms but waters are deleted.
                                 Defaults to False.
         variants (list): list of variants to apply for the protonation states. 
                          The ones to leave untouched are passed as None.
     """
-    fixer = pdbfixer.PDBFixer(pdbfile=pdb_string)
+    fixer = pdbfixer.PDBFixer(pdbfile=pdbfile, pdbxfile=pdbxfile)
     fixer.findMissingResidues()
     
     chains = list(fixer.topology.chains())

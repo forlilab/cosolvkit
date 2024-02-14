@@ -13,7 +13,7 @@ class Config(object):
                  keep_heterogens=False,
                  variants=list(),
                  add_repulsive=False,
-                 repuslive_residues=list(),
+                 repulsive_residues=list(),
                  solvent_smiles=None,
                  solvent_copies=None,
                  membrane=False,
@@ -34,7 +34,7 @@ class Config(object):
         self.keep_heterogens = keep_heterogens
         self.variants = variants
         self.add_repulsive = add_repulsive
-        self.repulsive_residues = repuslive_residues
+        self.repulsive_residues = repulsive_residues
         self.solvent_smiles = solvent_smiles
         self.solvent_copies = solvent_copies
         self.membrane = membrane
@@ -58,11 +58,9 @@ class Config(object):
     @classmethod
     def from_config(cls, config):
         expected_keys = cls.get_defaults_dict().keys()
-        print(expected_keys)
         with open(config) as f:
             config = json.load(f)
         bad_keys = [k for k in config if k not in expected_keys]
-        print(bad_keys)
         if len(bad_keys) > 0:
             err_msg = "unexpected keys in MoleculePreparation.from_config():" + os.linesep
             for key in bad_keys:
