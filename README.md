@@ -105,11 +105,13 @@ Report class:
     top_file: topology file
     cosolvents_file: json file describing the cosolvents
 
-generate_report_():
+generate_report():
     out_path: where to save the results. 3 folders will be created:
         - report
             - autocorrelation
             - rdf
+generate_density_maps():
+    out_path: where to save the results.
     analysis_selection_string: selection string of cosolvents you want to analyse. This
         follows MDAnalysis selection strings style. If no selection string, one density file
         for each cosolvent will be created.
@@ -118,10 +120,11 @@ generate_pymol_report()
     selection_string: important residues to select and show in the PyMol session.
 """
 report = Report(log_file, traj_file, top_file, cosolvents_file)
-report.generate_report(out_path=out_path, analysis_selection_string="")
+report.generate_report(out_path=out_path)
+report.generate_density_maps(out_path=out_path, , analysis_selection_string="")
 report.generate_pymol_reports(report.topology, 
                               report.trajectory, 
-                              density_file=report.density_file, 
+                              density_file="/path/to/density/file", 
                               selection_string='', 
                               out_path=out_path)
 ```

@@ -216,8 +216,14 @@ class Report:
             cosolvents_d = json.load(fi)
         for cosolvent in cosolvents_d:
             self.cosolvents.append(CosolventMolecule(**cosolvent))
+        
+        self._volume = None
+        self._temperature = None
+        self._potential_energy = None
+        self._potential_energy, self._temperature, self._volume = self._get_temp_vol_pot(self.statistics)
+        return
     
-    def generate_report(self, out_path, analysis_selection_string="", ):
+    def generate_report(self, out_path):
         print("Generating report...")
         # setup results folders
         report_path = os.path.join(out_path, "report")
@@ -228,7 +234,7 @@ class Report:
         os.makedirs(autocorrelation_path, exist_ok=True)
 
         # Generate equilibration plot
-        pot_e, temp, vol = self._plot_temp_vol_pot(report_path)
+        self._plot_temp_vol_pot(report_path)
         print("Plotting RDFs")
         irdf = self._rdf_mda(self.universe, self.cosolvents, rdf_path)
         print("Plotting RDF autocorrelations")
@@ -240,9 +246,12 @@ class Report:
                                        cosolvent_name2=cosolvent_name2,
                                        cosolvent_atom2=cosolvent_atom2,
                                        outpath=autocorrelation_path)
+        return
+    
+    def generate_density_maps(self, out_path, analysis_selection_string=""):
         print("Generating density maps...")
-        volume = vol[-1]
-        temperature = temp[-1]
+        volume = self._volume[-1]
+        temperature = self._temperature[-1]
         if analysis_selection_string == "":
             print("No cosolvent specified for the densities analysis. Generating a density map for each cosolvent.")
             for cosolvent in self.cosolvents:
@@ -262,6 +271,11 @@ class Report:
         return
     
     def generate_pymol_reports(self, topology, trajectory, density_file, selection_string, out_path):
+        base_path = os.getcwd()
+        topology = os.path.join(base_path, topology)
+        trajectory = os.path.join(base_path, trajectory)
+        density_file = os.path.join(base_path, density_file)
+         
         # Load topology and first frame of the trajectory
         cmd.load(topology, "structure")
         cmd.load_traj(trajectory, start=0, stop=1)
@@ -278,6 +292,7 @@ class Report:
         cmd.color("marine", "hbonds")
         # Show sticks for the residues of interest
         cmd.show("sticks", selection_string)
+        cmd.hide("spheres")
         # Set valence to 0 - no double bonds
         cmd.set("valence", 0)
         # Set cartoon_side_chain_helper to 1 - less messy
@@ -300,6 +315,7 @@ class Report:
         cmd.color('marine', 'hbonds')\n\
         # Show sticks for the residues of interest\n\
         cmd.show('sticks', '{selection_string}')\n\
+        cmd.hide('spheres')\n\
         # Set valence to 0 - no double bonds\n\
         cmd.set('valence', 0)\n\
         # Set cartoon_side_chain_helper to 1 - less messy\n\
@@ -337,17 +353,16 @@ class Report:
 
     def _plot_temp_vol_pot(self, outpath=None):
         fig_name = f"{outpath}/equilibration.png"
-        pot_e, temp, vol = self._get_temp_vol_pot(self.statistics)
-        lim = len(pot_e)
-        if len(pot_e) > 75:
+        lim = len(self._potential_energy)
+        if len(self._potential_energy) > 75:
             lim = 75
 
         t = range(0, lim)
         plt.close("all")
         fig, ax = plt.subplots()
-        ax.plot(t, [pot_e[x] / 1000 for x in range(0, lim)], label="potential")
-        ax.plot(t, [vol[x] for x in range(0, lim)], label="volume")
-        ax.plot(t, [temp[x] for x in range(0, lim)], label="temperature")
+        ax.plot(t, [self._potential_energy[x] / 1000 for x in range(0, lim)], label="potential")
+        ax.plot(t, [self._volume[x] for x in range(0, lim)], label="volume")
+        ax.plot(t, [self._temperature[x] for x in range(0, lim)], label="temperature")
 
         ax.set(**{
             "title": "Energy",
@@ -363,7 +378,7 @@ class Report:
         if outpath is not None:
             plt.savefig(fig_name)
         plt.close()
-        return pot_e, vol, temp
+        return
     
     def _rdf_mda(self, universe: Universe, cosolvents: list, outpath=None, n_frames=250):
         np.seterr(divide='ignore', invalid='ignore')
