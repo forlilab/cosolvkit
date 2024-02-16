@@ -434,7 +434,7 @@ class Report:
                 # Here compute RDF between atom and water's oxygen
                 irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max))
                 irdf.run(start=0, step=1000)
-                max_y = max(max_y, max(irdf.results.rdf))
+                max_y = max(irdf.results.rdf)
                 irdf_results[(cosolvent_name, cosolvent_atom, "HOH", "O")] = irdf.results.rdf
                 # irdf.run()
                 ax[0][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
