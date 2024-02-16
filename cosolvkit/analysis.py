@@ -209,7 +209,6 @@ class Report:
         self.trajectory = traj_file
         self.topology = top_file
         self.universe = Universe(self.topology, self.trajectory)
-        self.density_file = None
         self.cosolvents = list()
 
         with open(cosolvents_path) as fi:
@@ -400,7 +399,7 @@ class Report:
                 if "H" in cosolvent_atom: continue
                 print(f"Analysing {cosolvent_name}-{cosolvent_atom}")
                 fig, ax = plt.subplots(3, 2, sharex=True, sharey=False)
-                plt.tight_layout(pad=2.0)
+                plt.tight_layout(pad=3.0)
                 # Here compute RDF between same atoms and different molecules
                 atoms = cosolvent_residues.select_atoms(f'name {cosolvent_atom}')
                 irdf = rdf.InterRDF(atoms, atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
@@ -466,8 +465,8 @@ class Report:
                 for i in range(len(ax)):
                     plt.setp(ax[i][1], ylim=(0, max_y), xlim=(0, r_max+1))
 
-                for ax in fig.get_axes():
-                    ax.label_outer()
+                # for ax in fig.get_axes():
+                #     ax.label_outer()
                     
                 if outpath is not None:
                     plt.savefig(f"{outpath}/rdf_{cosolvent_name}_{cosolvent_atom}.png")
