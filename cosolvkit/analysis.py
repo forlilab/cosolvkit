@@ -399,7 +399,7 @@ class Report:
                 max_y = 0
                 if "H" in cosolvent_atom: continue
                 print(f"Analysing {cosolvent_name}-{cosolvent_atom}")
-                fig, ax = plt.subplots(3, 2, sharex=True, sharey=True)
+                fig, ax = plt.subplots(3, 2, sharex=True, sharey=False)
                 plt.tight_layout(pad=2.0)
                 # Here compute RDF between same atoms and different molecules
                 atoms = cosolvent_residues.select_atoms(f'name {cosolvent_atom}')
@@ -430,6 +430,9 @@ class Report:
                 ax[2][0].set_ylabel("$g(r)$")
                 ax[2][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} last 250 frames")
                 ax[2][0].legend()
+
+                for i in range(len(ax)):
+                    plt.setp(ax[i][0], ylim=(0, max_y), xlim=(0, r_max+1))
                 
                 # Here compute RDF between atom and water's oxygen
                 irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max))
@@ -460,7 +463,8 @@ class Report:
                 ax[2][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O last 250 frames")
                 ax[2][1].legend()
                 
-                plt.setp(ax, ylim=(0, max_y), xlim=(0, r_max+1))
+                for i in range(len(ax)):
+                    plt.setp(ax[i][1], ylim=(0, max_y), xlim=(0, r_max+1))
 
                 for ax in fig.get_axes():
                     ax.label_outer()
