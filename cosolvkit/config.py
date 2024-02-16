@@ -23,6 +23,7 @@ class Config(object):
                  waters_to_keep=list(),
                  radius=None,
                  output=None,
+                 run_cosolvent_system=True,
                  run_md=False):
         
         self.cosolvents = cosolvents
@@ -44,6 +45,7 @@ class Config(object):
         self.waters_to_keep = waters_to_keep
         self.radius = radius
         self.output = output
+        self.run_cosovlent_system = run_cosolvent_system
         self.run_md = run_md
     
     @classmethod

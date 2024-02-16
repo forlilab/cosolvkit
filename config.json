@@ -18,5 +18,6 @@
   "waters_to_keep": [],
   "radius": null,
   "output": "/home/niccolo/Desktop/results",
+  "run_cosolvent_system": true,
   "run_md": false
 }
