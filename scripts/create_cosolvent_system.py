@@ -1,5 +1,6 @@
 import os
 import io
+import json
 import time
 import argparse
 from cosolvkit.config import Config
@@ -67,11 +68,18 @@ if __name__ == "__main__":
             protein_topology, protein_positions = Topology(), None
         
         protein_modeller = Modeller(protein_topology, protein_positions)
-                
+
+        # Load cosolvents and forcefields dictionaries
+        with open(config.cosolvents) as fi:
+            cosolvents = json.load(fi)
+
+        with open(config.forcefields) as fi:
+            forcefields = json.load(fi)
+
         print("Building cosolvent system")
         if config.membrane:
-            cosolv_system = CosolventMembraneSystem(cosolvents=config.cosolvents,
-                                                    forcefields=config.forcefields,
+            cosolv_system = CosolventMembraneSystem(cosolvents=cosolvents,
+                                                    forcefields=forcefields,
                                                     simulation_format=config.md_format,
                                                     modeller=protein_modeller,
                                                     lipid_type=config.lipid_type,
@@ -80,8 +88,8 @@ if __name__ == "__main__":
                                     waters_to_keep=config.waters_to_keep)
             cosolv_system.build()
         else:
-            cosolv_system = CosolventSystem(cosolvents=config.cosolvents,
-                                            forcefields=config.forcefields,
+            cosolv_system = CosolventSystem(cosolvents=cosolvents,
+                                            forcefields=forcefields,
                                             simulation_format=config.md_format,
                                             modeller=protein_modeller,
                                             radius=config.radius)

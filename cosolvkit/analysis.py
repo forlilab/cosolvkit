@@ -21,6 +21,7 @@ from MDAnalysis.analysis import rdf
 from MDAnalysis.analysis.base import AnalysisBase
 import matplotlib.pyplot as plt
 import pandas as pd
+import pymol
 from pymol import cmd, stored
 from cosolvkit.cosolvent_system import CosolventMolecule
 
@@ -269,59 +270,63 @@ class Report:
                                cosolvent_name=None)
         return
     
-    def generate_pymol_reports(self, topology, trajectory, density_file, selection_string, out_path):
+    def generate_pymol_reports(self, topology, trajectory, density_files, selection_string, out_path):
+        colors = ['marine', 
+                  'orange', 
+                  'magenta',
+                  'salmon',
+                  'purple']
+        
+        assert len(density_files) < len(colors), "Error! Too many density files, not enough colors available!"
         base_path = os.getcwd()
         topology = os.path.join(base_path, topology)
         trajectory = os.path.join(base_path, trajectory)
-        density_file = os.path.join(base_path, density_file)
-         
+        # density_file = os.path.join(base_path, density_file)
+        cmd_string = ""
         # Load topology and first frame of the trajectory
         cmd.load(topology, "structure")
         cmd.load_traj(trajectory, start=0, stop=1)
+        cmd_string += f"cmd.load('{topology}', 'structure')\n"
+        cmd_string += f"cmd.load_traj('{trajectory}', start=0, stop=1)\n"
         # Load density
-        cmd.load(density_file, "density_map")
+        for idx, density in enumerate(density_files):
+            cmd.load(density, f"density_map_{idx}")
+            cmd_string += f"cmd.load('{density}', 'density_map_{idx}')\n"
+
         # Set structure's color
-        cmd.color("grey80", "structure and name C*")
+        cmd.color("grey50", "structure and name C*")
         # Remove solvent and organic molecules
         cmd.remove("solvent")
         cmd.remove("org")
-        # Create isomesh for hydrogen bond probes
-        cmd.isomesh("hbonds", "density_map", 10)
-        # Color the hydrgen bond isomesh
-        cmd.color("marine", "hbonds")
+        cmd_string += f"cmd.color('grey50', 'structure and name C*')\n"
+        cmd_string += f"cmd.remove('solvent')\n"
+        cmd_string += f"cmd.remove('org')\n"
+
+        for idx in range(len(density_files)):
+            # Create isomesh for hydrogen bond probes
+            cmd.isomesh(f"hbonds_{idx}", f"density_map_{idx}", 10)
+            # Color the hydrgen bond isomesh
+            cmd.color(colors[idx], f"hbonds_{idx}")
+            cmd_string += f"cmd.isomesh('hbonds_{idx}', 'density_map_{idx}', 10)\n"
+            cmd_string += f"cmd.color('{colors[idx]}', 'hbonds_{idx}')\n"
+
         # Show sticks for the residues of interest
-        cmd.show("sticks", selection_string)
+        if selection_string != '':
+            cmd.show("sticks", selection_string)
+            cmd_string += f"cmd.show('sticks', '{selection_string}')\n"
+
         cmd.hide("spheres")
         # Set valence to 0 - no double bonds
         cmd.set("valence", 0)
         # Set cartoon_side_chain_helper to 1 - less messy
         cmd.set("cartoon_side_chain_helper", 1)
         # Set background color
-        cmd.bg_color("white")
+        cmd.bg_color("grey80")
+        cmd_string += "cmd.hide('spheres')\n"
+        cmd_string += "cmd.set('valence', 0)\n"
+        cmd_string += "cmd.set('cartoon_side_chain_helper', 1)\n"
+        cmd_string += "cmd.bg_color('grey80')"
         
-        cmd_string = f"cmd.load('{topology}', 'structure')\n\
-        cmd.load_traj('{trajectory}', start=0, stop=1)\n\
-        # Load density\n\
-        cmd.load('{density_file}', 'density_map')\n\
-        # Set structure's color\n\
-        cmd.color('grey80', 'structure and name C*')\n\
-        # Remove solvent and organic molecules\n\
-        cmd.remove('solvent')\n\
-        cmd.remove('org')\n\
-        # Create isomesh for hydrogen bond probes\n\
-        cmd.isomesh('hbonds', 'density_map', 10)\n\
-        # Color the hydrgen bond isomesh\n\
-        cmd.color('marine', 'hbonds')\n\
-        # Show sticks for the residues of interest\n\
-        cmd.show('sticks', '{selection_string}')\n\
-        cmd.hide('spheres')\n\
-        # Set valence to 0 - no double bonds\n\
-        cmd.set('valence', 0)\n\
-        # Set cartoon_side_chain_helper to 1 - less messy\n\
-        cmd.set('cartoon_side_chain_helper', 1)\n\
-        # Set background color\n\
-        cmd.bg_color('white')"
-
         with open(os.path.join(out_path, "pymol_session_cmd.pml"), "w") as fo:
             fo.write(cmd_string)
             
