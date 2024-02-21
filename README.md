@@ -25,10 +25,9 @@ You need, at a minimum (requirements):
 ## Installation
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda create -n cosolvkit -c conda-forge python=3 numpy scipy mkl \
-rdkit ambertools parmed mdanalysis griddataformats openmm openmmforcefields \
-openff-toolkit pdbfixer mdtraj espaloma pymol-open-source
-$ conda activate cosolvkit
+$ conda create -n cosolvkit -c conda-forge && conda activate cosolvkit
+$ conda install openmmforcefields>=0.12
+$ conda install pdbfixer mdanalysis espaloma pymol-open-source griddataformats
 ```
 
 Finally, we can install the `CosolvKit` package

@@ -1,9 +1,9 @@
 {
-  "cosolvents": "/home/niccolo/phd/cosolvkit/cosolvents.json",
-  "forcefields": "/home/niccolo/phd/cosolvkit/forcefields.json",
+  "cosolvents": "/home/nick/phd/cosolvkit/cosolvents.json",
+  "forcefields": "/home/nick/phd/cosolvkit/forcefields.json",
   "md_format": "amber",
   "receptor": true,
-  "protein_path": "/home/niccolo/phd/cosolvkit/data/lysozyme/7l37.cif",
+  "protein_path": "/home/nick/phd/cosolvkit/data/lysozyme/7l37.cif",
   "clean_protein": true,
   "keep_heterogens": false,
   "variants": [],
@@ -17,7 +17,7 @@
   "cosolvent_placement": 0,
   "waters_to_keep": [],
   "radius": null,
-  "output": "/home/niccolo/Desktop/results",
+  "output": "/home/nick/Desktop/results",
   "run_cosolvent_system": true,
   "run_md": false
 }

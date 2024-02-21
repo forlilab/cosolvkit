@@ -862,14 +862,15 @@ class CosolventSystem(object):
         molecules = list()
         for cosolvent in cosolvents:
             try:
-                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
+                molecule = Molecule.from_smiles(smiles=cosolvent.smiles, name=cosolvent.name)
+                molecules.append(molecule)
             except Exception as e:
                 print(e)
                 print(cosolvent)
         if small_molecule_ff == "espaloma":
-            small_ff = EspalomaTemplateGenerator(molecules=molecules, forcefield='espaloma-0.3.2')
+            small_ff = EspalomaTemplateGenerator(molecules=molecules, forcefield='espaloma-0.3.2', template_generator_kwargs={"reference_forcefield": "openff_unconstrained-2.1.0", "charge_method": "nn"})
         elif small_molecule_ff == "gaff":
-            small_ff = GAFFTemplateGenerator(molecules=molecules)
+            small_ff = GAFFTemplateGenerator(molecules=molecules, forcefield='gaff-2.11')
         else:
             small_ff = SMIRNOFFTemplateGenerator(molecules=molecules)
         return small_ff
