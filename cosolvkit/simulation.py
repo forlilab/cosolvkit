@@ -21,21 +21,22 @@ def run_simulation( simulation_format: str = 'OPENMM',
     Tend = 300
     Tstep = 5
     
+    simulation_format = simulation_format.upper()
     openmm_flag = simulation_format == "OPENMM"
     total_steps = warming_steps + simulation_steps
 
-    if simulation_format.upper() not in ['OPENMM', 'AMBER', 'GROMACS', 'CHARMM']:
+    if simulation_format not in ['OPENMM', 'AMBER', 'GROMACS', 'CHARMM']:
         raise ValueError(f"Unknown simulation_format {simulation_format}. It must be one of 'OPENMM', 'AMBER', 'GROMACS', or 'CHARMM'.")
     
     if not openmm_flag:
         assert topology is not None and positions is not None, "If the simulation format specified is not OpenMM be sure to pass both topology and positions files"
-        if simulation_format.upper() == "AMBER":
+        if simulation_format == "AMBER":
             positions = app.AmberInpcrdFile(positions)
             topology = app.AmberPrmtopFile(topology, periodicBoxVectors=positions.boxVectors)
-        elif simulation_format.upper() == "GROMACS":
+        elif simulation_format == "GROMACS":
             positions = app.GromacsGroFile(positions)
             topology = app.GromacsTopFile(topology, periodicBoxVectors=positions.getPeriodicBoxVectors())
-        elif simulation_format.upper() == "CHARMM":
+        elif simulation_format == "CHARMM":
             topology = app.CharmmPsfFile(topology)
             positions = app.CharmmCrdFile(positions)
         system = topology.createSystem(nonbondedMethod=app.PME,
