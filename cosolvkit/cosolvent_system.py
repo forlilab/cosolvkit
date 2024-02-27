@@ -311,14 +311,14 @@ class CosolventSystem(object):
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
-    def add_repulsive_forces(self, residues_names: list, epsilon: float=-0.01, sigma: float=12.0):
+    def add_repulsive_forces(self, residues_names: list, epsilon: float=-0.01, sigma: float=6.0):
         """
             This function adds a LJ repulsive potential between the specified molecules.
 
             Args:
                 residues_names (list): list of residue names.
                 epsilon (float): depth of the potential well in kcal/mol (default: -0.01 kcal/mol)
-                sigma (float): inter-particle distance in Angstrom (default: 12 A)      
+                sigma (float): inter-particle distance in Angstrom (default: 6 A)      
         """
         epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
         sigma = sigma * openmmunit.angstrom
@@ -336,7 +336,7 @@ class CosolventSystem(object):
         repulsive_force.setCutoffDistance(cutoff_distance)
         repulsive_force.setUseLongRangeCorrection(False)
         repulsive_force.setUseSwitchingFunction(True)
-        repulsive_force.setSwitchingDistance(cutoff_distance - 1.0*unit.angstroms)
+        repulsive_force.setSwitchingDistance(cutoff_distance - 1.0*openmmunit.angstrom)
 
         target_indices = []
         for i, atom in enumerate(self.modeller.getTopology().atoms()):
