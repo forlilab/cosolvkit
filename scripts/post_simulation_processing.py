@@ -25,9 +25,9 @@ if __name__ == "__main__":
     cosolvents_path = args.cosolvents
 
     report = Report(log_file, traj_file, top_file, cosolvents_path)
-    # report.generate_report(out_path=out_path)
-    report.generate_pymol_reports(report.topology, 
-                                  report.trajectory, 
-                                  density_files=["/mnt/bigdisk1/cosolvkit/manu/results/map_density_PEN.dx"], 
-                                  selection_string='', 
-                                  out_path=out_path)
+    report.generate_report_2(out_path=out_path)
+    # report.generate_pymol_reports(report.topology, 
+    #                               report.trajectory, 
+    #                               density_files=["/mnt/bigdisk1/cosolvkit/manu/results/map_density_PEN.dx"], 
+    #                               selection_string='', 
+    #                               out_path=out_path)

@@ -236,16 +236,7 @@ class Report:
         # Generate equilibration plot
         self._plot_temp_vol_pot(report_path)
         print("Plotting RDFs")
-        irdf = self._rdf_mda(self.universe, self.cosolvents, rdf_path)
-        print("Plotting RDF autocorrelations")
-        for pair in irdf:
-            cosolvent_name1, cosolvent_atom1, cosolvent_name2, cosolvent_atom2 = pair
-            self._plot_autocorrelation(data=irdf[pair],
-                                       cosolvent_name1=cosolvent_name1,
-                                       cosolvent_atom1=cosolvent_atom1,
-                                       cosolvent_name2=cosolvent_name2,
-                                       cosolvent_atom2=cosolvent_atom2,
-                                       outpath=autocorrelation_path)
+        self._rdf_mda(self.universe, self.cosolvents, rdf_path)
         return
     
     def generate_density_maps(self, out_path, analysis_selection_string=""):
@@ -384,15 +375,17 @@ class Report:
         plt.close()
         return
     
-    def _rdf_mda(self, universe: Universe, cosolvents: list, outpath=None, n_frames=250):
+    def _rdf_mda(self, universe: Universe, cosolvents: list, outpath=None):
         np.seterr(divide='ignore', invalid='ignore')
         wat_resname = "HOH"
         # if top.endswith("cosolv_system.prmtop"):
         #     wat_resname = "WAT"
         oxygen_atoms = universe.select_atoms(f"resname {wat_resname} and name O")
         sim_frames = len(universe.trajectory)
+        step_size = int(sim_frames/250)
+        if step_size < 1:
+            step_size = 1
         n_bins = 150
-        irdf_results = {}
         for cosolvent in cosolvents:
             cosolvent_name = cosolvent.resname
             r_max = 15
@@ -403,76 +396,42 @@ class Report:
                 max_y = 0
                 if "H" in cosolvent_atom: continue
                 print(f"Analysing {cosolvent_name}-{cosolvent_atom}")
-                fig, ax = plt.subplots(3, 2, sharex=True, sharey=False)
+                fig, ax = plt.subplots(2, 2, sharex=False, sharey=False)
                 plt.tight_layout(pad=3.0)
                 # Here compute RDF between same atoms and different molecules
                 atoms = cosolvent_residues.select_atoms(f'name {cosolvent_atom}')
                 irdf = rdf.InterRDF(atoms, atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
-                irdf.run(start=0, step=1000)
-                irdf_results[(cosolvent_name, cosolvent_atom, cosolvent_name, cosolvent_atom)] = irdf.results.rdf
-                # irdf.run()
+                irdf.run(start=0, step=step_size)
                 max_y = max(irdf.results.rdf)
                 ax[0][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
                 ax[0][0].set_xlabel(r'$r$ $\AA$')
                 ax[0][0].set_ylabel("$g(r)$")
-                ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} every 1k frames")
-                ax[0][0].legend()         
-
-                irdf = rdf.InterRDF(atoms, atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
-                irdf.run(start=0, stop=250)
-                ax[1][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
-                ax[1][0].set_xlabel(r'$r$ $\AA$')
-                ax[1][0].set_ylabel("$g(r)$")
-                ax[1][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} first 250 frames")
-                ax[1][0].legend()
+                ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} every {step_size} frames")
+                ax[0][0].legend()
                 
-                # last frames
-                irdf = rdf.InterRDF(atoms, atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
-                irdf.run(start=sim_frames-n_frames, stop=sim_frames)
-                ax[2][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
-                ax[2][0].set_xlabel(r'$r$ $\AA$')
-                ax[2][0].set_ylabel("$g(r)$")
-                ax[2][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} last 250 frames")
-                ax[2][0].legend()
-
-                for i in range(len(ax)):
-                    plt.setp(ax[i][0], ylim=(0, max_y), xlim=(0, r_max+1))
-                
+                ax[1][0] = self._plot_autocorrelation_2(data=irdf.results.rdf,
+                                                        ax=ax[1][0], 
+                                            cosolvent_name1=cosolvent_name, 
+                                            cosolvent_atom1=cosolvent_atom, 
+                                            cosolvent_name2=cosolvent_name, 
+                                            cosolvent_atom2=cosolvent_atom)
                 # Here compute RDF between atom and water's oxygen
                 irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max))
-                irdf.run(start=0, step=1000)
+                irdf.run(start=0, step=step_size)
                 max_y = max(irdf.results.rdf)
-                irdf_results[(cosolvent_name, cosolvent_atom, "HOH", "O")] = irdf.results.rdf
-                # irdf.run()
+                irdf.run()
                 ax[0][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
                 ax[0][1].set_xlabel(r'$r$ $\AA$')
                 ax[0][1].set_ylabel("$g(r)$")
-                ax[0][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O every 1k frames")
+                ax[0][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O every {step_size} frames")
                 ax[0][1].legend()
 
-                irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max))
-                irdf.run(start=0, stop=250)
-                ax[1][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
-                ax[1][1].set_xlabel(r'$r$ $\AA$')
-                ax[1][1].set_ylabel("$g(r)$")
-                ax[1][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O first 250 frames")
-                ax[1][1].legend()
-                
-                # last frames
-                irdf = rdf.InterRDF(atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max))
-                irdf.run(start=sim_frames-n_frames, stop=sim_frames)
-                ax[2][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
-                ax[2][1].set_xlabel(r'$r$ $\AA$')
-                ax[2][1].set_ylabel("$g(r)$")
-                ax[2][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O last 250 frames")
-                ax[2][1].legend()
-                
-                for i in range(len(ax)):
-                    plt.setp(ax[i][1], ylim=(0, max_y), xlim=(0, r_max+1))
-
-                # for ax in fig.get_axes():
-                #     ax.label_outer()
-                    
+                self._plot_autocorrelation_2(data=irdf.results.rdf, 
+                                             ax=ax[1][1], 
+                                             cosolvent_name1=cosolvent_name, 
+                                             cosolvent_atom1=cosolvent_atom, 
+                                             cosolvent_name2="HOH", 
+                                             cosolvent_atom2="O")
                 if outpath is not None:
                     plt.savefig(f"{outpath}/rdf_{cosolvent_name}_{cosolvent_atom}.png")
                 plt.close()
@@ -481,7 +440,7 @@ class Report:
         print("Analysing water")
         r_max = 8.5
         fig, ax = plt.subplots()
-        plt.setp(ax, ylim=(0, 4.5), xlim=(0, r_max+1))
+        plt.setp(ax, xlim=(0, r_max+1))
         irdf = rdf.InterRDF(oxygen_atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
         irdf.run(start=0, step=50)
         # irdf.run()
@@ -493,8 +452,7 @@ class Report:
         if outpath is not None:
             plt.savefig(f"{outpath}/rdf_HOH_O.png")
         plt.close()
-        irdf_results[("HOH", "O", "HOH", "O")] = irdf.results.rdf
-        return irdf_results
+        return
 
     def _autocorrelation(self, data):        
         """Autocorrelation function"""
@@ -502,23 +460,20 @@ class Report:
         mean = np.mean(data)
         autocorr = correlate(data - mean, data - mean, mode='full', method='auto')
         return autocorr[n - 1:]
-
-    def _plot_autocorrelation(self, data, cosolvent_name1=None, cosolvent_atom1=None, cosolvent_name2=None, cosolvent_atom2=None, outpath=""):
+    
+    def _plot_autocorrelation(self, data, ax, cosolvent_name1=None, cosolvent_atom1=None, cosolvent_name2=None, cosolvent_atom2=None):
         """
 
         """
-        figname = f"{outpath}/ac_{cosolvent_name1}_{cosolvent_atom1}_{cosolvent_name2}_{cosolvent_atom2}.png"
         title = f"{cosolvent_name1} {cosolvent_atom1}-{cosolvent_name2} {cosolvent_atom2}"
         data = data[0::2]
         autocorr_values = self._autocorrelation(data)
         # Normalize autocorrelation values for better plotting
         normalized_autocorr = autocorr_values / np.max(np.abs(autocorr_values))
         lags = np.arange(0, len(autocorr_values))
-        ax = pd.plotting.autocorrelation_plot(pd.Series(normalized_autocorr))
+        pd.plotting.autocorrelation_plot(pd.Series(normalized_autocorr), ax=ax)
         ax.set_xlim([0, len(autocorr_values)])
-        plt.title(title)
-        plt.xlabel('Lag')
-        plt.ylabel('Autocorrelation')
-        plt.savefig(figname)
-        plt.close()
-        return
+        ax.set_title(title)
+        ax.set_xlabel('Lag')
+        ax.set_ylabel('Autocorrelation')
+        return ax
