@@ -409,7 +409,7 @@ class Report:
                 ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} every {step_size} frames")
                 ax[0][0].legend()
                 
-                ax[1][0] = self._plot_autocorrelation_2(data=irdf.results.rdf,
+                ax[1][0] = self._plot_autocorrelation(data=irdf.results.rdf,
                                                         ax=ax[1][0], 
                                             cosolvent_name1=cosolvent_name, 
                                             cosolvent_atom1=cosolvent_atom, 
@@ -426,7 +426,7 @@ class Report:
                 ax[0][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O every {step_size} frames")
                 ax[0][1].legend()
 
-                self._plot_autocorrelation_2(data=irdf.results.rdf, 
+                self._plot_autocorrelation(data=irdf.results.rdf, 
                                              ax=ax[1][1], 
                                              cosolvent_name1=cosolvent_name, 
                                              cosolvent_atom1=cosolvent_atom, 
