@@ -309,14 +309,14 @@ class CosolventSystem(object):
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
-    def add_repulsive_forces(self, residues_names: list, epsilon: float=0.01, sigma: float=6.0):
+    def add_repulsive_forces(self, residues_names: list, epsilon: float=0.01, sigma: float=10.0):
         """
             This function adds a LJ repulsive potential between the specified molecules.
 
             Args:
                 residues_names (list): list of residue names.
                 epsilon (float): depth of the potential well in kcal/mol (default: 0.01 kcal/mol)
-                sigma (float): inter-particle distance in Angstrom (default: 6 A)      
+                sigma (float): inter-particle distance in Angstrom (default: 10 A)      
         """
         epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
         sigma = sigma * openmmunit.angstrom
@@ -336,20 +336,23 @@ class CosolventSystem(object):
         repulsive_force.setUseSwitchingFunction(True)
         repulsive_force.setSwitchingDistance(cutoff_distance - 0.1 * openmmunit.nanometer)
 
-        target_indices = []
+        target_indices = defaultdict(list)
         for i, atom in enumerate(self.modeller.getTopology().atoms()):
             if not atom.residue.name in residues_names:
                 charge, sigma, epsilon = nb_force.getParticleParameters(i)
             else:
-                target_indices.append(i)
+                target_indices[atom.residue.id].append(i) 
             repulsive_force.addParticle([sigma, epsilon])
         
         for index in range(nb_force.getNumExceptions()):
             idx, jdx, c, s, eps = nb_force.getExceptionParameters(index)
             repulsive_force.addExclusion(idx, jdx)
-
-        repulsive_force.addInteractionGroup(target_indices, target_indices)
+        
+        for res in target_indices.keys():
+            indexes = [target_indices[x] for x in target_indices.keys() if x != res]
+            repulsive_force.addInteractionGroup(target_indices[res], indexes)
         self.system.addForce(repulsive_force)
+        
         return
 
     def save_pdb(self, topology: app.Topology, positions: list, out_path: str):
