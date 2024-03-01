@@ -148,8 +148,8 @@ class CosolventMolecule(object):
 
 class CosolventSystem(object):
     def __init__(self, 
-                 cosolvents: dict,
-                 forcefields: dict,
+                 cosolvents: str,
+                 forcefields: str,
                  simulation_format: str, 
                  modeller: app.Modeller,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
@@ -160,10 +160,10 @@ class CosolventSystem(object):
             the from_filename method and pass a pdb file path.
 
             Args:
-                cosolvents : dict
-                    Dictionary of cosolvent molecules.
-                forcefields : dict
-                    Dictionary of forcefields to use.
+                cosolvents : str
+                    Path to the cosolvents.json file
+                forcefields : str
+                    Path to the forcefields.json file
                 simulation_format : str
                     MD format that want to be used for the simulation.
                     Supported formats: Amber, Gromacs, CHARMM or openMM
@@ -197,9 +197,9 @@ class CosolventSystem(object):
         assert (simulation_format.upper() in self._available_formats), f"Error! The simulation format supplied is not supported! Available simulation engines:\n\t{self._available_formats}"
 
         # Creating the cosolvent molecules from json file
-        # with open(cosolvents) as fi:
-        #     cosolvents_dict = json.load(fi)
-        for c in cosolvents:
+        with open(cosolvents) as fi:
+            cosolvents_dict = json.load(fi)
+        for c in cosolvents_dict:
             cosolvent = CosolventMolecule(**c)
             cosolvent_xyz = cosolvent.positions*openmmunit.angstrom
             cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
@@ -311,13 +311,13 @@ class CosolventSystem(object):
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
     
-    def add_repulsive_forces(self, residues_names: list, epsilon: float=-0.01, sigma: float=6.0):
+    def add_repulsive_forces(self, residues_names: list, epsilon: float=0.01, sigma: float=6.0):
         """
             This function adds a LJ repulsive potential between the specified molecules.
 
             Args:
                 residues_names (list): list of residue names.
-                epsilon (float): depth of the potential well in kcal/mol (default: -0.01 kcal/mol)
+                epsilon (float): depth of the potential well in kcal/mol (default: 0.01 kcal/mol)
                 sigma (float): inter-particle distance in Angstrom (default: 6 A)      
         """
         epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
@@ -326,7 +326,7 @@ class CosolventSystem(object):
         forces = { force.__class__.__name__ : force for force in self.system.getForces()}
         nb_force = forces['NonbondedForce']
         cutoff_distance = nb_force.getCutoffDistance()
-        energy_expression = "4*epsilon * ((sigma / r)^12 * (sigma / r)^6);"
+        energy_expression = "4*epsilon * (sigma / r)^12;" #Only the repulsive term of the LJ potential
         energy_expression += f"epsilon = {epsilon.value_in_unit_system(openmmunit.md_unit_system)};"
         energy_expression += f"sigma = {sigma.value_in_unit_system(openmmunit.md_unit_system)};"
         repulsive_force = CustomNonbondedForce(energy_expression)
@@ -336,7 +336,7 @@ class CosolventSystem(object):
         repulsive_force.setCutoffDistance(cutoff_distance)
         repulsive_force.setUseLongRangeCorrection(False)
         repulsive_force.setUseSwitchingFunction(True)
-        repulsive_force.setSwitchingDistance(cutoff_distance - 1.0*openmmunit.angstrom)
+        repulsive_force.setSwitchingDistance(cutoff_distance - 0.1 * openmmunit.nanometer)
 
         target_indices = []
         for i, atom in enumerate(self.modeller.getTopology().atoms()):
@@ -508,6 +508,7 @@ class CosolventSystem(object):
         system = forcefield.createSystem(topology,
                                          nonbondedMethod=app.PME,
                                          nonbondedCutoff=10*openmmunit.angstrom,
+                                         switchDistance=9*openmmunit.angstrom,
                                          constraints=app.HBonds,
                                          hydrogenMass=1.5*openmmunit.amu)
         return system 
@@ -828,23 +829,22 @@ class CosolventSystem(object):
 #endregion                
 
 #region ForceFieldParametrization
-    def _parametrize_system(self, forcefields: dict, engine: str, cosolvents: dict) -> app.ForceField:
+    def _parametrize_system(self, forcefields: str, engine: str, cosolvents: dict) -> app.ForceField:
         """Parametrize the system with the specified forcefields
 
         Args:
-            forcefields (dict): dictionary of the forcefields json
+            forcefields (str): path to the json file containing the forcefields to use
             engine (str): name of the simulation engine
             cosolvents (dict): cosolvent molecules
 
         Returns:
             app.ForceField: forcefield obj
         """
-        # with open(forcefields) as fi:
-        #     ffs = json.load(fi)
-
+        with open(forcefields) as fi:
+            ffs = json.load(fi)
         engine = engine.upper()
-        forcefield = app.ForceField(*forcefields[engine])
-        sm_ff = forcefields["small_molecules"][0]
+        forcefield = app.ForceField(*ffs[engine])
+        sm_ff = ffs["small_molecules"][0]
         small_molecule_ff = self._parametrize_cosolvents(cosolvents, small_molecule_ff=sm_ff)
         forcefield.registerTemplateGenerator(small_molecule_ff.generator)
         return forcefield
@@ -862,15 +862,14 @@ class CosolventSystem(object):
         molecules = list()
         for cosolvent in cosolvents:
             try:
-                molecule = Molecule.from_smiles(smiles=cosolvent.smiles, name=cosolvent.name)
-                molecules.append(molecule)
+                molecules.append(Molecule.from_smiles(cosolvent.smiles, name=cosolvent.name))
             except Exception as e:
                 print(e)
                 print(cosolvent)
         if small_molecule_ff == "espaloma":
-            small_ff = EspalomaTemplateGenerator(molecules=molecules, forcefield='espaloma-0.3.2', template_generator_kwargs={"reference_forcefield": "openff_unconstrained-2.1.0", "charge_method": "nn"})
+            small_ff = EspalomaTemplateGenerator(molecules=molecules, forcefield='espaloma-0.3.2')
         elif small_molecule_ff == "gaff":
-            small_ff = GAFFTemplateGenerator(molecules=molecules, forcefield='gaff-2.11')
+            small_ff = GAFFTemplateGenerator(molecules=molecules)
         else:
             small_ff = SMIRNOFFTemplateGenerator(molecules=molecules)
         return small_ff
