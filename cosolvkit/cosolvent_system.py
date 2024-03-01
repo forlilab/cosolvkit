@@ -209,6 +209,7 @@ class CosolventSystem(object):
             assert (isinstance(radius, openmmunit.Quantity)) and (radius.unit == openmmunit.angstrom), \
                 "Error! If no receptor is passed, the radius parameter has to be set and it needs to be in angstrom openmm.unit"
             self.vectors, self.box, self.lowerBound, self.upperBound = self._build_box(None, padding, radius=radius)
+            self.receptor = False
         else:
             self.receptor = True
             self.vectors, self.box, self.lowerBound, self.upperBound = self._build_box(self.modeller.positions, padding, radius=None)
@@ -352,7 +353,7 @@ class CosolventSystem(object):
             indexes = [target_indices[x] for x in target_indices.keys() if x != res]
             repulsive_force.addInteractionGroup(target_indices[res], indexes)
         self.system.addForce(repulsive_force)
-        
+
         return
 
     def save_pdb(self, topology: app.Topology, positions: list, out_path: str):
