@@ -410,7 +410,7 @@ class CosolventSystem(object):
                                              nonbondedCutoff=10*openmmunit.angstrom,
                                              removeCMMotion=False,
                                              rigidWater=False,
-                                             hydrogenMass=1.5*openmmunit.amu)
+                                             hydrogenMass=3.0*openmmunit.amu)
         
         parmed_structure = parmed.openmm.topsystem.load_topology(topology, new_system, positions)   
         
@@ -509,8 +509,9 @@ class CosolventSystem(object):
                                          nonbondedMethod=app.PME,
                                          nonbondedCutoff=10*openmmunit.angstrom,
                                          switchDistance=9*openmmunit.angstrom,
+                                         removeCMMotion=True,
                                          constraints=app.HBonds,
-                                         hydrogenMass=1.5*openmmunit.amu)
+                                         hydrogenMass=3.0*openmmunit.amu)
         return system 
 #endregion
 #region FillTheVoid

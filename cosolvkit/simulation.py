@@ -41,8 +41,10 @@ def run_simulation( simulation_format: str = 'OPENMM',
             positions = app.CharmmCrdFile(positions)
         system = topology.createSystem(nonbondedMethod=app.PME,
                                        nonbondedCutoff=10*openmmunit.angstrom,
+                                       switchDistance=9*openmmunit.angstrom,
                                        constraints=app.HBonds,
-                                       hydrogenMass=1.5*openmmunit.amu)
+                                       removeCMMotion=True,
+                                       hydrogenMass=3.0*openmmunit.amu)
     else:
         assert pdb is not None and system is not None, "If the simulation format specified is OpenMM be sure to pass both pdb file and system.xml"
         pdb = app.PDBFile(f'{results_path}/system.pdb')
