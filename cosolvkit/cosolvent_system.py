@@ -148,8 +148,8 @@ class CosolventMolecule(object):
 
 class CosolventSystem(object):
     def __init__(self, 
-                 cosolvents: str,
-                 forcefields: str,
+                 cosolvents: dict,
+                 forcefields: dict,
                  simulation_format: str, 
                  modeller: app.Modeller,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
@@ -160,10 +160,10 @@ class CosolventSystem(object):
             the from_filename method and pass a pdb file path.
 
             Args:
-                cosolvents : str
-                    Path to the cosolvents.json file
-                forcefields : str
-                    Path to the forcefields.json file
+                cosolvents : dict
+                    Dictionary of cosolvent molecules
+                forcefields : dict
+                    Dictionary of forcefields to use
                 simulation_format : str
                     MD format that want to be used for the simulation.
                     Supported formats: Amber, Gromacs, CHARMM or openMM
@@ -196,10 +196,8 @@ class CosolventSystem(object):
         
         assert (simulation_format.upper() in self._available_formats), f"Error! The simulation format supplied is not supported! Available simulation engines:\n\t{self._available_formats}"
 
-        # Creating the cosolvent molecules from json file
-        with open(cosolvents) as fi:
-            cosolvents_dict = json.load(fi)
-        for c in cosolvents_dict:
+        # Creating cosolvent molecules
+        for c in cosolvents:
             cosolvent = CosolventMolecule(**c)
             cosolvent_xyz = cosolvent.positions*openmmunit.angstrom
             cosolvent_xyz = cosolvent_xyz.value_in_unit(openmmunit.nanometer)
@@ -830,22 +828,20 @@ class CosolventSystem(object):
 #endregion                
 
 #region ForceFieldParametrization
-    def _parametrize_system(self, forcefields: str, engine: str, cosolvents: dict) -> app.ForceField:
+    def _parametrize_system(self, forcefields: dict, engine: str, cosolvents: dict) -> app.ForceField:
         """Parametrize the system with the specified forcefields
 
         Args:
-            forcefields (str): path to the json file containing the forcefields to use
+            forcefields (dict): dictionary the forcefields to use
             engine (str): name of the simulation engine
             cosolvents (dict): cosolvent molecules
 
         Returns:
             app.ForceField: forcefield obj
         """
-        with open(forcefields) as fi:
-            ffs = json.load(fi)
         engine = engine.upper()
-        forcefield = app.ForceField(*ffs[engine])
-        sm_ff = ffs["small_molecules"][0]
+        forcefield = app.ForceField(*forcefields[engine])
+        sm_ff = forcefields["small_molecules"][0]
         small_molecule_ff = self._parametrize_cosolvents(cosolvents, small_molecule_ff=sm_ff)
         forcefield.registerTemplateGenerator(small_molecule_ff.generator)
         return forcefield
@@ -868,9 +864,9 @@ class CosolventSystem(object):
                 print(e)
                 print(cosolvent)
         if small_molecule_ff == "espaloma":
-            small_ff = EspalomaTemplateGenerator(molecules=molecules, forcefield='espaloma-0.3.2')
+            small_ff = EspalomaTemplateGenerator(molecules=molecules, forcefield='espaloma-0.3.2', template_generator_kwargs={"reference_forcefield": "openff_unconstrained-2.1.0", "charge_method": "nn"})
         elif small_molecule_ff == "gaff":
-            small_ff = GAFFTemplateGenerator(molecules=molecules)
+            small_ff = GAFFTemplateGenerator(molecules=molecules, forcefield='gaff-2.11')
         else:
             small_ff = SMIRNOFFTemplateGenerator(molecules=molecules)
         return small_ff
