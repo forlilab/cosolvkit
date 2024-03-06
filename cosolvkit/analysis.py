@@ -228,10 +228,8 @@ class Report:
         # setup results folders
         report_path = os.path.join(out_path, "report")
         rdf_path = os.path.join(report_path, "rdf")
-        autocorrelation_path = os.path.join(report_path, "autocorrelation")
         os.makedirs(report_path, exist_ok=True)
         os.makedirs(rdf_path, exist_ok=True)
-        os.makedirs(autocorrelation_path, exist_ok=True)
 
         # Generate equilibration plot
         self._plot_temp_vol_pot(report_path)
@@ -337,7 +335,6 @@ class Report:
         analysis.export_atomic_grid_free_energy(fig_energy_name)
         self.density_file = fig_density_name
         return
-        
 
     def _get_temp_vol_pot(self, log_file):
         df = pd.read_csv(log_file)
@@ -347,33 +344,32 @@ class Report:
         return pot_e, temp, vol
 
     def _plot_temp_vol_pot(self, outpath=None):
-        fig_name = f"{outpath}/equilibration.png"
-        lim = len(self._potential_energy)
-        if len(self._potential_energy) > 75:
-            lim = 75
 
-        t = range(0, lim)
-        plt.close("all")
-        fig, ax = plt.subplots()
-        ax.plot(t, [self._potential_energy[x] / 1000 for x in range(0, lim)], label="potential")
-        ax.plot(t, [self._volume[x] for x in range(0, lim)], label="volume")
-        ax.plot(t, [self._temperature[x] for x in range(0, lim)], label="temperature")
-
-        ax.set(**{
-            "title": "Energy",
-            "xlabel": "time / ps",
-            "xlim": (0, 75),
-            })
-
-        ax.legend(
-            framealpha=1,
-            edgecolor="k",
-            fancybox=False
-        )
         if outpath is not None:
-            plt.savefig(fig_name)
+            fig_name = f"{outpath}/simulation_statistics.png"
+
+        fig, axs = plt.subplots(3, 1, figsize=(12, 6))
+
+        axs[0].plot(self._potential_energy, color='green', linewidth=2)
+        axs[0].set_title('Potential Energy',)
+        axs[0].set_xlabel('Time (ps)')
+        axs[0].set_ylabel('Energy (kJ/mole)')
+    
+        axs[1].plot(self._volume, color='blue', linewidth=2)
+        axs[1].set_title('Volume')
+        axs[1].set_xlabel('Time (ps)')
+        axs[1].set_ylabel('Volume (nm^3)')
+
+        axs[2].plot(self._temperature, color='red', linewidth=2)
+        axs[2].set_title('Temperature')
+        axs[2].set_xlabel('Time (ps)')
+        axs[2].set_ylabel('Temperature (K)')
+
+        plt.tight_layout()
+        plt.savefig(fig_name)
         plt.close()
-        return
+
+        return 
     
     def _rdf_mda(self, universe: Universe, cosolvents: list, outpath=None):
         np.seterr(divide='ignore', invalid='ignore')
