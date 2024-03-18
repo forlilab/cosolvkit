@@ -1,12 +1,12 @@
 {
-  "cosolvents": "/home/nick/phd/cosolvkit/cosolvents.json",
-  "forcefields": "/home/nick/phd/cosolvkit/forcefields.json",
-  "md_format": "amber",
+  "cosolvents": "/home/niccolo/phd/cosolvkit/cosolvents.json",
+  "forcefields": "/home/niccolo/phd/cosolvkit/forcefields.json",
+  "md_format": "openmm",
   "receptor": true,
-  "protein_path": "/home/nick/phd/cosolvkit/data/lysozyme/7l37.cif",
+  "protein_path": "/home/niccolo/phd/cosolvkit/data/example/protein.pdb",
   "clean_protein": true,
   "keep_heterogens": false,
-  "variants": [],
+  "variants_d": {"A:16": "CYX"},
   "add_repulsive": false,
   "repulsive_residues": [],
   "solvent_smiles": "H2O",
@@ -17,7 +17,7 @@
   "cosolvent_placement": 0,
   "waters_to_keep": [],
   "radius": null,
-  "output": "/home/nick/Desktop/results",
+  "output": "/home/niccolo/Desktop/results",
   "run_cosolvent_system": true,
   "run_md": false
 }

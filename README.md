@@ -51,7 +51,7 @@ The main entry point of the script is the file `config.json` where all the neces
 |protein_path          | If receptor is `true` this should be the path to the protein structure. | no default |
 |clean_protein         | Flag indicating if cleaning the protein with `PDBFixer` | TRUE |
 |keep_heterogens       | Flag indicating if keeping the heterogen atoms while cleaning the protein. Waters will be always kept. | FALSE |
-|variants              | List of residues for which a variant is requested (different protonation state), `None` for the rest of the residues. | empty list |
+|variants              | Dictionary of residues for which a variant is requested (different protonation state) in the form {"chain_id:res_id":"protonation_state"}, `None` for the rest of the residues. | empty dictionary |
 |add_repulsive         | Flag indicating if adding repulsive forces between certain residues or not. | FALSE |
 |repulsive_resiudes    | List of residues for which applying the repulsive forces. | empty list |
 |solvent_smiles        | Smiles string of the solvent to use. | H2O |

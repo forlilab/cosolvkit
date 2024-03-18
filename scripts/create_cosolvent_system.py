@@ -3,8 +3,9 @@ import io
 import json
 import time
 import argparse
+from collections import defaultdict
 from cosolvkit.config import Config
-from cosolvkit.utils import fix_pdb
+from cosolvkit.utils import fix_pdb, add_variants
 from cosolvkit.cosolvent_system import CosolventSystem, CosolventMembraneSystem
 from cosolvkit.simulation import run_simulation
 from openmm.app import *
@@ -30,7 +31,6 @@ if __name__ == "__main__":
     args = cmd_lineparser()
     config_file = args.config
     config = Config.from_config(config_file)
-    
     # Start setting up the pipeline
     os.makedirs(config.output, exist_ok=True)
     
@@ -53,20 +53,37 @@ if __name__ == "__main__":
                     pdbxfile = pdb_string
                 protein_topology, protein_positions = fix_pdb(pdbfile=pdbfile,
                                                             pdbxfile=pdbxfile, 
-                                                            keep_heterogens=config.keep_heterogens, 
-                                                            variants=config.variants)
+                                                            keep_heterogens=config.keep_heterogens, )
             else:
                 if not config.protein_path.endswith(".pdb"):
                     pdb = PDBxFile(pdb_string)
                 else:
                     pdb = PDBFile(pdb_string)
                 protein_topology, protein_positions = pdb.topology, pdb.positions
+            
+            # Call add_variants fucntion
+            if len(config.variants_d.keys()) > 0:
+                variants = list()
+                residues = list(protein_topology.residues())
+                mapping = defaultdict(list)
+                for r in residues:
+                    mapping[r.chain.id].append(int(r.id))
+                
+                for chain in mapping:
+                    for res_number in mapping[chain]:
+                        key = f"{chain}:{res_number}"
+                        if key in config.variants_d:
+                            variants.append(config.variants_d[key])
+                        else:
+                            variants.append(None)
+                protein_topology, protein_positions = add_variants(protein_topology, protein_positions, variants)
+                
         else:
             assert config.radius is not None, "radius is None in the config"
             # Create empty modeller since there's nothing in the system yet
             config.radius = config.radius * openmmunit.angstrom
             protein_topology, protein_positions = Topology(), None
-        
+
         protein_modeller = Modeller(protein_topology, protein_positions)
 
         # Load cosolvents and forcefields dictionaries
