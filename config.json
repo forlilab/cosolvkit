@@ -1,12 +1,12 @@
 {
-  "cosolvents": "/home/niccolo/phd/cosolvkit/cosolvents.json",
-  "forcefields": "/home/niccolo/phd/cosolvkit/forcefields.json",
+  "cosolvents": "/path/to/cosolvents.json",
+  "forcefields": "/path/to/forcefields.json",
   "md_format": "openmm",
   "receptor": true,
-  "protein_path": "/home/niccolo/phd/cosolvkit/data/example/protein.pdb",
+  "protein_path": "/path/to/protein/structure",
   "clean_protein": true,
   "keep_heterogens": false,
-  "variants_d": {"A:16": "CYX"},
+  "variants_d": {},
   "add_repulsive": false,
   "repulsive_residues": [],
   "solvent_smiles": "H2O",
@@ -17,7 +17,7 @@
   "cosolvent_placement": 0,
   "waters_to_keep": [],
   "radius": null,
-  "output": "/home/niccolo/Desktop/results",
+  "output": "/path/to/where/to/save/results",
   "run_cosolvent_system": true,
   "run_md": false
 }
