@@ -9,6 +9,8 @@
   "variants_d": {},
   "add_repulsive": false,
   "repulsive_residues": [],
+  "epsilon": 0.01,
+  "sigma": 10.0,
   "solvent_smiles": "H2O",
   "solvent_copies": null,
   "membrane": false,

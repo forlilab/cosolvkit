@@ -14,6 +14,8 @@ class Config(object):
                  variants_d=dict(),
                  add_repulsive=False,
                  repulsive_residues=list(),
+                 epsilon=None,
+                 sigma=None,
                  solvent_smiles=None,
                  solvent_copies=None,
                  membrane=False,
@@ -36,6 +38,8 @@ class Config(object):
         self.variants_d = variants_d
         self.add_repulsive = add_repulsive
         self.repulsive_residues = repulsive_residues
+        self.epsilon = epsilon
+        self.sigma = sigma
         self.solvent_smiles = solvent_smiles
         self.solvent_copies = solvent_copies
         self.membrane = membrane
@@ -64,7 +68,7 @@ class Config(object):
             config = json.load(f)
         bad_keys = [k for k in config if k not in expected_keys]
         if len(bad_keys) > 0:
-            err_msg = "unexpected keys in MoleculePreparation.from_config():" + os.linesep
+            err_msg = "unexpected keys in Config.from_config():" + os.linesep
             for key in bad_keys:
                 err_msg += "  - %s" % key + os.linesep
             raise ValueError(err_msg)

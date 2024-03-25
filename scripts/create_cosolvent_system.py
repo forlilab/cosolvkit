@@ -114,7 +114,7 @@ if __name__ == "__main__":
                                 n_solvent_molecules=config.solvent_copies)
             
         if config.add_repulsive:
-            cosolv_system.add_repulsive_forces(config.repulsive_residues)
+            cosolv_system.add_repulsive_forces(config.repulsive_residues, epsilon=config.epsilon, sigma=config.sigma)
 
         print("Saving topology file")
         cosolv_system.save_topology(topology=cosolv_system.modeller.topology, 

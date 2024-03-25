@@ -23,7 +23,7 @@ You need, at a minimum (requirements):
 * pymol
 
 ## Installation
-I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
+I highly recommend you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
 $ conda create -n cosolvkit -c conda-forge && conda activate cosolvkit
 $ conda install openmmforcefields==0.12
@@ -42,28 +42,31 @@ $ pip install -e .
 The script `create_cosolvent_system.py` provide all the necessary tools to build a cosolvent system and optionally run an MD simulation with standard setup.
 The main entry point of the script is the file `config.json` where all the necessary flags and command line options are specified.
 
-| Argument          | Description                                           | Default value   |
-|:------------------------|:-------------------------------------------------|:----------------|
-|cosolvents            | Path to the json file containing the cosolvents to add to the system. | no default |
-|forcefields           | Path to the json file containing the forcefields to use. | no default |
-|md_format             | Format to use for the MD simulations and topology files. Supported formats: [OPENMM, AMBER, GROMACS, CHARMM] | no default |
-|receptor              | Boolean describing if the receptor is present or not. | no default |
-|protein_path          | If receptor is `true` this should be the path to the protein structure. | no default |
-|clean_protein         | Flag indicating if cleaning the protein with `PDBFixer` | TRUE |
-|keep_heterogens       | Flag indicating if keeping the heterogen atoms while cleaning the protein. Waters will be always kept. | FALSE |
-|variants              | Dictionary of residues for which a variant is requested (different protonation state) in the form {"chain_id:res_id":"protonation_state"}, `None` for the rest of the residues. | empty dictionary |
-|add_repulsive         | Flag indicating if adding repulsive forces between certain residues or not. | FALSE |
-|repulsive_resiudes    | List of residues for which applying the repulsive forces. | empty list |
-|solvent_smiles        | Smiles string of the solvent to use. | H2O |
-|solvent_copies        | If specified, the box won't be filled up with solvent, but will have the exact number of solvent molecules specified. | no default |
-|membrane              | Flag indicating if the system has membranes or not. | FALSE |
-|lipid_type            | If membrane is TRUE specify the lipid to use. Supported lipids: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"] | "POPC" |
-|lipid_patch_path      | If the lipid required is not in the available, it is possible to pass a pre-equilibrated patch of the lipid of interest. | no default |
-|cosolvent_placement   | Integer deciding on which side of the membrane to place the cosolvents. Available options: [0 -> no preference, 1 -> outside, -1 -> inside] | 0 |
-|waters_to_keep        | List of indices of waters of interest in a membrane system. | no default |
-|radius                | If no receptor, the radius is necessary to set the size of the simulation box. | no default |
-|output                | Path to where save the results. | no default |
-|run_md                | Flag indicating if running the md simulation after creating the system or not. | FALSE |
+| Argument                | Type  | Description                                           | Default value   |
+|:------------------------|:------|:-------------------------------------------|:----------------|
+|cosolvents               | string |Path to the json file containing the cosolvents to add to the system. | no default |
+|forcefields              | string | Path to the json file containing the forcefields to use. | no default |
+|md_format                | string | Format to use for the MD simulations and topology files. Supported formats: [OPENMM, AMBER, GROMACS, CHARMM] | no default |
+|receptor                 | boolean | Boolean describing if the receptor is present or not. | no default |
+|protein_path             | string | If receptor is `true` this should be the path to the protein structure. | no default |
+|clean_protein            | boolean | Flag indicating if cleaning the protein with `PDBFixer` | TRUE |
+|keep_heterogens          | boolean | Flag indicating if keeping the heterogen atoms while cleaning the protein. Waters will be always kept. | FALSE |
+|variants                 | dictionary | Dictionary of residues for which a variant is requested (different protonation state) in the form {"chain_id:res_id":"protonation_state"}, `None` for the rest of the residues. | empty dictionary |
+|add_repulsive            | boolean | Flag indicating if adding repulsive forces between certain residues or not. | FALSE |
+|repulsive_resiudes       | list | List of residues for which applying the repulsive forces. | empty list |
+|epsilon                  | float | Depth of the potential well in kcal/mol | 0.01 kcal/mol |
+|sigma                    | float | inter-particle distance in Angstrom | 10.0 Angstrom |
+|solvent_smiles           | string | Smiles string of the solvent to use. | H2O |
+|solvent_copies           | integer | If specified, the box won't be filled up with solvent, but will have the exact number of solvent molecules specified. | no default |
+|membrane                 | boolean | Flag indicating if the system has membranes or not. | FALSE |
+|lipid_type               | string | If membrane is TRUE specify the lipid to use. Supported lipids: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"] | "POPC" |
+|lipid_patch_path         | string | If the lipid required is not in the available, it is possible to pass a pre-equilibrated patch of the lipid of interest. | no default |
+|cosolvent_placement      | integer | Integer deciding on which side of the membrane to place the cosolvents. Available options: [0 -> no preference, 1 -> outside, -1 -> inside] | 0 |
+|waters_to_keep           | list | List of indices of waters of interest in a membrane system. | no default |
+|radius                   | float | If no receptor, the radius is necessary to set the size of the simulation box. | no default |
+|output                   | string | Path to where save the results. | no default |
+|run_cosolvent_system     | boolean | Flag indicating if running creating the system or not. | TRUE |
+|run_md                   | boolean | Flag indicating if running the md simulation after creating the system or not. | FALSE |
 
 1. **Preparation**
 ```bash
