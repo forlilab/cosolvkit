@@ -124,7 +124,6 @@ def _export(fname, grid, gridsize=0.5, center=None, box_size=None):
 
 class Analysis(AnalysisBase):
 
-
     def __init__(self, atomgroup, gridsize=0.5, **kwargs):
         super(Analysis, self).__init__(atomgroup.universe.trajectory, **kwargs)
 
@@ -239,6 +238,7 @@ class Report:
     
     def generate_density_maps(self, out_path, analysis_selection_string=""):
         print("Generating density maps...")
+        os.makedirs(out_path, exist_ok=True)
         volume = self._volume[-1]
         temperature = self._temperature[-1]
         if analysis_selection_string == "":
@@ -271,19 +271,24 @@ class Report:
         topology = os.path.join(base_path, topology)
         trajectory = os.path.join(base_path, trajectory)
         # density_file = os.path.join(base_path, density_file)
+        
         cmd_string = ""
         # Load topology and first frame of the trajectory
         cmd.load(topology, "structure")
         cmd.load_traj(trajectory, start=0, stop=1)
         cmd_string += f"cmd.load('{topology}', 'structure')\n"
         cmd_string += f"cmd.load_traj('{trajectory}', start=0, stop=1)\n"
+
         # Load density
         for idx, density in enumerate(density_files):
-            cmd.load(density, f"density_map_{idx}")
-            cmd_string += f"cmd.load('{density}', 'density_map_{idx}')\n"
+            cosolv = density.split('_')[-1]
+
+            cmd.load(density, f"density_map_{cosolv}")
+            cmd_string += f"cmd.load('{density}', 'density_map_{cosolv}')\n"
 
         # Set structure's color
         cmd.color("grey50", "structure and name C*")
+
         # Remove solvent and organic molecules
         cmd.remove("solvent")
         cmd.remove("org")
@@ -293,12 +298,13 @@ class Report:
 
         for idx in range(len(density_files)):
             # Create isomesh for hydrogen bond probes
-            cmd.isomesh(f"hbonds_{idx}", f"density_map_{idx}", 10)
-            # Color the hydrgen bond isomesh
-            cmd.color(colors[idx], f"hbonds_{idx}")
-            cmd_string += f"cmd.isomesh('hbonds_{idx}', 'density_map_{idx}', 10)\n"
-            cmd_string += f"cmd.color('{colors[idx]}', 'hbonds_{idx}')\n"
+            cmd.isomesh(f"dens_{cosolv}", f"density_map_{cosolv}", 10)
 
+            # Color the hydrgen bond isomesh
+            cmd.color(colors[idx], f"dens_{cosolv}")
+            cmd_string += f"cmd.isomesh('dens_{cosolv}', 'density_map_{cosolv}', 10)\n"
+            cmd_string += f"cmd.color('{colors[idx]}', 'dens_{cosolv}')\n"
+            
         # Show sticks for the residues of interest
         if selection_string != '':
             cmd.show("sticks", selection_string)
