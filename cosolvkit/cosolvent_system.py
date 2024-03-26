@@ -709,7 +709,7 @@ class CosolventSystem(object):
             # for replicate in range(cosolvent.copies):
                 # counter = replicate
                 if len(placed_atoms_positions) < 1:
-                    counter = 0
+                    counter = np.random.choice(len(points))
                     xyz = points[counter]
                     cosolv_xyz = c_xyz + xyz
                     if self.check_coordinates_to_add(cosolv_xyz, None, prot_kdtree):
