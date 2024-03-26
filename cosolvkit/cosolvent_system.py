@@ -350,8 +350,12 @@ class CosolventSystem(object):
             repulsive_force.addExclusion(idx, jdx)
         
         for res in target_indices.keys():
-            indexes = [target_indices[x] for x in target_indices.keys() if x != res]
-            repulsive_force.addInteractionGroup(target_indices[res], indexes)
+            indexes = set()
+            for x in target_indices.keys():
+                if x!= res:
+                    for y in target_indices[x]:
+                        indexes.add(y)
+            repulsive_force.addInteractionGroup(set(target_indices[res]), indexes)
         self.system.addForce(repulsive_force)
 
         return
