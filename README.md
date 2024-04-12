@@ -106,7 +106,7 @@ center :1-100@CA
 image
 reference system.pdb [myref]
 rms ref [myref] :1-100@CA out protein.rmsd
-trajout clean.dcd
+trajout clean.xtc
 ```
 There are two important selections in this input file that are system specific and need to be edited manually, the one for centering
 the trajectory after `center` command, and the one for aligning after `rms`.
@@ -115,10 +115,10 @@ To run it, `system.pdb` needs to be on the working directory:
 ```
 cpptraj system.pdb process.cpptraj
 ```
-It will write `clean.dcd`. This trajectory should inspected to make sure the
+It will write `clean.xtc`. This trajectory should inspected to make sure the
 region of interest is not moving or wrapping around the periodic boundaries.
 First, load `system.pdb` into Pymol, and then type the following into
-Pymol's command line: `load_traj clean.dcd, system`.
+Pymol's command line: `load_traj clean.xtc, system`.
 
 An example of another program that can image and center trajectories is
 MDAnalysis. For imaging, see its documentation about
