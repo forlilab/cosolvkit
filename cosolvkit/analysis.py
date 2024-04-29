@@ -20,6 +20,7 @@ from MDAnalysis import Universe
 from MDAnalysis.analysis import rdf
 from MDAnalysis.analysis.base import AnalysisBase
 import matplotlib.pyplot as plt
+import matplotlib.style as style
 import pandas as pd
 import pymol
 from pymol import cmd, stored
@@ -204,6 +205,7 @@ class Analysis(AnalysisBase):
         _export(fname, self._agfe, gridsize, center, box_size)
 
 class Report:
+    # style.use('ggplot')
     def __init__(self, log_file, traj_file, top_file, cosolvents_path):
         self.statistics = log_file
         self.trajectory = traj_file
@@ -405,11 +407,14 @@ class Report:
                 irdf = rdf.InterRDF(atoms, atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
                 irdf.run(start=0, step=step_size)
                 max_y = max(irdf.results.rdf)
-                ax[0][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+                ax[0][0].plot(irdf.results.bins, irdf.results.rdf, label="RDF")
                 ax[0][0].set_xlabel(r'$r$ $\AA$')
                 ax[0][0].set_ylabel("$g(r)$")
-                ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} every {step_size} frames")
-                ax[0][0].legend()
+                ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom}")
+                # ax[0][0].set_title(f"RDF-{cosolvent_name} {cosolvent_atom} every {step_size} frames")
+                leg = ax[0][0].legend(handlelength=0, handletextpad=0, fancybox=True)
+                for item in leg.legendHandles:
+                    item.set_visible(False)
                 
                 ax[1][0] = self._plot_autocorrelation(data=irdf.results.rdf,
                                                         ax=ax[1][0], 
@@ -422,11 +427,14 @@ class Report:
                 irdf.run(start=0, step=step_size)
                 max_y = max(irdf.results.rdf)
                 irdf.run()
-                ax[0][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+                ax[0][1].plot(irdf.results.bins, irdf.results.rdf, label="RDF")
                 ax[0][1].set_xlabel(r'$r$ $\AA$')
                 ax[0][1].set_ylabel("$g(r)$")
-                ax[0][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O every {step_size} frames")
-                ax[0][1].legend()
+                ax[0][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O")
+                # ax[0][1].set_title(f"RDF {cosolvent_name} {cosolvent_atom}-HOH O every {step_size} frames")
+                leg = ax[0][1].legend(handlelength=0, handletextpad=0, fancybox=True)
+                for item in leg.legendHandles:
+                    item.set_visible(False)
 
                 self._plot_autocorrelation(data=irdf.results.rdf, 
                                              ax=ax[1][1], 
@@ -446,11 +454,13 @@ class Report:
         irdf = rdf.InterRDF(oxygen_atoms, oxygen_atoms, nbins=n_bins, range=(0.0, r_max), exclusion_block=(1, 1))
         irdf.run(start=0, step=50)
         # irdf.run()
-        ax.plot(irdf.results.bins, irdf.results.rdf, label="RDF", alpha=0.5)
+        ax.plot(irdf.results.bins, irdf.results.rdf, label="RDF")
         ax.set_xlabel(r'$r$ $\AA$')
         ax.set_ylabel("$g(r)$")
         ax.set_title(f"RDF-HOH O every 50 frames")
-        ax.legend()
+        leg = ax.legend(handlelength=0, handletextpad=0, fancybox=True)
+        for item in leg.legendHandles:
+            item.set_visible(False)
         if outpath is not None:
             plt.savefig(f"{outpath}/rdf_HOH_O.png")
         plt.close()
@@ -473,9 +483,13 @@ class Report:
         # Normalize autocorrelation values for better plotting
         normalized_autocorr = autocorr_values / np.max(np.abs(autocorr_values))
         lags = np.arange(0, len(autocorr_values))
-        pd.plotting.autocorrelation_plot(pd.Series(normalized_autocorr), ax=ax)
+        pd.plotting.autocorrelation_plot(pd.Series(normalized_autocorr), ax=ax, label="Autocorrelation")
+        ax.grid(False)
         ax.set_xlim([0, len(autocorr_values)])
         ax.set_title(title)
         ax.set_xlabel('Lag')
         ax.set_ylabel('Autocorrelation')
+        leg = ax.legend(handlelength=0, handletextpad=0, fancybox=True)
+        for item in leg.legendHandles:
+            item.set_visible(False)
         return ax
