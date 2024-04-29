@@ -1,0 +1,4 @@
+[
+    {"resname": "GZ6", "name": "guanidinium",       "concentration": 0.1, "smiles": "C(=[NH2+])(N)N"},
+    {"resname": "NCC", "name": "ethylammonium",     "concentration": 0.1, "smiles": "[NH3+]CC"}
+]

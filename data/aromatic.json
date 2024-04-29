@@ -1,0 +1,5 @@
+[
+    {"resname": "BNZ", "name": "benzene",           "concentration": 0.1, "smiles": "c1ccccc1"},
+    {"resname": "IMD", "name": "imidazole",         "concentration": 0.1, "smiles": "c1[nH]cnc1"},
+    {"resname": "IPH", "name": "phenol",            "concentration": 0.1, "smiles": "Oc1ccccc1"}
+]

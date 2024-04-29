@@ -185,7 +185,3 @@ Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and re
 * Acetate CC(=O)[O-] ACT
 * Formamide C(=O)N FOM
 * Acetaldehyde CC=O ACD
-
-## Citations
-* Ustach, Vincent D., et al. "Optimization and Evaluation of Site-Identification by Ligand Competitive Saturation (SILCS) as a Tool for Target-Based Ligand Optimization." Journal of chemical information and modeling 59.6 (2019): 3018-3035.
-* Schott-Verdugo, S., & Gohlke, H. (2019). PACKMOL-memgen: a simple-to-use, generalized workflow for membrane-protein–lipid-bilayer system building. Journal of chemical information and modeling, 59(6), 2522-2528.

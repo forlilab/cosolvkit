@@ -1,6 +1,6 @@
 {
-  "cosolvents": "/path/to/cosolvents.json",
-  "forcefields": "/path/to/forcefields.json",
+  "cosolvents": "data/cosolvents.json",
+  "forcefields": "data/forcefields.json",
   "md_format": "openmm",
   "receptor": true,
   "protein_path": "/path/to/protein/structure",

@@ -1,0 +1,4 @@
+[
+    {"resname": "IOH", "name": "isopropanol",       "concentration": 0.1, "smiles": "OC(C)C"},
+    {"resname": "ACM", "name": "acetamide",         "concentration": 0.1, "smiles": "CC(=O)N"}
+]
