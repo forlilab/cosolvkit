@@ -1,0 +1,13 @@
+[
+    {"resname": "NML", "name": "n-methylacetamide", "concentration": 0.1, "smiles": "CC(=O)NC"},
+    {"resname": "BNZ", "name": "benzene",           "concentration": 0.1, "smiles": "c1ccccc1"},
+    {"resname": "IMD", "name": "imidazole",         "concentration": 0.1, "smiles": "c1[nH]cnc1"},
+    {"resname": "IPH", "name": "phenol",            "concentration": 0.1, "smiles": "Oc1ccccc1"},
+    {"resname": "IND", "name": "indole",            "concentration": 0.1, "smiles": "c1ccc2c(c1)cc[nH]2"},
+    {"resname": "EOH", "name": "ethanol",           "concentration": 0.1, "smiles": "OCC"},
+    {"resname": "ACM", "name": "acetamide",         "concentration": 0.1, "smiles": "CC(=O)N"},
+    {"resname": "IBT", "name": "isobutane",         "concentration": 0.1, "smiles": "CC(C)C"},
+    {"resname": "GZ6", "name": "guanidinium",       "concentration": 0.06, "smiles": "C(=[NH2+])(N)N"},
+    {"resname": "NCC", "name": "ethylammonium",     "concentration": 0.06, "smiles": "[NH3+]CC"},
+    {"resname": "ACT", "name": "acetate",           "concentration": 0.12, "smiles": "CC(=O)[O-]"}
+]

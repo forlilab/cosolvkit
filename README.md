@@ -3,25 +3,6 @@
 # CosolvKit
 The python package for creating cosolvent system
 
-## Prerequisites
-
-You need, at a minimum (requirements):
-* python 3
-* numpy 
-* scipy
-* RDKit
-* ambertools
-* parmed
-* MDAnalysis
-* griddataformats
-* MDTraj
-* OpenMM
-* OpenMM-ForceFields
-* OpenFF-toolkit
-* PDBFixer
-* espaloma
-* pymol
-
 ## Installation
 I highly recommend you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
@@ -29,6 +10,7 @@ $ conda create -n cosolvkit -c conda-forge && conda activate cosolvkit
 $ conda install openmmforcefields==0.12
 $ conda install pdbfixer mdanalysis espaloma pymol-open-source griddataformats
 ```
+For faster installation, use `mamba` or `micromamba` instead of `conda`.
 
 Finally, we can install the `CosolvKit` package
 ```bash
@@ -97,6 +79,52 @@ print(f"Simulation finished after {(time.time() - start)/60:.2f} min.")
 ```
 
 4. **Analysis**
+
+#### 4.1 centering, imaging, and aligning a trajectory
+To generate meaningful cosolvent densities for visualization, the trajectory
+must be centered and aligned on the region of interest. Centering is
+placing a set of atoms at the center of the simulation box
+(without rotating the box),
+imaging is placing all atoms inside the box if they traveled beyond
+the periodic boundary conditions, and aligning is rotating and translating
+the system so that a selection of atoms overlaps with some reference positions.
+
+Usually, trajectories are aligned on a macromolecule such as a protein, but
+parts of macromolecules that are flexible and move during the simulation can
+still cause densities to smear. If such flexible parts are of interest, it is
+a good idea to align the trajectories on each flexible part independently.
+If the region of interest is a specific location of a large or flexible protein,
+it is best to align using the vicinity of the region of interest, rather than
+the whole protein.
+
+One option to align and image trajectories is `cpptraj`. It should be installed
+automatically by the installation instructions above. First we create an input
+file for `cpptraj`, which we will call `process.cpptraj`:
+```
+trajin trajectory.dcd
+center :1-100@CA
+image
+reference system.pdb [myref]
+rms ref [myref] :1-100@CA out protein.rmsd
+trajout clean.xtc
+```
+There are two important selections in this input file that are system specific and need to be edited manually, the one for centering
+the trajectory after `center` command, and the one for aligning after `rms`.
+See the [documentation for defining selections](https://amberhub.chpc.utah.edu/atom-mask-selection-syntax/).
+To run it, `system.pdb` needs to be on the working directory:
+```
+cpptraj system.pdb process.cpptraj
+```
+It will write `clean.xtc`. This trajectory should inspected to make sure the
+region of interest is not moving or wrapping around the periodic boundaries.
+First, load `system.pdb` into Pymol, and then type the following into
+Pymol's command line: `load_traj clean.xtc, system`.
+
+An example of another program that can image and center trajectories is
+MDAnalysis. For imaging, see its documentation about
+[wrapping and unwrapping](https://docs.mdanalysis.org/stable/documentation_pages/transformations/wrap.html).
+
+#### 4.2 the actual analysis
 ```python
 from cosolvkit.analysis import Report
 """
