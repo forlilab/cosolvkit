@@ -187,6 +187,6 @@ Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and re
 
 ## Config files
 An example of the following configuration files can be found in the data folder:
-    - config.json
-    - cosolvents.json
-    - forcefields.json
+* config.json
+* cosolvents.json
+* forcefields.json
