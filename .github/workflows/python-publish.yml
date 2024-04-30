@@ -22,7 +22,7 @@ jobs:
           architecture: 'x64'
       - name: Install dependencies
         run: |
-          python3 -m install --upgrade pip setuptools wheel twine flake8
+          python3 -m pip install --upgrade pip setuptools wheel twine flake8
       - name: Create sdist and wheel
         run: |
           python3 setup.py sdist bdist_wheel
