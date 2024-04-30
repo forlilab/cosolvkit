@@ -6,9 +6,7 @@ The python package for creating cosolvent system
 ## Installation
 I highly recommend you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda create -n cosolvkit -c conda-forge && conda activate cosolvkit
-$ conda install openmmforcefields==0.12
-$ conda install pdbfixer mdanalysis espaloma pymol-open-source griddataformats
+$ conda create -n cosolvkit -c conda-forge -f cosolvkit_env.yml
 ```
 For faster installation, use `mamba` or `micromamba` instead of `conda`.
 
@@ -185,3 +183,10 @@ Non-exhaustive list of suggested cosolvents (molecule_name, SMILES string and re
 * Acetate CC(=O)[O-] ACT
 * Formamide C(=O)N FOM
 * Acetaldehyde CC=O ACD
+
+
+## Config files
+An example of the following configuration files can be found in the data folder:
+    - config.json
+    - cosolvents.json
+    - forcefields.json
