@@ -22,10 +22,10 @@ jobs:
           architecture: 'x64'
       - name: Install dependencies
         run: |
-          python -m install --upgrade pip setuptools wheel twine flake8
+          python3 -m install --upgrade pip setuptools wheel twine flake8
       - name: Create sdist and wheel
         run: |
-          python setup.py sdist bdist_wheel
+          python3 setup.py sdist bdist_wheel
       - name: Upload artifacts for inspection
         uses: actions/upload-artifact@v2
         with:
