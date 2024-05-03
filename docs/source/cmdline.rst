@@ -149,7 +149,6 @@ The script is based on the `Report class` and the following functions:
         - selection_string: important residues to select and show in the PyMol session.
 
 .. figure:: img/rdf_BEN_C1x.png
-   :scale: 50 %
    :alt: RDF plot example
 
    Example of an RDF plot generated with the post-processing pipeline.
