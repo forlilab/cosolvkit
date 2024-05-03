@@ -131,39 +131,32 @@ To access help message type:
 
 The script is based on the `Report class` and the following functions:
 
-    log_file: is the statistics.csv or whatever log_file produced during the simulation.
-        At least Volume, Temperature and Pot_e should be reported on this log file.
-    traj_file: trajectory file
-    top_file: topology file
-    cosolvents_file: json file describing the cosolvents
+    - log_file: is the statistics.csv or whatever log_file produced during the simulation. At least Volume, Temperature and Pot_e should be reported on this log file.
+    - traj_file: trajectory file
+    - top_file: topology file
+    - cosolvents_file: json file describing the cosolvents
 
     generate_report():
-        out_path: where to save the results. 3 folders will be created:
+        - out_path: where to save the results. 3 folders will be created:
             - report
                 - autocorrelation
                 - rdf
     generate_density_maps():
-        out_path: where to save the results.
-        analysis_selection_string: selection string of cosolvents you want to analyse. This
-            follows MDAnalysis selection strings style. If no selection string, one density file
-            for each cosolvent will be created.
+        - out_path: where to save the results.
+        - analysis_selection_string: selection string of cosolvents you want to analyse. This follows MDAnalysis selection strings style. If no selection string, one density file for each cosolvent will be created.
 
     generate_pymol_report()
         selection_string: important residues to select and show in the PyMol session.
 
-.. image:: ../img/rdf_BEN_C1x.png
-   :width: 200px
-   :height: 100px
+.. figure:: ../img/rdf_BEN_C1x.png
    :scale: 50 %
    :alt: RDF plot example
-   :align: center
+   Example of an RDF plot generated with the post-processing pipeline.
 
-.. image:: ../img/simulation_statistics.png
-   :width: 200px
-   :height: 100px
+.. figure:: ../img/simulation_statistics.png
    :scale: 50 %
    :alt: simulation statistics
-   :align: center
+   Example of a statistics plot generated with the post-processing pipeline.
 
 Outputs
 ********************
