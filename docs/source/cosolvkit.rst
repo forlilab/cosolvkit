@@ -20,7 +20,7 @@ cosolvkit.config module
    :undoc-members:
    :show-inheritance:
 
-cosolvkit.cosolvent\_system module
+cosolvkit.cosolvent_system module
 ----------------------------------
 
 .. automodule:: cosolvkit.cosolvent_system
