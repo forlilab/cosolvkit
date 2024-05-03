@@ -1,4 +1,4 @@
-name: ringtail
+name: cosolvkit
 channels:
   - conda-forge
   - defaults
