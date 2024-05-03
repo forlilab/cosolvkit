@@ -151,11 +151,13 @@ The script is based on the `Report class` and the following functions:
 .. figure:: img/rdf_BEN_C1x.png
    :scale: 50 %
    :alt: RDF plot example
+
    Example of an RDF plot generated with the post-processing pipeline.
 
 .. figure:: img/simulation_statistics.png
    :scale: 50 %
    :alt: simulation statistics
+   
    Example of a statistics plot generated with the post-processing pipeline.
 
 Outputs
