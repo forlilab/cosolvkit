@@ -1,21 +1,27 @@
-
-
-CosolvKit 
-================
+cosolvkit package
+=================
 
 Submodules
 ----------
 
+cosolvkit.analysis module
+-------------------------
+
+.. automodule:: cosolvkit.analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 cosolvkit.config module
-------------------------------
+-----------------------
 
 .. automodule:: cosolvkit.config
    :members:
    :undoc-members:
    :show-inheritance:
 
-cosolvkit.cosolvent_system module
---------------------------
+cosolvkit.cosolvent\_system module
+----------------------------------
 
 .. automodule:: cosolvkit.cosolvent_system
    :members:
@@ -23,7 +29,7 @@ cosolvkit.cosolvent_system module
    :show-inheritance:
 
 cosolvkit.simulation module
-----------------------------
+---------------------------
 
 .. automodule:: cosolvkit.simulation
    :members:
@@ -31,17 +37,9 @@ cosolvkit.simulation module
    :show-inheritance:
 
 cosolvkit.utils module
---------------------------
+----------------------
 
 .. automodule:: cosolvkit.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-cosolvkit.analysis module
--------------------------
-
-.. automodule:: cosolvkit.analysis
    :members:
    :undoc-members:
    :show-inheritance:

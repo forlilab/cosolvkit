@@ -5,13 +5,14 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../cosolvkit/'))
+sys.path.insert(0, os.path.abspath('../../cosolvkit'))
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'cosolvkit'
-copyright = '2024, Forli lab'
-author = 'Forli lab'
+copyright = '2024, Niccolo Bruciaferri'
+author = 'Niccolo Bruciaferri'
 release = '0.4.1'
 
 # -- General configuration ---------------------------------------------------
@@ -22,16 +23,16 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
-]
+    ]
 
 templates_path = ['_templates']
 exclude_patterns = []
 
-pygments_style = 'sphinx'
 
+pygments_style = 'sphinx'
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'sohinx_rtd_theme'
 html_static_path = ['_static']
