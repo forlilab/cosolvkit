@@ -9,6 +9,8 @@ def cmd_lineparser():
                         action='store', help='path to the traj <.dcd> file from MD simulation')
     parser.add_argument('-topo', dest='top_file', required=True,
                         action='store', help='path to the topology file from MD simulation')
+    parser.add_argument('-densitises', nargs='+', help='path to the density files passed as a list',
+                        action='store', dest='densities', required=True)
     parser.add_argument('-o', '--out_path', dest='out_path', required=True,
                         action='store', help='path where to store output plots')
     parser.add_argument('-c', '--cosolvents', dest='cosolvents', required=True,
@@ -21,6 +23,7 @@ if __name__ == "__main__":
     log_file = args.log_file
     traj_file = args.traj_file
     top_file = args.top_file
+    densities = args.densities
     out_path = args.out_path
     cosolvents_path = args.cosolvents
 
@@ -28,6 +31,6 @@ if __name__ == "__main__":
     report.generate_report(out_path=out_path)
     report.generate_pymol_reports(report.topology, 
                                   report.trajectory, 
-                                  density_files=["path_to_density_file"], 
+                                  density_files=densities, 
                                   selection_string='', 
                                   out_path=out_path)
