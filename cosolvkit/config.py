@@ -3,6 +3,8 @@ import json
 from inspect import signature
 
 class Config(object):
+    """Config class handling the config.json input.
+    """
     def __init__(self, 
                  cosolvents=None,
                  forcefields=None,

@@ -1,5 +1,3 @@
-:: _index:
-
 CosolvKit: a versatile tool for cosolvent MD preparation and analysis
 ========================================
 
