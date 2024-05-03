@@ -126,6 +126,7 @@ The script `post_simulaiton_processing.py` takes care of analysing the MD simula
 To access help message type:
 
 .. code-block:: bash
+
     $ post_simulation_processing.py --help
 
 The script is based on the `Report class` and the following functions:
@@ -150,8 +151,19 @@ The script is based on the `Report class` and the following functions:
     generate_pymol_report()
         selection_string: important residues to select and show in the PyMol session.
 
-.. |RDF plots| image:: ../img/rdf_BEN_C1x.png
-.. |Statistics| image:: ../img/simulation_statistics.png
+.. image:: ../img/rdf_BEN_C1x.png
+   :width: 200px
+   :height: 100px
+   :scale: 50 %
+   :alt: RDF plot example
+   :align: center
+
+.. image:: ../img/simulation_statistics.png
+   :width: 200px
+   :height: 100px
+   :scale: 50 %
+   :alt: simulation statistics
+   :align: center
 
 Outputs
 ********************
