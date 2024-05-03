@@ -146,14 +146,14 @@ The script is based on the `Report class` and the following functions:
         - analysis_selection_string: selection string of cosolvents you want to analyse. This follows MDAnalysis selection strings style. If no selection string, one density file for each cosolvent will be created.
 
     generate_pymol_report()
-        selection_string: important residues to select and show in the PyMol session.
+        - selection_string: important residues to select and show in the PyMol session.
 
-.. figure:: ../img/rdf_BEN_C1x.png
+.. figure:: img/rdf_BEN_C1x.png
    :scale: 50 %
    :alt: RDF plot example
    Example of an RDF plot generated with the post-processing pipeline.
 
-.. figure:: ../img/simulation_statistics.png
+.. figure:: img/simulation_statistics.png
    :scale: 50 %
    :alt: simulation statistics
    Example of a statistics plot generated with the post-processing pipeline.
