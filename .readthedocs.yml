@@ -19,5 +19,9 @@ build:
   tools:
     python: "3.10"
 
+# Build documentation in the "docs/" directory with Sphinx
+sphinx:
+  configuration: docs/source/conf.py
+
 conda:
-  environment: cosolvkit_env.yml
+  environment: docs/source/environment.yml
