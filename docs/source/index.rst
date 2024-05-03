@@ -16,6 +16,13 @@ Please report bugs or enhancement requests through the `Issue Tracker <https://g
 
 CosolvKit is **open source** and welcomes your contributions. `Fork the repository on GitHub <https://github.com/forlilab/cosolvkit>`_ and submit a pull request.
 
+Indices and tables
+********************
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+
 .. toctree::
    :maxdepth: 2
    :hidden:
