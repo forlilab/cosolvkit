@@ -20,11 +20,4 @@ build:
     python: "3.10"
 
 conda:
-  environment: build/python/environment.yml
-
-# Optionally set the version of Python and requirements required to build your docs
-python:
-   version: 3
-   install:
-   - method: setuptools
-     path: build/python
+  environment: cosolvkit_env.yml
