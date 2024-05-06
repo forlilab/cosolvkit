@@ -8,6 +8,16 @@ CosolvKit: a versatile tool for cosolvent MD preparation and analysis
 **CosolvKit** is one of the most **generalizable** and **flexible** **open-source** cosolvent systems preparation tool. It is developed on top of the **OpenMM** echosystem and allows the user to specify every kind of cosolvent molecule(s) in the form of SMILES strings at desired concentrations (M) - or specific number of copies.
 It exposes a user friendly interface that ensures reproducibility through the files config.json, cosolvents.json and forcefields.json that define all the setup options. At the same time, CosolvKit has also a powerful python API that ensures high **flexibility** and ease of use.
 
+
+.. important:: \This pre-print in ChemRxiv describes the original design, implementation, and features of CosolvKit:\
+      *CosolvKit: a versatile tool for cosolvent MD preparation and analysis.*
+      Niccolo Bruciaferri ,Jerome Eberhardt ,Manuel A. Llanos Author ,Johannes R. Loeffler ,
+      Matthew Holcomb ,Monica L. Fernandez-Quintero ,Diogo Santos-Martins ,Andrew B. Ward ,Stefano Forli.  
+        
+      DOI: `https://doi.org/10.26434/chemrxiv-2024-rmsnj`
+
+   If using CosolvKit in your work, please cite this pre-print.
+
 Availability
 ------------
 CosolvKit can be easily installed with all its dependencies using `pip` or `conda` package managers.

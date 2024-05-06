@@ -1,6 +1,6 @@
 :: _cmdline:
 
-CosolvKit command line interface
+cosolvkit command line interface
 ###############################
 
 The CosolvKit command line interface is the easiest method to create and simulate a cosolvent system. 

@@ -3,7 +3,10 @@ import json
 from inspect import signature
 
 class Config(object):
-    """Config class handling the config.json input.
+    """This class handles the config.json options and the whole Cosolvent setup.
+
+    :param object: inherits from the base class
+    :type object: object
     """
     def __init__(self, 
                  cosolvents=None,
@@ -56,6 +59,11 @@ class Config(object):
     
     @classmethod
     def get_defaults_dict(cls):
+        """Returns a dictionary of all the class attributes
+
+        :return: dictionary of class attributes
+        :rtype: dict
+        """
         defaults = {}
         sig = signature(cls)
         for key in sig.parameters:
@@ -65,6 +73,14 @@ class Config(object):
         
     @classmethod
     def from_config(cls, config):
+        """Sets up the parameters to run cosolvent from the config.json file supplied.
+
+        :param config: loads the config.json file and populates the class attributes
+        :type config: str
+        :raises ValueError: raises an error if some attributes are not recognized
+        :return: instance of the Config class
+        :rtype: Config
+        """
         expected_keys = cls.get_defaults_dict().keys()
         with open(config) as f:
             config = json.load(f)

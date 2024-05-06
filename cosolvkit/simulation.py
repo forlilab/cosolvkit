@@ -7,14 +7,36 @@ from mdtraj.reporters import NetCDFReporter, DCDReporter
 
 def run_simulation( simulation_format: str = 'OPENMM',
                     results_path: str = "output",
-                    topology=None, 
-                    positions=None,
+                    topology: str=None, 
+                    positions: str=None,
                     pdb: str = 'output/system.pdb',
                     system: str = 'output/system.xml', 
                     warming_steps: int = 100000,
                     simulation_steps: int = 25000000,
                     seed: int = None
                     ):
+    """_summary_
+
+    :param simulation_format: determines what MD engine will be used, defaults to 'OPENMM'. Available engines are: [AMBER, GROMACS, CHARMM, OPENMM]
+    :type simulation_format: str, optional
+    :param results_path: path to where to save the results, defaults to "output"
+    :type results_path: str, optional
+    :param topology: path to the topology file if using simulation_format different from OPENMM, defaults to None
+    :type topology: str, optional
+    :param positions: path to the positions file if using simulation_format different from OPENMM, defaults to None
+    :type positions: str, optional
+    :param pdb: path to the pdb file if using simulation_format OPENMM, defaults to 'output/system.pdb'
+    :type pdb: str, optional
+    :param system: path to the system.xml file if using simulation_format OPENMM, defaults to 'output/system.xml'
+    :type system: str, optional
+    :param warming_steps: number of warming steps, defaults to 100000
+    :type warming_steps: int, optional
+    :param simulation_steps: number of simulation steps, defaults to 25000000
+    :type simulation_steps: int, optional
+    :param seed: random seed for reproducibility, defaults to None
+    :type seed: int, optional
+    :raises ValueError: different checks are performed and expections are raised if some of the fail.
+    """
 
     # Temperature annealing
     Tstart = 5

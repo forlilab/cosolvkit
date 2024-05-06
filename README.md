@@ -2,7 +2,9 @@
     
 
 # CosolvKit
-The python package for creating cosolvent system
+The python package for creating cosolvent system.  
+
+Pre-print version of the original paper is freely accessible at the link https://doi.org/10.26434/chemrxiv-2024-rmsnj.
 
 ## Installation
 I highly recommend you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
@@ -11,7 +13,13 @@ $ conda create -n cosolvkit -c conda-forge -f cosolvkit_env.yml
 ```
 For faster installation, use `mamba` or `micromamba` instead of `conda`.
 
-Finally, we can install the `CosolvKit` package
+Finally, we can install the `CosolvKit` package via `pip`:
+```bash
+$ pip instal cosolvkit
+```
+
+or directly download and install the source code from git: 
+
 ```bash
 $ git clone https://github.com/forlilab/cosolvkit
 $ cd cosolvkit

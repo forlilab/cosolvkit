@@ -12,6 +12,7 @@ import parmed
 from openmm import Vec3, unit, XmlSerializer, System, CustomNonbondedForce, NonbondedForce, OpenMMException
 import openmm.app as app
 import openmm.unit as openmmunit
+import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from openff.toolkit import Molecule, Topology
@@ -25,21 +26,21 @@ rnaResidues = ['A', 'G', 'C', 'U', 'I']
 dnaResidues = ['DA', 'DG', 'DC', 'DT', 'DI']
 
 class CosolventMolecule(object):
-    def __init__(self, name, smiles=None, mol_filename=None, resname=None, copies=None, concentration=None):
-        """Create a Cosolvent object.
+    def __init__(self, name: str, smiles: str=None, mol_filename: str=None, resname: str=None, copies: int=None, concentration: float=None):
+        """Creates a Cosolvent object.
 
-        Parameters
-        ----------
-        name : str
-            Name of the molecule.
-        smiles : str, default=None
-            SMILES string of the molecule in the chosen protonation state.
-        mol_filename : str, default=None
-            MOL/SDF filename of the molecule in the chosen protonation state.
-        resname : str, default=None
-            3-letters residue name of the molecule. If None, the first 3 
-            letters of the name will be used as uppercase.
-
+        :param name: name of the molecule
+        :type name: str
+        :param smiles: SMILES string of the molecule in the chose protonation state, defaults to None
+        :type smiles: str, optional
+        :param mol_filename: MOL/SDF filename of the molecule, defaults to None
+        :type mol_filename: str, optional
+        :param resname: 3-letters residue name of the molecule. If None, the first 3 uppercase letters of the name will be used, defaults to None
+        :type resname: str, optional
+        :param copies: number of copies of cosolvent the user wants to place, defaults to None
+        :type copies: int, optional
+        :param concentration: if the number of copies is unknown the user can specify the concentration in Molar units, defaults to None
+        :type concentration: float, optional
         """
         if resname is None:
             self.resname = name[:3].upper()
@@ -104,18 +105,13 @@ class CosolventMolecule(object):
         return
     
     
-    def _generate_atom_names_from_mol(self, rdkit_mol):
-        """Generate atom names from an RDKit molecule.
+    def _generate_atom_names_from_mol(self, rdkit_mol: rdkit.Chem.rdchem.Mol) -> list:
+        """Generates atom names from an RDKit molecule.
 
-        Parameters
-        ----------
-        rdkit_mol : rdkit.Chem.rdchem.Mol
-            RDKit molecule.
-
-        Returns
-        -------
-        list
-            List of atom names.
+        :param rdkit_mol: RDKit molecule
+        :type rdkit_mol: rdkit.Chem.rdchem.Mol
+        :return: list of atom names.
+        :rtype: list
         """
         atom_names = []
         counter = {}
@@ -134,7 +130,14 @@ class CosolventMolecule(object):
         return atom_names
 
 
-    def _get_pdb_conect(self, rdkit_mol):
+    def _get_pdb_conect(self, rdkit_mol: rdkit.Chem.rdchem.Mol) -> list:
+        """Generates bonds definition (unused)
+
+        :param rdkit_mol: RDKit molecule
+        :type rdkit_mol: rdkit.Chem.rdchem.Mol
+        :return: list of bonds
+        :rtype: list
+        """
         conect = []
 
         pdb_string = Chem.MolToPDBBlock(rdkit_mol)
@@ -154,29 +157,21 @@ class CosolventSystem(object):
                  modeller: app.Modeller,  
                  padding: openmmunit.Quantity = 12*openmmunit.angstrom, 
                  radius: openmmunit.Quantity = None):
-        """
-            Create cosolvent system.
-            By default it accepts a pdb string for the receptor, otherwise can call
-            the from_filename method and pass a pdb file path.
+        """Create cosolvent system.
 
-            Args:
-                cosolvents : dict
-                    Dictionary of cosolvent molecules
-                forcefields : dict
-                    Dictionary of forcefields to use
-                simulation_format : str
-                    MD format that want to be used for the simulation.
-                    Supported formats: Amber, Gromacs, CHARMM or openMM
-                modeller : app.Modeller
-                    Modeller containing topology and positions information.
-                padding : openmm.unit.Quantity
-                    Specifies the padding used to create the simulation box 
-                    if no receptor is provided. Default to 12 Angstrom
-                radius : openmm.unit.Quantity
-                    Specifies the radius to create the box without receptor.
-                    Default is None
-        """ 
-        
+        :param cosolvents: dictionary of cosolvent molecules
+        :type cosolvents: dict
+        :param forcefields: dictionary of forcefields to use
+        :type forcefields: dict
+        :param simulation_format: MD format that want to be used for the simulation. Supported formats: Amber, Gromacs, CHARMM, openMM 
+        :type simulation_format: str
+        :param modeller: openmm modeller created from topology and positions.
+        :type modeller: openmm.app.Modeller
+        :param padding: specifies the padding used to create the simulation box, defaults to 12*openmmunit.angstrom
+        :type padding: openmm.unit.Quantity, optional
+        :param radius: Specifies the radius to create the box without receptor, defaults to None
+        :type radius: openmm.unit.Quantity, optional
+        """
         # Private
         self._available_formats = ["AMBER", "GROMACS", "CHARMM", "OPENMM"]
         self._cosolvent_positions = defaultdict(list)
@@ -226,44 +221,6 @@ class CosolventSystem(object):
         print(f"\t{self.box_volume*1000} A^3")
         return
     
-    # @classmethod
-    # def from_filename(cls, 
-    #                   cosolvents: str,
-    #                   forcefields: str,
-    #                   simulation_format: str, 
-    #                   receptor: str,  
-    #                   padding: openmmunit.Quantity = 12*openmmunit.angstrom,
-    #                   clean_protein: bool=True):
-    #     """
-    #         Create a CosolventSystem with receptor from the pdb file path.
-
-    #         Args:
-    #                 cosolvents : str
-    #                     Path to the cosolvents.json file
-    #                 forcefields : str
-    #                     Path to the forcefields.json file
-    #                 simulation_format : str
-    #                     MD format that want to be used for the simulation.
-    #                     Supported formats: Amber, Gromacs, CHARMM or openMM
-    #                 receptor : None | str
-    #                     PDB string of the protein. 
-    #                     By default is None to allow cosolvent
-    #                     simulations without receptor
-    #                 padding : openmm.unit.Quantity
-    #                     Specifies the padding used to create the simulation box 
-    #                     if no receptor is provided. Default to 12 Angstrom
-    #                 radius : openmm.unit.Quantity
-    #                     Specifies the radius to create the box without receptor.
-    #                     Default is None
-    #                 clean_protein : bool
-    #                     Determines if the protein will be cleaned and prepared
-    #                     with PDBFixer or not.
-    #                     Default is False
-    #     """
-    #     with open(receptor) as fi:
-    #         pdb_string = fi.read()
-    #     return cls(cosolvents, forcefields, simulation_format, io.StringIO(pdb_string), padding, None, clean_protein)
-    
 #region Public
     def build(self,
               solvent_smiles: str="H2O", 
@@ -275,10 +232,12 @@ class CosolventSystem(object):
         Please note that the solvation with solvents different from water may highly impact
         the execution time.
 
-        Args:
-            solvent_smiles (str, optional): smiles string defining the desired solvent to use. Defaults to "H2O".
-            n_solvent_molecules (int, optional): number of mulecules of solvent to add. Defaults to None.
-            neutralize (bool, optional): if True, the system charge will be neutralized by OpenMM. Defaults to True.
+        :param solvent_smiles: smiles string defining the desired solvent to use, defaults to "H2O"
+        :type solvent_smiles: str, optional
+        :param n_solvent_molecules: number of molecules of solvent to add, defaults to None
+        :type n_solvent_molecules: int, optional
+        :param neutralize: if True, the system charge will be neutralized by OpenMM, defaults to True
+        :type neutralize: bool, optional
         """
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
@@ -311,13 +270,14 @@ class CosolventSystem(object):
         return
     
     def add_repulsive_forces(self, residues_names: list, epsilon: float=0.01, sigma: float=10.0):
-        """
-            This function adds a LJ repulsive potential between the specified molecules.
+        """This function adds a LJ repulsive potential between the specified molecules.
 
-            Args:
-                residues_names (list): list of residue names.
-                epsilon (float): depth of the potential well in kcal/mol (default: 0.01 kcal/mol)
-                sigma (float): inter-particle distance in Angstrom (default: 10 A)      
+        :param residues_names: list of residue names
+        :type residues_names: list
+        :param epsilon: depth of the potential well in kcal/mol, defaults to 0.01
+        :type epsilon: float, optional
+        :param sigma: inter-particle distance in Angstrom, defaults to 10.0
+        :type sigma: float, optional
         """
         epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
         sigma = sigma * openmmunit.angstrom
@@ -363,10 +323,12 @@ class CosolventSystem(object):
     def save_pdb(self, topology: app.Topology, positions: list, out_path: str):
         """Saves the specified topology and position to the out_path file.
 
-        Args:
-            topology (app.Topology): topology used
-            positions (list): list of 3D coords
-            out_path (str): path to where to save the file
+        :param topology: topology used
+        :type topology: openmm.app.Topology
+        :param positions: list of 3D coords
+        :type positions: list
+        :param out_path: path to where to save the dile
+        :type out_path: str
         """
         app.PDBFile.writeFile(
             topology,
@@ -379,22 +341,22 @@ class CosolventSystem(object):
     def save_system(self, out_path: str, system: System):
         """Saves the openmm system to the desired out path.
 
-        Args:
-            out_path (str): path where to save the System
-            system (System): system to be saved
+        :param out_path: path where to save the System
+        :type out_path: str
+        :param system: system to save
+        :type system: openmm.System
         """
         with open(f"{out_path}/system.xml", "w") as fo:
             fo.write(XmlSerializer.serialize(system))
         return
     
     def load_system(self, system_path: str) -> System:
-        """Loads the desired system.
+        """Loads the specified openmm system.
 
-        Args:
-            system_path (str): path to the system file
-
-        Returns:
-            System: system
+        :param system_path: path to the system file.
+        :type system_path: str
+        :return: a system instance.
+        :rtype: openmm.System
         """
         with open(system_path) as fi:
             system = XmlSerializer.deserialize(fi.read())
@@ -403,13 +365,18 @@ class CosolventSystem(object):
     def save_topology(self, topology: app.Topology, positions: list, system: System, simulation_format: str, forcefield: app.ForceField, out_path: str):
         """Save the topology files necessary for MD simulations according to the simulation engine specified.
 
-        Args:
-            topology (app.Topology): openmm topology 
-            positions (list): list of 3D coordinates of the topology
-            system (System): openmm system
-            simulation_format (str): name of the simulation engine
-            forcefield (app.Forcefield): openmm forcefield
-            out_path (str): output path to where to save the topology files
+        :param topology: openmm topology
+        :type topology: openmm.app.Topology
+        :param positions: list of 3D coordinates
+        :type positions: list
+        :param system: openmm system
+        :type system: openmm.System
+        :param simulation_format: name of the simulation engine
+        :type simulation_format: str
+        :param forcefield: openmm forcefield
+        :type forcefield: openmm.app.ForceField
+        :param out_path: output path to where to save the topology files
+        :type out_path: str
         """
         new_system = forcefield.createSystem(topology,
                                              nonbondedMethod=app.PME,
@@ -448,8 +415,8 @@ class CosolventSystem(object):
     def _copies_from_concentration(self, water_volume: float):
         """Computes the number of copies of cosolvent necessary to reach the desired concentration
 
-        Args:
-            water_volume (float): volume available to be filled with cosolvents.
+        :param water_volume: volume available to be filled with cosolvents
+        :type water_volume: float
         """
         for cosolvent in self.cosolvents:
             if cosolvent.concentration is not None:
@@ -458,10 +425,10 @@ class CosolventSystem(object):
 
     
     def _get_n_waters(self) -> int:
-        """Returns the number of waters in the system
+        """Returns the number of waters in the system.
 
-        Returns:
-            int: number of waters in the system
+        :return: number of waters in the system
+        :rtype: int
         """
         res = [r.name for r in self.modeller.topology.residues()]
         return res.count('HOH')
@@ -469,13 +436,14 @@ class CosolventSystem(object):
     def _setup_new_topology(self, cosolvents_positions: dict, receptor_topology: app.Topology = None, receptor_positions:list = None) -> app.Modeller:
         """Returns a new modeller with the topolgy with the new molecules specified
 
-        Args:
-            cosolvents_positions (dict): keys are cosolvent molecules and values are lists of position of the new molecules to add
-            receptor_topology (app.Topology, optional): old topology to which add the new molecules. Defaults to None.
-            receptor_positions (list, optional): old positions to which add the new molecules. Defaults to None.
-
-        Returns:
-            app.Modeller: new modeller containing combined topology and positions
+        :param cosolvents_positions: keys are cosolvent molecules and values are lists of position of the new molecules to add
+        :type cosolvents_positions: dict
+        :param receptor_topology: old topology to which add the new molecules, defaults to None
+        :type receptor_topology: openmm.app.Topology, optional
+        :param receptor_positions: old positions to which add the new molecules, defaults to None
+        :type receptor_positions: list, optional
+        :return: new modeller containing combined topology and positions
+        :rtype: openmm.app.Modeller
         """
         new_mod = None
         last_res_id = 0
@@ -515,11 +483,13 @@ class CosolventSystem(object):
     def _to_openmm_topology(self, off_topology: Topology, starting_id: int) -> app.Topology:
         """Converts an openff topology to openmm without specifying a different chain for each residue.
 
-        Args:
-            topology (Topology): Openff Topology
-
-        Returns:
-            app.Topology: returns the corresponding openmm Topology.
+        :param off_topology: Openff Topology
+        :type off_topology: openff.Topology
+        :param starting_id: starting index
+        :type starting_id: int
+        :raises RuntimeError: if something goes wrong
+        :return: openmm topology
+        :rtype: openmm.app.Topology
         """
         from openff.toolkit.topology.molecule import Bond
 
@@ -644,12 +614,12 @@ class CosolventSystem(object):
     def _create_system(self, forcefield: app.forcefield, topology: app.Topology) -> System:
         """Returns system created from the Forcefield and the Topology.
 
-        Args:
-            forcefield (app.forcefield): Forcefield(s) used to build the system
-            topology (app.Topology): Topology used to build the system 
-
-        Returns:
-            System: created system
+        :param forcefield: forcefield(s) used to build the system
+        :type forcefield: openmm.app.forcefield
+        :param topology: topology used to build the system
+        :type topology: openmm.app.Topology
+        :return: the new system
+        :rtype: openmm.System
         """
         print("Creating system")
         system = forcefield.createSystem(topology,
@@ -673,15 +643,18 @@ class CosolventSystem(object):
         At first, if a receptor/protein is present the halton sequence points that would clash with the protein
         are pruned.
 
-        Args:
-            cosolvents (dict): keys are cosolvent molecules and values are 3D coordinates of the molecule
-            vectors (tuple[Vec3, Vec3, Vec3]): vectors defining the simulation box
-            lowerBound (openmmunit.Quantity | Vec3): lower bound of the simulation box
-            upperBound (openmmunit.Quantity | Vec3): upper bound of the simulation box
-            receptor_positions (list): 3D coordinates of the receptor
-
-        Returns:
-            dict: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvents molecules
+        :param cosolvents: keys are cosolvent molecules and values are 3D coordinates of the molecule
+        :type cosolvents: dict
+        :param vectors: vectors defining the simulation box
+        :type vectors: tuple[openmm.Vec3, openmm.Vec3, openmm.Vec3]
+        :param lowerBound: lower bound of the simulation box
+        :type lowerBound: openmm.unit.Quantity | Vec3
+        :param upperBound: upper bound of the simulation box
+        :type upperBound: openmm.unit.Quantity | Vec3
+        :param receptor_positions: list of 3D coordinates of the receptor
+        :type receptor_positions: list
+        :return: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvent molecules
+        :rtype: dict
         """
         edge_cutoff = 2.5*openmmunit.angstrom
         prot_kdtree = None
@@ -757,15 +730,15 @@ class CosolventSystem(object):
     def check_coordinates_to_add(self, new_coords: np.ndarray, cosolvent_kdtree: spatial.cKDTree, protein_kdtree: spatial.cKDTree) -> bool:
         """Checks that the new coordinates don't clash with the receptor (if present) and/or other cosolvent molecules
 
-        Args:
-            new_coords (np.ndarray): coordinates of the new molecule of shape (n, 3)
-            cosolvent_kdtree (spatial.cKDTree): binary tree of the cosolvent molecules present in the box
-            protein_kdtree (spatial.cKDTree): binary tree of the receptor's coordinates
-
-        Returns:
-            bool: True if there are no clashes False otherwise
+        :param new_coords: coordinates of the new molecule of shape (n, 3)
+        :type new_coords: np.ndarray
+        :param cosolvent_kdtree: tree of the cosolvent molecules present in the box
+        :type cosolvent_kdtree: spatial.cKDTree
+        :param protein_kdtree: tree of the receptor's coordinates
+        :type protein_kdtree: spatial.cKDTree
+        :return: True if there are no clashes, False otherwise
+        :rtype: bool
         """
-        
         cosolvent_clashes = False
         protein_clashes = False
         check_clashes = cosolvent_kdtree is not None or protein_kdtree is not None
@@ -794,19 +767,23 @@ class CosolventSystem(object):
         random halton point is selected and the old one is marked as not good. The algorithm stops
         when a move is accepted or 1000000 of trials are done and no move is accepted.
 
-        Args:
-            xyz (np.ndarray): 3D coordinates of the cosolvent molecule
-            halton (list): halton sequence
-            kdtree (spatial.cKDTree): binary tree of the cosolvent molecules positions already placed in the box
-            valid_ids (list): valid halton indices
-            lowerBound (openmmunit.Quantity | Vec3): lower bound of the box
-            upperBound (openmmunit.Quantity | Vec3): upper bound of the box
-            protein_kdtree (spatial.cKDTree): binary tree of the protein's positions
-
-        Returns:
-            tuple[np.ndarray, list]: accepted coordinates for the cosolvent and the used halton ids
-        """
-        
+        :param xyz: 3D coordinates of the cosolvent molecule
+        :type xyz: np.ndarray
+        :param halton: halton sequence
+        :type halton: list
+        :param kdtree: tree of the cosolvent molecules positions already placed in the box
+        :type kdtree: spatial.cKDTree
+        :param valid_ids: valid halton indices
+        :type valid_ids: list
+        :param lowerBound: lower bound of the box
+        :type lowerBound: openmm.unit.Quantity | Vec3
+        :param upperBound: upper bound of the box
+        :type upperBound: openmm.unit.Quantity | Vec3
+        :param protein_kdtree: tree of the protein's positions
+        :type protein_kdtree: spatial.cKDTree
+        :return: accepted coordinates for the cosolvent and the used halton ids
+        :rtype: tuple[np.ndarray, list]
+        """        
         trial = 0
         accepted = False
         coords_to_return = 0
@@ -839,13 +816,14 @@ class CosolventSystem(object):
                   upperBound: openmmunit.Quantity | Vec3) -> bool:
         """Checks if the coordinates are in the box or not
 
-        Args:
-            xyzs (np.ndarray): coordinates to check
-            lowerBound (openmmunit.Quantity | Vec3): lower bound of the box
-            upperBound (openmmunit.Quantity | Vec3): upper bound of the box
-
-        Returns:
-            bool: True if all the coordinates are in the box, False otherwise
+        :param xyzs: coordinates to check
+        :type xyzs: np.ndarray
+        :param lowerBound: lower bound of the box
+        :type lowerBound: openmmunit.Quantity | Vec3
+        :param upperBound: upper bound of the box
+        :type upperBound: openmmunit.Quantity | Vec3
+        :return: True if all the coordinates are in the box, Flase otherwise
+        :rtype: bool
         """
         # cutoff = (1.5*openmmunit.angstrom).value_in_unit(openmmunit.nanometer)
         xyzs = np.atleast_2d(xyzs)
@@ -865,20 +843,21 @@ class CosolventSystem(object):
     def local_search(self) -> list:
         """Return all the possible moves in the 1 tile neighbors
 
-        Returns:
-            list: combinations
+        :return: combinations
+        :rtype: list
         """
         step = 1
         moves = filter(lambda point: not all(axis ==0 for axis in point), list(product([-step, 0, step], repeat=3)))
         return moves
 
     def generate_rotation(self, coords: np.ndarray) -> np.ndarray:
-        """ Rotate a list of 3D [x,y,z] vectors about corresponding random uniformly
+        """Rotate a list of 3D [x,y,z] vectors about corresponding random uniformly
             distributed quaternion [w, x, y, z]
-        Args:
-            coords (np.ndarray) with shape [n,3]: list of [x,y,z] cartesian vector coordinates
-        Returns:
-            np.ndarray: rotated coordinates
+
+        :param coords: list of [x, y, z] cartesian vector coordinates
+        :type coords: np.ndarray
+        :return: rotated coordinates
+        :rtype: np.ndarray
         """
         rand = np.random.rand(3)
         r1 = np.sqrt(1.0 - rand[0])
@@ -898,11 +877,10 @@ class CosolventSystem(object):
         """Calculates the volume occupied by the 3D coordinates provided based
         on voxelization.
 
-        Args:
-            mol_positions (np.ndarray): 3D coordinates
-
-        Returns:
-            float: volume occupied in nm**3
+        :param mol_positions: 3D coordinates of the molecule
+        :type mol_positions: np.ndarray
+        :return: volume occupied in nm**3
+        :rtype: float
         """
         padding = 3.5*openmmunit.angstrom
         offset = 1.5*openmmunit.angstrom
@@ -929,8 +907,8 @@ class CosolventSystem(object):
         do not exceed the 50% of the available fillable volume 
         (volume not occupied by the receptor, if present).
 
-        Returns:
-            float | None: available volume if the cosolvents can fit, None otherwise
+        :return: available volume if the cosolvents can fit, None otherwise
+        :rtype: float | None
         """
         prot_volume = 0
         if self.receptor:
@@ -953,11 +931,10 @@ class CosolventSystem(object):
     def liters_to_cubic_nanometers(self, liters: float | openmmunit.Quantity) -> float:
         """Converts liters in cubic nanometers
 
-        Args:
-            liters (float | openmmunit.Quantity): volume to convert
-
-        Returns:
-            float: converted volume 
+        :param liters: volume to convert
+        :type liters: float | openmm.unit.Quantity
+        :return: converted volume
+        :rtype: float
         """
         if isinstance(liters, openmmunit.Quantity):
             liters = liters.value_in_unit(openmmunit.liters)
@@ -967,11 +944,10 @@ class CosolventSystem(object):
     def cubic_nanometers_to_liters(self, vol: float) -> float:
         """Converts cubic nanometers in liters
 
-        Args:
-            vol (float): volume to convert
-
-        Returns:
-            float: converted volume
+        :param vol: volume to convert
+        :type vol: float
+        :return: converted volume
+        :rtype: float
         """
         value = vol * 1e-24
         return value
@@ -982,13 +958,14 @@ class CosolventSystem(object):
     def _parametrize_system(self, forcefields: dict, engine: str, cosolvents: dict) -> app.ForceField:
         """Parametrize the system with the specified forcefields
 
-        Args:
-            forcefields (dict): dictionary the forcefields to use
-            engine (str): name of the simulation engine
-            cosolvents (dict): cosolvent molecules
-
-        Returns:
-            app.ForceField: forcefield obj
+        :param forcefields: dictionary of the forcefields to use (from forcefields.json)
+        :type forcefields: dict
+        :param engine: name of the simulation engine to use
+        :type engine: str
+        :param cosolvents: cosolvent moleucles (from cosolvents.json)
+        :type cosolvents: dict
+        :return: forcefield object
+        :rtype: openmm.app.ForceField
         """
         engine = engine.upper()
         forcefield = app.ForceField(*forcefields[engine])
@@ -1000,12 +977,12 @@ class CosolventSystem(object):
     def _parametrize_cosolvents(self, cosolvents: dict, small_molecule_ff="espaloma") -> SmallMoleculeTemplateGenerator:
         """Parametrizes cosolvent molecules according to the forcefiled specified.
 
-        Args:
-            cosolvents (dict): cosolvents specified
-            small_molecule_ff (str, optional): name of the forcefield to use. Defaults to "espaloma".
-
-        Returns:
-            SmallMoleculeTemplateGenerator: forcefiled obj
+        :param cosolvents: cosolvents specified
+        :type cosolvents: dict
+        :param small_molecule_ff: name of the forcefield to use, defaults to "espaloma"
+        :type small_molecule_ff: str, optional
+        :return: forcefield object for the small molecules
+        :rtype: SmallMoleculeTemplateGenerator
         """
         molecules = list()
         for cosolvent in cosolvents:
@@ -1035,16 +1012,16 @@ class CosolventSystem(object):
         parameter to build the box automatically, otherwise a radius has to be passed. If no receptor
         the box is centered on the point [0, 0, 0].
 
-        Args:
-            positions (np.ndarray): coordinates of the receptor if present
-            padding (openmmunit.Quantity): padding to be used
-            radius (openmmunit.Quantity, optional): radius specified if no receptor is passed. Defaults to None.
-
-        Returns:
-            tuple[tuple[Vec3, Vec3, Vec3], Vec3, openmmunit.Quantity | Vec3, openmmunit.Quantity | Vec3]: 
-                The first element returned is a tuple containing the three vectors describing the simulation box.
+        :param positions: coordinates of the receptor if present
+        :type positions: np.ndarray
+        :param padding: padding to be used
+        :type padding: openmm.unit.Quantity
+        :param radius: radius specified if no receptor is passed, defaults to None
+        :type radius: openmm.unit.Quantity, optional
+        :return: The first element returned is a tuple containing the three vectors describing the simulation box.
                 The second element is the box itself.
-                Third and fourth elements are the lower and upper bound of the simulation box. 
+                Third and fourth elements are the lower and upper bound of the simulation box.
+        :rtype: tuple[tuple[Vec3, Vec3, Vec3], Vec3, openmmunit.Quantity | Vec3, openmmunit.Quantity | Vec3]
         """
         padding = padding.value_in_unit(openmmunit.nanometer)
         if positions is not None:
@@ -1082,31 +1059,27 @@ class CosolventMembraneSystem(CosolventSystem):
                  radius: openmmunit.Quantity = None,
                  lipid_type: str=None,
                  lipid_patch_path: str=None):
-        """
-        Creates a CosolventMembraneSystem.
+        """Creates a CosolventMembraneSystem.
 
-        Args:
-            cosolvents (str): Path to the cosolvents.json file
-            forcefields (str): Path to the forcefields.json file
-            simulation_format (str): MD format that want to be used for the simulation.
-                                     Supported formats: Amber, Gromacs, CHARMM or openMM
-            modeller (app.Modeller): Modeller containing topology and positions information.                                                                          
-            padding (openmmunit.Quantity, optional): Specifies the padding used to create the simulation box 
-                                                     if no receptor is provided. Default to 12 Angstrom. 
-                                                     Defaults to 12*openmmunit.angstrom.
-            radius (openmmunit.Quantity, optional): Specifies the radius to create the box without receptor.
-                                                    Defaults to None.
-            clean_protein (bool, optional): Determines if the protein will be cleaned and prepared with PDBFixer or not. 
-                                            Defaults to False.
-            lipid_type (str, optional): Lipid type to use to build the membrane system, 
-                                        supported types: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"]. 
+        :param cosolvents: path to the cosolvents.json file
+        :type cosolvents: str
+        :param forcefields: path to the forcefields.json file
+        :type forcefields: str
+        :param simulation_format: MD format that want to be used for the simulation
+        :type simulation_format: str
+        :param modeller: Modeller containing topology and positions information
+        :type modeller: openmm.app.Modeller
+        :param padding: specify the padding to be used to create the simulation box, defaults to 12*openmmunit.angstrom
+        :type padding: openmm.unit.Quantity, optional
+        :param radius: specifies the radius to create the box without receptor, defaults to None
+        :type radius: openmm.unit.Quantity, optional
+        :param lipid_type: lipid type to use to build the membrane system, defaults to None. Supported types: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"]. 
                                         Mutually exclusive with <lipid_patch_path>.
-                                        Defaults to None.
-            lipid_patch_path (str, optional): If lipid type is None the path to a pre-equilibrated patch of custom
-                                              lipids membrane can be passed. Mutually exclusive with <lipid_type>.
-                                              Defaults to None.
+        :type lipid_type: str, optional
+        :param lipid_patch_path: if lipid type is None the path to a pre-equilibrated patch of custom lipids membrane can be passed, defaults to None. Mutually exclusive with <lipid_type>
+        :type lipid_patch_path: str, optional
+        :raises MutuallyExclusiveParametersError: custom Exception
         """
-        
         super().__init__(cosolvents=cosolvents,
                          forcefields=forcefields,
                          simulation_format=simulation_format,
@@ -1129,67 +1102,19 @@ class CosolventMembraneSystem(CosolventSystem):
         else:
             raise MutuallyExclusiveParametersError("Error! <lipid_type> and <lipid_patch_path> are mutually exclusive parameters. Please pass just one of them.")
     
-    # @classmethod
-    # def from_filename(cls, 
-    #                   cosolvents: str,
-    #                   forcefields: str,
-    #                   simulation_format: str, 
-    #                   receptor: str,  
-    #                   padding: openmmunit.Quantity = 12*openmmunit.angstrom,
-    #                   clean_protein: bool=False,
-    #                   lipid_type: str=None,
-    #                   lipid_patch_path: str=None):
-    #     """
-    #     Create a CosolventMembraneSystem with receptor from the pdb file path.
-
-    #     Args:
-    #         cosolvents (str): Path to the cosolvents.json file
-    #         forcefields (str): Path to the forcefields.json file
-    #         simulation_format (str): MD format that want to be used for the simulation.
-    #                                  Supported formats: Amber, Gromacs, CHARMM or openMM
-    #         receptor (str, optional): PDB string of the protein. 
-    #                                   By default is None to allow cosolvent
-    #                                   simulations without receptor. Defaults to None.
-    #         padding (openmmunit.Quantity, optional): Specifies the padding used to create the simulation box 
-    #                                                  if no receptor is provided. Default to 12 Angstrom. 
-    #                                                  Defaults to 12*openmmunit.angstrom.
-    #         clean_protein (bool, optional): Determines if the protein will be cleaned and prepared with PDBFixer or not. 
-    #                                         Defaults to False.
-    #         lipid_type (str, optional): Lipid type to use to build the membrane system, 
-    #                                     supported types: ["POPC", "POPE", "DLPC", "DLPE", "DMPC", "DOPC", "DPPC"]. 
-    #                                     Mutually exclusive with <lipid_patch_path>.
-    #                                     Defaults to None.
-    #         lipid_patch_path (str, optional): If lipid type is None the path to a pre-equilibrated patch of custom
-    #                                           lipids membrane can be passed. Mutually exclusive with <lipid_type>.
-    #                                           Defaults to None.
-    #     """
-    #     with open(receptor) as fi:
-    #         pdb_string = fi.read()
-    #     return cls(cosolvents, 
-    #                forcefields, 
-    #                simulation_format, 
-    #                io.StringIO(pdb_string), 
-    #                padding, 
-    #                None, 
-    #                clean_protein, 
-    #                lipid_type, 
-    #                lipid_patch_path)
-    
     def add_membrane(self, cosolvent_placement: int=0, neutralize: bool=True, waters_to_keep: list=None):
-        """Create the membrane system.
+        """Create a membrane system
 
-        Args:
-            cosolvent_placement (int): Determines on what side of the membrane will the cosolvents be placed.
-                                       * -1: Inside the membrane
-                                       * +1: Outside the membrane
-                                       *  0: Everywhere 
-                                       Defaults to 0.
-            neutralize (bool, optional): If neutralize the system when solvating the membrane. Defaults to True.
-            waters_to_keep (list, optional): A list of the indices of key waters that should not be deleted. 
-                                             Defaults to None.
-
-        Raises:
-            SystemError: If OpenMM is not able to relax the system after adding the membrane a SystemError is raised.
+        :param cosolvent_placement: determines on what side of the membrane will the cosolvents be placed, defaults to 0.
+                                    * -1: inside the membrane
+                                    * +1: outside the membrane
+                                    * 0: everywhere
+        :type cosolvent_placement: int, optional
+        :param neutralize: if neutralize the system when solvating the membrane, defaults to True
+        :type neutralize: bool, optional
+        :param waters_to_keep: a list of the indices of key waters that should not be deleted, defaults to None
+        :type waters_to_keep: list, optional
+        :raises SystemError: if OpenMM is not able to relax the system after adding the membrane a SystemError is raised
         """
         waters_residue_names = ["HOH", "WAT"]
         # OpenMM default
@@ -1240,12 +1165,10 @@ class CosolventMembraneSystem(CosolventSystem):
         return
 
     def build(self, neutralize: bool=True):
-        """
-        Adds the cosolvent molecules to the system.
+        """Adds the cosolvent molecules to the system
 
-
-        Args:
-            neutralize (bool, optional): If neutralize the system during solvation. Defaults to True.
+        :param neutralize: if neutralize the system during solvation, defaults to True
+        :type neutralize: bool, optional
         """
         if self._cosolvent_placement != 0:
             lipid_positions = list()
