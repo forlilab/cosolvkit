@@ -19,16 +19,17 @@ release = '0.4.1'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
+    'sphinx.ext.autosectionlabel',
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
-    ]
+]
 
 templates_path = ['_templates']
 exclude_patterns = []
 
-
 pygments_style = 'sphinx'
+
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
