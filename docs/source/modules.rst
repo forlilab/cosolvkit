@@ -1,5 +1,7 @@
+.. _modules:
+
 cosolvkit
-=========
+##########
 
 .. toctree::
    :maxdepth: 4

@@ -1,4 +1,4 @@
-cosolvkit package
+CosolvKit
 =================
 
 Submodules
