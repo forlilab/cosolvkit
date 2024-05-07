@@ -4,7 +4,12 @@ channels:
   - defaults
 dependencies:
   - python >=3.9,<3.12
-  - numpy
+  - openmmforcefields==0.12
+  - pdbfixer 
+  - mdanalysis 
+  - espaloma 
+  - pymol-open-source 
+  - griddataformats
   - sphinx
   - sphinx_rtd_theme
    
