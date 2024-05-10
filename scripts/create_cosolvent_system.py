@@ -25,6 +25,19 @@ def cmd_lineparser():
     
     parser.add_argument('-c', '--config', dest='config', required=True,
                         action='store', help='path to the json config file')
+    parser.add_argument(
+        "--num_simulation_steps", type=int, default=6250000
+    )
+    parser.add_argument(
+        "--traj_write_freq", type=int, default=25000
+    )
+    parser.add_argument(
+        "--time_step", type=float, default=.004
+    )
+    parser.add_argument(
+        "--iteratively_adjust_copies", action="store_true", default=False
+    )
+ 
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -103,7 +116,7 @@ if __name__ == "__main__":
                                                     lipid_patch_path=config.lipid_patch_path)
             cosolv_system.add_membrane(cosolvent_placement=config.cosolvent_placement,
                                     waters_to_keep=config.waters_to_keep)
-            cosolv_system.build()
+            cosolv_system.build(iteratively_adjust_copies=args.iteratively_adjust_copies)
         else:
             cosolv_system = CosolventSystem(cosolvents=cosolvents,
                                             forcefields=forcefields,
@@ -111,7 +124,8 @@ if __name__ == "__main__":
                                             modeller=protein_modeller,
                                             radius=config.radius)
             cosolv_system.build(solvent_smiles=config.solvent_smiles,
-                                n_solvent_molecules=config.solvent_copies)
+                                n_solvent_molecules=config.solvent_copies,
+                                iteratively_adjust_copies=args.iteratively_adjust_copies)
             
         if config.add_repulsive:
             cosolv_system.add_repulsive_forces(config.repulsive_residues, epsilon=config.epsilon, sigma=config.sigma)
@@ -152,8 +166,10 @@ if __name__ == "__main__":
                         positions = pos,
                         pdb = pdb,
                         system = system,
+                        traj_write_freq = args.traj_write_freq,
+                        time_step = args.time_step,
                         warming_steps = 100000,
-                        simulation_steps = 6250000, # 25ns
+                        simulation_steps = args.num_simulation_steps, 
                         results_path = config.output, # This should be the name of system being simulated
                         seed=None
         )

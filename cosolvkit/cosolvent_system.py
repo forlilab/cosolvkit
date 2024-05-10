@@ -26,13 +26,15 @@ rnaResidues = ['A', 'G', 'C', 'U', 'I']
 dnaResidues = ['DA', 'DG', 'DC', 'DT', 'DI']
 
 class CosolventMolecule(object):
-    def __init__(self, name: str, smiles: str=None, mol_filename: str=None, resname: str=None, copies: int=None, concentration: float=None):
+    def __init__(self, name: str, smiles: str=None, mol_save_dir: str = None, mol_filename: str=None, resname: str=None, copies: int=None, concentration: float=None):
         """Creates a Cosolvent object.
 
         :param name: name of the molecule
         :type name: str
         :param smiles: SMILES string of the molecule in the chose protonation state, defaults to None
         :type smiles: str, optional
+        :param mol_save_dir: directory to save MOL file
+        :type mol_save_dir: str, optional 
         :param mol_filename: MOL/SDF filename of the molecule, defaults to None
         :type mol_filename: str, optional
         :param resname: 3-letters residue name of the molecule. If None, the first 3 uppercase letters of the name will be used, defaults to None
@@ -57,8 +59,8 @@ class CosolventMolecule(object):
         self.name = name
         self.charge = None
         self.positions = None
-        self.mol_filename = None
         self.pdb_conect = None
+        self.mol_save_dir = mol_save_dir 
         self.smiles = smiles
         self.copies = copies
         self.concentration = concentration
@@ -80,12 +82,16 @@ class CosolventMolecule(object):
 
             # Setup rdkit molecule
             mol = Chem.MolFromSmiles(smiles)
-            mol.SetProp("_Name", name)
+            mol.SetProp("_Name", str(name))
             mol = Chem.AddHs(mol)
             AllChem.EmbedMolecule(mol, params=params)
             AllChem.MMFFOptimizeMolecule(mol)
 
-            mol_filename = '%s.mol' % self.name
+            if mol_save_dir is None:
+                mol_filename = '%s.mol' % self.name
+            else:
+                os.makedirs(self.mol_save_dir, exist_ok=True)
+                mol_filename = '%s/%s.mol' % (self.mol_save_dir, self.name)
             with Chem.SDWriter(mol_filename) as w:
                 w.write(mol)
         else:
@@ -225,8 +231,9 @@ class CosolventSystem(object):
     def build(self,
               solvent_smiles: str="H2O", 
               n_solvent_molecules: int=None,
-              neutralize: bool=True):
-        """This function adds thd cosolvents specified in the CosolvSystem
+              neutralize: bool=True,
+              iteratively_adjust_copies: bool=False):
+        """This function adds the cosolvents specified in the CosolvSystem
         and solvates with the desired solvent. If n_solvent_molecules is not passed
         the function will try to fill the box with the desired solvent to a certain extent.
         Please note that the solvation with solvents different from water may highly impact
@@ -238,11 +245,16 @@ class CosolventSystem(object):
         :type n_solvent_molecules: int, optional
         :param neutralize: if True, the system charge will be neutralized by OpenMM, defaults to True
         :type neutralize: bool, optional
+        :param iteratively_adjust_copies: if True, the number of copies of each cosolvent will iteratively be reduced until a valid starting configuration is found
+        :type iteratively_adjust_copies: bool, optional 
         """
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
         receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
-        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions)
+        if iteratively_adjust_copies:
+            cosolv_xyzs = self.add_cosolvents_adaptive(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions)
+        else:
+            cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
         if solvent_smiles == "H2O":
             if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=neutralize)
@@ -262,8 +274,10 @@ class CosolventSystem(object):
             # need to register the custom solvent if not present already
             self.forcefield.registerTemplateGenerator(self._parametrize_cosolvents(d_mol).generator)
             print(f"Placing {solvent_mol.copies}")
-            solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
-            solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
+            if iteratively_adjust_copies: 
+                solv_xyz = self.add_cosolvents_adaptive(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
+            else:
+                solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
             self.modeller = self._setup_new_topology(solv_xyz, self.modeller.topology, self.modeller.positions)
             
         self.system = self._create_system(self.forcefield, self.modeller.topology)
@@ -408,6 +422,19 @@ class CosolventSystem(object):
             print("The specified simulation engine is not supported!")
             print(f"Available simulation engines:\n\t{self._available_formats}")
         return
+
+    def reduce_copies(self, factor_reduction: float):
+        """Reduces the number of copies of each cosolvent by a constant factor 
+
+        :param factor_reduction: value between 0-1 representing reduction factor to apply to number of cosolvent copies
+        :type factor_reduction: float
+        """
+        for cosolvent in self.cosolvents:
+            proposed_copies = int(cosolvent.copies*factor_reduction)
+            if proposed_copies >= 1:
+                cosolvent.copies = proposed_copies
+        return 
+
 #endregion
     
 #region Private
@@ -422,7 +449,6 @@ class CosolventSystem(object):
             if cosolvent.concentration is not None:
                 cosolvent.copies = int(math.floor((((cosolvent.concentration*openmmunit.molar)*(water_volume*openmmunit.liters))*openmmunit.AVOGADRO_CONSTANT_NA) + 0.5))
         return
-
     
     def _get_n_waters(self) -> int:
         """Returns the number of waters in the system.
@@ -432,7 +458,7 @@ class CosolventSystem(object):
         """
         res = [r.name for r in self.modeller.topology.residues()]
         return res.count('HOH')
-    
+ 
     def _setup_new_topology(self, cosolvents_positions: dict, receptor_topology: app.Topology = None, receptor_positions:list = None) -> app.Modeller:
         """Returns a new modeller with the topolgy with the new molecules specified
 
@@ -467,7 +493,7 @@ class CosolventSystem(object):
 
         molecules_positions = np.array(molecules_positions)*openmmunit.nanometer
         new_top_openff = Topology.from_molecules(molecules)
-        new_top = self._to_openmm_topology(new_top_openff, starting_id=last_res_id)       
+        new_top = self._to_openmm_topology(new_top_openff, starting_id=last_res_id, chain_id='S')       
         residues = list(new_top.residues())
         for i in range(len(cosolvent_names)):
             residues[i].name = cosolvent_names[i]
@@ -480,13 +506,15 @@ class CosolventSystem(object):
         new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
         return new_mod
     
-    def _to_openmm_topology(self, off_topology: Topology, starting_id: int) -> app.Topology:
+    def _to_openmm_topology(self, off_topology: Topology, starting_id: int, chain_id: str) -> app.Topology:
         """Converts an openff topology to openmm without specifying a different chain for each residue.
 
         :param off_topology: Openff Topology
         :type off_topology: openff.Topology
         :param starting_id: starting index
         :type starting_id: int
+        :param chain_id: chain_id for solvent molecules
+        :type chain_id: str 
         :raises RuntimeError: if something goes wrong
         :return: openmm topology
         :rtype: openmm.app.Topology
@@ -499,70 +527,26 @@ class CosolventSystem(object):
 
         # Go through atoms in OpenFF to preserve the order.
         omm_atoms = []
+        atom_insertion_code = " "
+        mol_num = 0
+        chain = omm_topology.addChain(chain_id)
 
-        last_chain = None
-        cnt = 0
-        # For each atom in each molecule, determine which chain/residue it should be a part of
         for molecule in off_topology.molecules:
-            # No chain or residue can span more than one OFF molecule, so reset these to None for the first
-            # atom in each molecule.
-            last_residue = None
+            curr_residue = None
             for atom in molecule.atoms:
-                # If the residue name is undefined, assume a default of "UNK"
-                if "residue_name" in atom.metadata:
-                    atom_residue_name = atom.metadata["residue_name"]
-                else:
-                    atom_residue_name = "UNK"
-
-                # If the residue number is undefined, assume a default of "0"
-                if "residue_number" in atom.metadata:
-                    atom_residue_number = atom.metadata["residue_number"]
-                else:
-                    atom_residue_number = str(starting_id+cnt)
-
-                # If the insertion code  is undefined, assume a default of " "
-                if "insertion_code" in atom.metadata:
-                    atom_insertion_code = atom.metadata["insertion_code"]
-                else:
-                    atom_insertion_code = " "
-
-                # If the chain ID is undefined, assume a default of "X"
-                if "chain_id" in atom.metadata:
-                    atom_chain_id = atom.metadata["chain_id"]
-                else:
-                    atom_chain_id = "X"
-
-                # Determine whether this atom should be part of the last atom's chain, or if it
-                # should start a new chain
-                if last_chain is None:
-                    chain = omm_topology.addChain(atom_chain_id)
-                elif last_chain.id == atom_chain_id:
-                    chain = last_chain
-                else:
-                    chain = omm_topology.addChain(atom_chain_id)
+                atom_residue_name = molecule.name
+                atom_residue_number = str(starting_id+mol_num)
                 # Determine whether this atom should be a part of the last atom's residue, or if it
                 # should start a new residue
-                if last_residue is None:
+                if curr_residue is None:
                     residue = omm_topology.addResidue(
                         atom_residue_name,
                         chain,
                         id=atom_residue_number,
                         insertionCode=atom_insertion_code,
                     )
-                elif (
-                    (last_residue.name == atom_residue_name)
-                    and (int(last_residue.id) == int(atom_residue_number))
-                    and (last_residue.insertionCode == atom_insertion_code)
-                    and (chain.id == last_chain.id)
-                ):
-                    residue = last_residue
                 else:
-                    residue = omm_topology.addResidue(
-                        atom_residue_name,
-                        chain,
-                        id=atom_residue_number,
-                        insertionCode=atom_insertion_code,
-                    )
+                    residue = curr_residue
 
                 # Add atom.
                 element = app.Element.getByAtomicNumber(atom.atomic_number)
@@ -572,10 +556,9 @@ class CosolventSystem(object):
                 assert off_topology.atom_index(atom) == int(omm_atom.id) - 1
                 omm_atoms.append(omm_atom)
 
-                last_chain = chain
-                last_residue = residue
+                curr_residue = residue
             
-            cnt += 1 
+            mol_num += 1 
             # Add all bonds.
             bond_types = {1: app.Single, 2: app.Double, 3: app.Triple}
             for bond in molecule.bonds:
@@ -604,11 +587,7 @@ class CosolventSystem(object):
                     type=bond_type,
                     order=bond_order,
                 )
-
-        if off_topology.box_vectors is not None:
-            from openff.units.openmm import to_openmm
-
-            omm_topology.setPeriodicBoxVectors(to_openmm(off_topology.box_vectors))
+        
         return omm_topology
             
     def _create_system(self, forcefield: app.forcefield, topology: app.Topology) -> System:
@@ -637,11 +616,14 @@ class CosolventSystem(object):
                        vectors: tuple[Vec3, Vec3, Vec3], 
                        lowerBound: openmmunit.Quantity | Vec3, 
                        upperBound: openmmunit.Quantity | Vec3,
-                       receptor_positions: list) -> dict:
+                       receptor_positions: list,
+                       max_attempts_per_mol: int = 10) -> dict:
         """This function adds the desired number of cosolvent molecules using the halton sequence
         to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
         At first, if a receptor/protein is present the halton sequence points that would clash with the protein
-        are pruned.
+        are pruned. We note that each molecule is attempted to be inserted max_attempts_per_mol times, and 
+        if this condition is not satisfied, then the program terminates (as we were unable to add the desired 
+        number of cosolvent molecules). 
 
         :param cosolvents: keys are cosolvent molecules and values are 3D coordinates of the molecule
         :type cosolvents: dict
@@ -653,6 +635,8 @@ class CosolventSystem(object):
         :type upperBound: openmm.unit.Quantity | Vec3
         :param receptor_positions: list of 3D coordinates of the receptor
         :type receptor_positions: list
+        :param max_attempts_per_mol: the maximum number of times we attempt to insert a single molecule
+        :type max_attempts_per_mol: int
         :return: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvent molecules
         :rtype: dict
         """
@@ -679,8 +663,10 @@ class CosolventSystem(object):
         used_halton_ids = self.delete_edges_points(points, lowerBound, vectors, edge_cutoff.value_in_unit(openmmunit.nanometer), used_halton_ids)
         valid_ids = np.array(range(0, len(points)))
         valid_ids = np.delete(valid_ids, used_halton_ids)
+        num_mol_insertion_attempts = 0 
+
         for cosolvent in cosolvents:
-            print(f"Placing {cosolvent.copies} copies of {cosolvent.name}")
+            print(f"Attempting to place {cosolvent.copies} copies of {cosolvent.name}")
             c_xyz = cosolvents[cosolvent]
             while len(cosolv_xyzs[cosolvent]) < cosolvent.copies:
             # for replicate in range(cosolvent.copies):
@@ -696,18 +682,144 @@ class CosolventSystem(object):
                         kdtree = spatial.cKDTree(placed_atoms_positions)
                 else:
                     kdtree = spatial.cKDTree(placed_atoms_positions)
-                    cosolv_xyz, valid_ids = self.accept_reject(c_xyz, points, kdtree, valid_ids, lowerBound, vectors, prot_kdtree)
+                    cosolv_xyz, valid_ids, num_trials = self.accept_reject(c_xyz, points, kdtree, valid_ids, lowerBound, vectors, prot_kdtree)
+                    mol_num = len(cosolv_xyzs[cosolvent])+1
+                    num_mol_insertion_attempts += 1 
 
                     if isinstance(cosolv_xyz, int):
-                        print("Could not place the cosolvent molecule!")
+                        print("Could not place the %dth cosolvent molecule!" % mol_num)
+                        if num_mol_insertion_attempts < max_attempts_per_mol: 
+                            print("Attempting again...")
+                        else:
+                            print("Unable to insert %dth cosolvent molecule after %d attempts" % (mol_num, max_attempts_per_mol))
+                            print("Exiting..")
+                            sys.exit(1)
                     else:
                         cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
                         [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
+                        num_mol_insertion_attempts = 0
             print("Done!")
         print("Added cosolvents:")
         for cosolvent in cosolv_xyzs:
             print(f"{cosolvent.name}: {len(cosolv_xyzs[cosolvent])}")
         return cosolv_xyzs
+
+
+    def add_cosolvents_adaptive(self, 
+                       cosolvents: dict, 
+                       vectors: tuple[Vec3, Vec3, Vec3], 
+                       lowerBound: openmmunit.Quantity | Vec3, 
+                       upperBound: openmmunit.Quantity | Vec3,
+                       receptor_positions: list,
+                       max_autoadjust_attempts: int = 10,
+                       copies_factor_reduction: float = 0.9,
+                       max_num_trials: int = 2000) -> dict:
+        """This function attempts to add the desired number of cosolvent molecules using the halton sequence
+        to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
+        At first, if a receptor/protein is present the halton sequence points that would clash with the protein
+        are pruned. Concentrations are iteratively reduced if initial conditions do not result in a valid 
+        starting configuration. 
+
+        :param cosolvents: keys are cosolvent molecules and values are 3D coordinates of the molecule
+        :type cosolvents: dict
+        :param vectors: vectors defining the simulation box
+        :type vectors: tuple[openmm.Vec3, openmm.Vec3, openmm.Vec3]
+        :param lowerBound: lower bound of the simulation box
+        :type lowerBound: openmm.unit.Quantity | Vec3
+        :param upperBound: upper bound of the simulation box
+        :type upperBound: openmm.unit.Quantity | Vec3
+        :param receptor_positions: list of 3D coordinates of the receptor
+        :type receptor_positions: list
+        :param max_autoadjust_attempts: the maximum number of times we attempt to retry to add cosolvents after adjusting molecule copy numbers  
+        :type max_autoadjust_attempts: int
+        :param copies_factor_reduction: the multiplicative factor by which we reduce molecule copy numbers (i.e n*copies_factor_reduction)
+        :type copies_factor_reduction: float
+        :param max_num_trials: the maximum number of halton moves to make
+        :param max_num_trials: int 
+        :return: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvent molecules
+        :rtype: dict
+        """
+        edge_cutoff = 2.5*openmmunit.angstrom
+        prot_kdtree = None
+        if receptor_positions is not None and len(receptor_positions) > 0:
+            prot_kdtree = spatial.cKDTree(receptor_positions)
+        
+        sampler = qmc.Halton(d=3)
+        points = sampler.random(5000000)
+        points= qmc.scale(points, [lowerBound[0], 
+                                   lowerBound[1], 
+                                   lowerBound[2]], 
+                                  [upperBound[0], 
+                                   upperBound[1], 
+                                   upperBound[2]])
+        used_halton_ids = list()
+        if prot_kdtree is not None:
+            banned_ids = prot_kdtree.query_ball_point(points, self.protein_radius.value_in_unit(openmmunit.nanometer))
+            used_halton_ids = list(np.unique(np.hstack(banned_ids)).astype(int))
+        used_halton_ids = self.delete_edges_points(points, lowerBound, vectors, edge_cutoff.value_in_unit(openmmunit.nanometer), used_halton_ids)
+        valid_ids = np.array(range(0, len(points)))
+        valid_ids = np.delete(valid_ids, used_halton_ids)
+
+
+        num_autoadjust_attempts = 0
+        
+        while num_autoadjust_attempts < max_autoadjust_attempts:
+            print("*****************************************************************")
+            cosolv_xyzs = defaultdict(list)
+            # This is used to update the kdtree of the placed cosolvents
+            placed_atoms_positions = []
+            terminate_early = False 
+            for cosolvent in cosolvents:
+                if terminate_early:
+                    break  
+                print(f"Attempting to place {cosolvent.copies} copies of {cosolvent.name}")
+                c_xyz = cosolvents[cosolvent]
+                while len(cosolv_xyzs[cosolvent]) < cosolvent.copies and not(terminate_early):
+                    if len(placed_atoms_positions) < 1:
+                        counter = np.random.choice(len(points))
+                        xyz = points[counter]
+                        cosolv_xyz = c_xyz + xyz
+                        if self.check_coordinates_to_add(cosolv_xyz, None, prot_kdtree):
+                            [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
+                            cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
+                            used_halton_ids.append(counter)
+                            kdtree = spatial.cKDTree(placed_atoms_positions)
+                    else:
+                        kdtree = spatial.cKDTree(placed_atoms_positions)
+                        cosolv_xyz, valid_ids, num_trials = self.accept_reject(c_xyz, points, kdtree, valid_ids, lowerBound, vectors, prot_kdtree, max_num_trials)
+                        mol_num = len(cosolv_xyzs[cosolvent])+1
+
+                        if isinstance(cosolv_xyz, int):
+                            print("*****************************************************************")
+                            print("Could not place the %dth cosolvent molecule!" % mol_num)
+                            terminate_early = True 
+                            num_autoadjust_attempts += 1
+                            print("Reducing number of cosolvent copies by factor of %.2f" % copies_factor_reduction) 
+                            self.reduce_copies(copies_factor_reduction) 
+                        else:
+                            print("Placed %dth cosolvent molecule after %d trials" % (mol_num, num_trials))
+                            cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
+                            [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
+                if terminate_early:
+                    print("Attempting to place cosolvents again with reduced number of copies")
+                    print("*****************************************************************")
+                else:
+                    print(f"Successfully placed {cosolvent.copies} copies of {cosolvent.name}!")
+            if not(terminate_early):
+                break #all cosolvents have been added  
+
+        if num_autoadjust_attempts == max_autoadjust_attempts:
+            print("Could not place cosolvents after %d rounds of copies reduction" % max_autoadjust_attempts)
+            print("Exiting..")
+            sys.exit(1)
+            
+        print("Successfully added all cosolvents:")
+        for cosolvent in cosolv_xyzs:
+            print(f"{cosolvent.name}: {len(cosolv_xyzs[cosolvent])}")
+        return cosolv_xyzs
+
+
+
 
     
     def delete_edges_points(self, xyzs, lowerBound, upperBound, distance, used_halton_ids):
@@ -722,8 +834,6 @@ class CosolventSystem(object):
         y_close = np.logical_or(np.abs(ymin - y) <= distance, np.abs(ymax - y) <= distance)
         z_close = np.logical_or(np.abs(zmin - z) <= distance, np.abs(zmax - z) <= distance)
         close_to = np.unique(np.argwhere(np.any((x_close, y_close, z_close), axis=0)).flatten())
-
-
 
         return used_halton_ids+list(close_to)
 
@@ -760,12 +870,13 @@ class CosolventSystem(object):
                       valid_ids: list, 
                       lowerBound: openmmunit.Quantity | Vec3, 
                       upperBound: openmmunit.Quantity | Vec3, 
-                      protein_kdtree: spatial.cKDTree) -> tuple[np.ndarray, list]:
+                      protein_kdtree: spatial.cKDTree,
+                      max_num_trials: int = 10000) -> tuple[np.ndarray, list]:
         """Accepts or reject the halton move. A random halton point is selected and checked, if accepted
         the cosolvent is placed there, otherwise a local search is performed in the neighbors of the point 
         (1 tile). If the local search produces no clashes the new position is accepted, otherwise a new 
         random halton point is selected and the old one is marked as not good. The algorithm stops
-        when a move is accepted or 1000000 of trials are done and no move is accepted.
+        when a move is accepted or 10000 of num_trialss are done and no move is accepted.
 
         :param xyz: 3D coordinates of the cosolvent molecule
         :type xyz: np.ndarray
@@ -781,14 +892,16 @@ class CosolventSystem(object):
         :type upperBound: openmm.unit.Quantity | Vec3
         :param protein_kdtree: tree of the protein's positions
         :type protein_kdtree: spatial.cKDTree
+        :param max_num_trials: the maximum number of halton moves to make
+        :param max_num_trials: int 
         :return: accepted coordinates for the cosolvent and the used halton ids
         :rtype: tuple[np.ndarray, list]
         """        
-        trial = 0
+        num_trials = 0
         accepted = False
         coords_to_return = 0
         moves = self.local_search()
-        while not accepted and trial < 1000000:
+        while not accepted and num_trials < max_num_trials:
             halton_idx = np.random.choice(len(valid_ids))
             rotated_xyz = self.generate_rotation(xyz)
             cosolv_xyz = rotated_xyz + halton[halton_idx]
@@ -797,7 +910,7 @@ class CosolventSystem(object):
                 accepted = True
                 coords_to_return = cosolv_xyz
             else:
-                trial += 1
+                num_trials += 1
                 for move in moves:
                     move = move*openmmunit.angstrom
                     rotated_xyz = self.generate_rotation(xyz)
@@ -807,8 +920,8 @@ class CosolventSystem(object):
                             accepted = True
                             coords_to_return = cosolv_xyz
                             break
-                    trial += 1
-        return coords_to_return, valid_ids
+                    num_trials += 1
+        return coords_to_return, valid_ids, num_trials 
 
     def is_in_box(self, 
                   xyzs: np.ndarray, 
@@ -1164,11 +1277,13 @@ class CosolventMembraneSystem(CosolventSystem):
         self._periodic_box_vectors = self.modeller.topology.getPeriodicBoxVectors().value_in_unit(openmmunit.nanometer)
         return
 
-    def build(self, neutralize: bool=True):
+    def build(self, neutralize: bool=True, iteratively_adjust_copies: bool=False):
         """Adds the cosolvent molecules to the system
 
         :param neutralize: if neutralize the system during solvation, defaults to True
         :type neutralize: bool, optional
+        :param iteratively_adjust_copies: if True, the number of copies of each cosolvent will iteratively be reduced until a valid starting configuration is found
+        :type iteratively_adjust_copies: bool, optional 
         """
         if self._cosolvent_placement != 0:
             lipid_positions = list()
@@ -1192,7 +1307,10 @@ class CosolventMembraneSystem(CosolventSystem):
         volume_not_occupied_by_cosolvent = self.fitting_checks()
         assert volume_not_occupied_by_cosolvent is not None, "The requested volume for the cosolvents exceeds the available volume! Please try increasing the box padding or radius."
         receptor_positions = self.modeller.positions.value_in_unit(openmmunit.nanometer)
-        cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, lowerBound, upperBound, receptor_positions)
+        if iteratively_adjust_copies:
+            cosolv_xyzs = self.add_cosolvents_adaptive(self.cosolvents, self.vectors, lowerBound, upperBound, receptor_positions)
+        else:
+            cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, lowerBound, upperBound, receptor_positions)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
         self.modeller.addSolvent(forcefield=self.forcefield, neutralize=neutralize)
             
