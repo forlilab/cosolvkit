@@ -1,3 +1,4 @@
+import sys
 import argparse
 from cosolvkit.analysis import Report
 
@@ -17,8 +18,7 @@ def cmd_lineparser():
                         action='store', help='path to the json file containing cosolvents used for the simulation')
     return parser.parse_args()
 
-
-if __name__ == "__main__":
+def main():
     args = cmd_lineparser()
     log_file = args.log_file
     traj_file = args.traj_file
@@ -34,3 +34,8 @@ if __name__ == "__main__":
                                   density_files=densities, 
                                   selection_string='', 
                                   out_path=out_path)
+    return
+
+
+if __name__ == "__main__":
+    sys.exit(main())
