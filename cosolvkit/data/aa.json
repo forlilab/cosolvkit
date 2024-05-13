@@ -49,7 +49,7 @@
     },
     {
         "name": "ILE",
-        "smiles": "C(C)CC",
+        "smiles": "CC(C)CC",
         "concentration": 0.1,
         "resname": "ILE"
     },
