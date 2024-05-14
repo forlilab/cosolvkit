@@ -687,11 +687,11 @@ class CosolventSystem(object):
                     num_mol_insertion_attempts += 1 
 
                     if isinstance(cosolv_xyz, int):
-                        print("Could not place the %dth cosolvent molecule!" % mol_num)
+                        print("Could not place cosolvent molecule %d!" % mol_num)
                         if num_mol_insertion_attempts < max_attempts_per_mol: 
                             print("Attempting again...")
                         else:
-                            print("Unable to insert %dth cosolvent molecule after %d attempts" % (mol_num, max_attempts_per_mol))
+                            print("Unable to insert cosolvent molecule %d after %d attempts" % (mol_num, max_attempts_per_mol))
                             print("Exiting..")
                             sys.exit(1)
                     else:
@@ -713,7 +713,7 @@ class CosolventSystem(object):
                        receptor_positions: list,
                        max_autoadjust_attempts: int = 10,
                        copies_factor_reduction: float = 0.9,
-                       max_num_trials: int = 2000) -> dict:
+                       max_num_trials: int = 2500) -> dict:
         """This function attempts to add the desired number of cosolvent molecules using the halton sequence
         to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
         At first, if a receptor/protein is present the halton sequence points that would clash with the protein
@@ -791,13 +791,13 @@ class CosolventSystem(object):
 
                         if isinstance(cosolv_xyz, int):
                             print("*****************************************************************")
-                            print("Could not place the %dth cosolvent molecule!" % mol_num)
+                            print("Could not place cosolvent molecule %d!" % mol_num)
                             terminate_early = True 
                             num_autoadjust_attempts += 1
                             print("Reducing number of cosolvent copies by factor of %.2f" % copies_factor_reduction) 
                             self.reduce_copies(copies_factor_reduction) 
                         else:
-                            print("Placed %dth cosolvent molecule after %d trials" % (mol_num, num_trials))
+                            print("Placed cosolvent molecule %d after %d trials" % (mol_num, num_trials))
                             cosolv_xyzs[cosolvent].append(cosolv_xyz*openmmunit.nanometer)
                             [placed_atoms_positions.append(pos) for pos in cosolv_xyz]
                 if terminate_early:
