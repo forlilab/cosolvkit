@@ -17,7 +17,7 @@ To install cosolvkit dependencies:
 
 .. code-block:: bash
 
-    $ conda create -n cosolvkit --file cosolvkit_env.yml && conda activate cosolvkit
+    $ conda create -n cosolvkit --file environment.yml && conda activate cosolvkit
 
 
 Installation from source code
@@ -27,7 +27,7 @@ Installation from source code
 
     $ git clone git@github.com:forlilab/cosolvkit.git
     $ cd cosolvkit
-    $ conda create -n cosolvkit --file cosolvkit_env.yml
+    $ conda create -n cosolvkit --file environment.yml
     $ pip install .
 
 
