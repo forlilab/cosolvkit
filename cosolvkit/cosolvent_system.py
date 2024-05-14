@@ -3,6 +3,7 @@ import os
 import sys
 import io
 from collections import defaultdict
+from typing import Union
 import numpy as np
 from scipy import spatial
 from scipy.stats import qmc
@@ -635,8 +636,8 @@ class CosolventSystem(object):
     def add_cosolvents(self, 
                        cosolvents: dict, 
                        vectors: tuple[Vec3, Vec3, Vec3], 
-                       lowerBound: openmmunit.Quantity | Vec3, 
-                       upperBound: openmmunit.Quantity | Vec3,
+                       lowerBound: Union[openmmunit.Quantity, Vec3], 
+                       upperBound: Union[openmmunit.Quantity, Vec3],
                        receptor_positions: list) -> dict:
         """This function adds the desired number of cosolvent molecules using the halton sequence
         to generate random uniformly distributed points inside the grid where to place the cosolvent molecules.
@@ -648,9 +649,9 @@ class CosolventSystem(object):
         :param vectors: vectors defining the simulation box
         :type vectors: tuple[openmm.Vec3, openmm.Vec3, openmm.Vec3]
         :param lowerBound: lower bound of the simulation box
-        :type lowerBound: openmm.unit.Quantity | Vec3
+        :type lowerBound: Union[openmm.unit.Quantity, Vec3]
         :param upperBound: upper bound of the simulation box
-        :type upperBound: openmm.unit.Quantity | Vec3
+        :type upperBound: [openmm.unit.Quantity, Vec3]
         :param receptor_positions: list of 3D coordinates of the receptor
         :type receptor_positions: list
         :return: keys are cosolvent molecules and values are 3D coordinates of the newly added cosolvent molecules
@@ -758,8 +759,8 @@ class CosolventSystem(object):
                       halton: list, 
                       kdtree: spatial.cKDTree, 
                       valid_ids: list, 
-                      lowerBound: openmmunit.Quantity | Vec3, 
-                      upperBound: openmmunit.Quantity | Vec3, 
+                      lowerBound: Union[openmmunit.Quantity, Vec3], 
+                      upperBound: Union[openmmunit.Quantity, Vec3], 
                       protein_kdtree: spatial.cKDTree) -> tuple[np.ndarray, list]:
         """Accepts or reject the halton move. A random halton point is selected and checked, if accepted
         the cosolvent is placed there, otherwise a local search is performed in the neighbors of the point 
@@ -776,9 +777,9 @@ class CosolventSystem(object):
         :param valid_ids: valid halton indices
         :type valid_ids: list
         :param lowerBound: lower bound of the box
-        :type lowerBound: openmm.unit.Quantity | Vec3
+        :type lowerBound: Union[openmm.unit.Quantity, Vec3]
         :param upperBound: upper bound of the box
-        :type upperBound: openmm.unit.Quantity | Vec3
+        :type upperBound: Union[openmm.unit.Quantity, Vec3]
         :param protein_kdtree: tree of the protein's positions
         :type protein_kdtree: spatial.cKDTree
         :return: accepted coordinates for the cosolvent and the used halton ids
@@ -812,16 +813,16 @@ class CosolventSystem(object):
 
     def is_in_box(self, 
                   xyzs: np.ndarray, 
-                  lowerBound: openmmunit.Quantity | Vec3, 
-                  upperBound: openmmunit.Quantity | Vec3) -> bool:
+                  lowerBound: Union[openmmunit.Quantity, Vec3], 
+                  upperBound: Union[openmmunit.Quantity, Vec3]) -> bool:
         """Checks if the coordinates are in the box or not
 
         :param xyzs: coordinates to check
         :type xyzs: np.ndarray
         :param lowerBound: lower bound of the box
-        :type lowerBound: openmmunit.Quantity | Vec3
+        :type lowerBound: Union[openmmunit.Quantity, Vec3]
         :param upperBound: upper bound of the box
-        :type upperBound: openmmunit.Quantity | Vec3
+        :type upperBound: Union[openmmunit.Quantity, Vec3]
         :return: True if all the coordinates are in the box, Flase otherwise
         :rtype: bool
         """
@@ -902,13 +903,13 @@ class CosolventSystem(object):
         points = np.unique(np.hstack(query)).astype(int)
         return round(len(points)*mesh_step**3, 2)
 
-    def fitting_checks(self) -> float | None:
+    def fitting_checks(self) -> Union[float, None]:
         """Checks if the required cosolvents can fit in the box and 
         do not exceed the 50% of the available fillable volume 
         (volume not occupied by the receptor, if present).
 
         :return: available volume if the cosolvents can fit, None otherwise
-        :rtype: float | None
+        :rtype: Union[float, None]
         """
         prot_volume = 0
         if self.receptor:
@@ -928,11 +929,11 @@ class CosolventSystem(object):
             return None
         return empty_available_volume
 
-    def liters_to_cubic_nanometers(self, liters: float | openmmunit.Quantity) -> float:
+    def liters_to_cubic_nanometers(self, liters: Union[float, openmmunit.Quantity]) -> float:
         """Converts liters in cubic nanometers
 
         :param liters: volume to convert
-        :type liters: float | openmm.unit.Quantity
+        :type liters: Union[float, openmm.unit.Quantity]
         :return: converted volume
         :rtype: float
         """
@@ -1006,8 +1007,8 @@ class CosolventSystem(object):
                    padding: openmmunit.Quantity, 
                    radius: openmmunit.Quantity = None) -> tuple[tuple[Vec3, Vec3, Vec3], 
                                                                 Vec3, 
-                                                                openmmunit.Quantity | Vec3,
-                                                                openmmunit.Quantity | Vec3]:
+                                                                Union[openmmunit.Quantity, Vec3],
+                                                                Union[openmmunit.Quantity, Vec3]]:
         """Builds the simulation box. If a receptor is passed it is used alongside with the padding
         parameter to build the box automatically, otherwise a radius has to be passed. If no receptor
         the box is centered on the point [0, 0, 0].
@@ -1021,7 +1022,7 @@ class CosolventSystem(object):
         :return: The first element returned is a tuple containing the three vectors describing the simulation box.
                 The second element is the box itself.
                 Third and fourth elements are the lower and upper bound of the simulation box.
-        :rtype: tuple[tuple[Vec3, Vec3, Vec3], Vec3, openmmunit.Quantity | Vec3, openmmunit.Quantity | Vec3]
+        :rtype: tuple[tuple[Vec3, Vec3, Vec3], Vec3, Union[openmmunit.Quantity, Vec3], Union[openmmunit.Quantity, Vec3]]
         """
         padding = padding.value_in_unit(openmmunit.nanometer)
         if positions is not None:

@@ -18,7 +18,7 @@ def find_files(directory):
 
 
 setup(name="cosolvkit",
-      version='0.4.4',
+      version='0.4.5',
       description="CosolvKit",
       author="Niccolo Bruciaferri, Jerome Eberhardt",
       author_email="forli@scripps.edu",
