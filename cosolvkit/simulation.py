@@ -11,6 +11,8 @@ def run_simulation( simulation_format: str = 'OPENMM',
                     positions: str=None,
                     pdb: str = 'output/system.pdb',
                     system: str = 'output/system.xml', 
+                    traj_write_freq: int = 25000,
+                    time_step: float = 0.004, 
                     warming_steps: int = 100000,
                     simulation_steps: int = 25000000,
                     seed: int = None
@@ -116,7 +118,7 @@ def run_simulation( simulation_format: str = 'OPENMM',
     
     #every 0.1ns
     simulation.reporters.append(app.DCDReporter(os.path.join(results_path, "trajectory.dcd"),
-                                            reportInterval=25000, enforcePeriodicBox=None))
+                                            reportInterval=traj_write_freq, enforcePeriodicBox=True))
 
     
     #every 1ns
@@ -146,7 +148,7 @@ def run_simulation( simulation_format: str = 'OPENMM',
         simulation.step(int(warming_steps / nT))
 
     # Increase the timestep for production simulations
-    integrator.setStepSize(0.004 * openmmunit.picoseconds)
+    integrator.setStepSize(time_step * openmmunit.picoseconds)
 
     print(f'Adding a Montecarlo Barostat to the system')
     system.addForce(openmm.MonteCarloBarostat(1 * openmmunit.bar, Tend * openmmunit.kelvin))

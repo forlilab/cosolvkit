@@ -1,0 +1,116 @@
+[
+    {
+        "name": "ALA",
+        "smiles": "C",
+        "concentration": 0.1,
+        "resname": "ALA"
+    },
+    {
+        "name": "ARG",
+        "smiles": "CCC[NH]C(=[NH2+])N",
+        "concentration": 0.1,
+        "resname": "ARG"
+    },
+    {
+        "name": "ASN",
+        "smiles": "CC(=O)N",
+        "concentration": 0.1,
+        "resname": "ASN"
+    },
+    {
+        "name": "ASP",
+        "smiles": "CC(=O)[O-1]",
+        "concentration": 0.1,
+        "resname": "ASP"
+    },
+    {
+        "name": "CYS",
+        "smiles": "CS",
+        "concentration": 0.1,
+        "resname": "CYS"
+    },
+    {
+        "name": "GLN",
+        "smiles": "CCC(N)=O",
+        "concentration": 0.1,
+        "resname": "GLN"
+    },
+    {
+        "name": "GLU",
+        "smiles": "CCC(=O)[O-1]",
+        "concentration": 0.1,
+        "resname": "GLU"
+    },
+    {
+        "name": "HIS",
+        "smiles": "CC1=CNC=N1",
+        "concentration": 0.1,
+        "resname": "HIS"
+    },
+    {
+        "name": "ILE",
+        "smiles": "CC(C)CC",
+        "concentration": 0.1,
+        "resname": "ILE"
+    },
+    {
+        "name": "LEU",
+        "smiles": "CC(C)C",
+        "concentration": 0.1,
+        "resname": "LEU"
+    },
+    {
+        "name": "LYS",
+        "smiles": "CCCC[NH3+]",
+        "concentration": 0.1,
+        "resname": "LYS"
+    },
+    {
+        "name": "MET",
+        "smiles": "CCSC",
+        "concentration": 0.1,
+        "resname": "MET"
+    },
+    {
+        "name": "PHE",
+        "smiles": "c1ccc(cc1)C",
+        "concentration": 0.1,
+        "resname": "PHE"
+    },
+    {
+        "name": "PRO",
+        "smiles": "CCC",
+        "concentration": 0.1,
+        "resname": "PRO"
+    },
+    {
+        "name": "SER",
+        "smiles": "CO",
+        "concentration": 0.1,
+        "resname": "SER"
+    },
+    {
+        "name": "THR",
+        "smiles": "C(C)O",
+        "concentration": 0.1,
+        "resname": "THR"
+    },
+    {
+        "name": "TRP",
+        "smiles": "c1[nH]c2ccccc2c1C",
+        "concentration": 0.1,
+        "resname": "TRP"
+    },
+    {
+        "name": "TYR",
+        "smiles": "Cc1ccc(O)cc1",
+        "concentration": 0.1,
+        "resname": "TYR"
+    },
+    {
+        "name": "VAL",
+        "smiles": "C(C)C",
+        "concentration": 0.1,
+        "resname": "VAL"
+    }
+]
