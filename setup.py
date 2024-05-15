@@ -18,14 +18,12 @@ def find_files(directory):
 
 
 setup(name="cosolvkit",
-      version='0.4.6',
+      version='0.4.7',
       description="CosolvKit",
       author="Niccolo Bruciaferri, Jerome Eberhardt",
       author_email="forli@scripps.edu",
       url="https://github.com/forlilab/cosolvkit",
       packages=find_packages(exclude=['docs']),
-      package_data={"cosolvkit" : ["data/*"]},
-      data_files=[("", ["README.md", "LICENSE"])],
       include_package_data=True,
       zip_safe=False,
       license="LGPL-2.1",
@@ -37,8 +35,8 @@ setup(name="cosolvkit",
                    "Topic :: Scientific/Engineering"],
       entry_points={
           'console_scripts': [
-              'create_cosolvent_system=scripts.create_cosolvent_system:main',
-              'post_simulation_processing=scripts.post_simulation_processing:main'
+              'create_cosolvent_system=cosolvkit.cli.create_cosolvent_system:main',
+              'post_simulation_processing=cosolvkit.cli.post_simulation_processing:main'
           ]
       }
       
