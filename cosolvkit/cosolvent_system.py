@@ -3,7 +3,7 @@ import os
 import sys
 import io
 from collections import defaultdict
-from typing import Union
+from typing import Union, Tuple
 import numpy as np
 from scipy import spatial
 from scipy.stats import qmc
@@ -635,7 +635,7 @@ class CosolventSystem(object):
 #region FillTheVoid
     def add_cosolvents(self, 
                        cosolvents: dict, 
-                       vectors: tuple[Vec3, Vec3, Vec3], 
+                       vectors: Tuple[Vec3, Vec3, Vec3], 
                        lowerBound: Union[openmmunit.Quantity, Vec3], 
                        upperBound: Union[openmmunit.Quantity, Vec3],
                        receptor_positions: list) -> dict:
@@ -647,7 +647,7 @@ class CosolventSystem(object):
         :param cosolvents: keys are cosolvent molecules and values are 3D coordinates of the molecule
         :type cosolvents: dict
         :param vectors: vectors defining the simulation box
-        :type vectors: tuple[openmm.Vec3, openmm.Vec3, openmm.Vec3]
+        :type vectors: Tuple[openmm.Vec3, openmm.Vec3, openmm.Vec3]
         :param lowerBound: lower bound of the simulation box
         :type lowerBound: Union[openmm.unit.Quantity, Vec3]
         :param upperBound: upper bound of the simulation box
@@ -761,7 +761,7 @@ class CosolventSystem(object):
                       valid_ids: list, 
                       lowerBound: Union[openmmunit.Quantity, Vec3], 
                       upperBound: Union[openmmunit.Quantity, Vec3], 
-                      protein_kdtree: spatial.cKDTree) -> tuple[np.ndarray, list]:
+                      protein_kdtree: spatial.cKDTree) -> Tuple[np.ndarray, list]:
         """Accepts or reject the halton move. A random halton point is selected and checked, if accepted
         the cosolvent is placed there, otherwise a local search is performed in the neighbors of the point 
         (1 tile). If the local search produces no clashes the new position is accepted, otherwise a new 
@@ -783,7 +783,7 @@ class CosolventSystem(object):
         :param protein_kdtree: tree of the protein's positions
         :type protein_kdtree: spatial.cKDTree
         :return: accepted coordinates for the cosolvent and the used halton ids
-        :rtype: tuple[np.ndarray, list]
+        :rtype: Tuple[np.ndarray, list]
         """        
         trial = 0
         accepted = False
@@ -1005,7 +1005,7 @@ class CosolventSystem(object):
     def _build_box(self, 
                    positions: np.ndarray, 
                    padding: openmmunit.Quantity, 
-                   radius: openmmunit.Quantity = None) -> tuple[tuple[Vec3, Vec3, Vec3], 
+                   radius: openmmunit.Quantity = None) -> Tuple[Tuple[Vec3, Vec3, Vec3], 
                                                                 Vec3, 
                                                                 Union[openmmunit.Quantity, Vec3],
                                                                 Union[openmmunit.Quantity, Vec3]]:

@@ -18,7 +18,7 @@ def find_files(directory):
 
 
 setup(name="cosolvkit",
-      version='0.4.5',
+      version='0.4.6',
       description="CosolvKit",
       author="Niccolo Bruciaferri, Jerome Eberhardt",
       author_email="forli@scripps.edu",
@@ -28,7 +28,6 @@ setup(name="cosolvkit",
       data_files=[("", ["README.md", "LICENSE"])],
       include_package_data=True,
       zip_safe=False,
-      python_requires=">=3.9",
       license="LGPL-2.1",
       keywords=["molecular modeling", "drug design",
                 "cosolvent", "MD simulations"],
