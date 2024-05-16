@@ -3,9 +3,16 @@
 Installing cosolvkit
 ###############
 
+Installation from conda/mamba
+#############################
+.. code-block:: bash
+
+    $ conda install --channel cosolvkit
+
+
 Installation (from PyPI)
 *******************
-Please note that CosolvKit requires Python 3.10.
+Please note that CosolvKit requires Python >=3.10.
 
 .. code-block:: bash
 
