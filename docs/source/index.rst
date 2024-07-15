@@ -11,7 +11,7 @@ It exposes a user friendly interface that ensures reproducibility through the fi
 
 .. important:: \This pre-print in ChemRxiv describes the original design, implementation, and features of CosolvKit:\
       *CosolvKit: a versatile tool for cosolvent MD preparation and analysis.*
-      Niccolo Bruciaferri ,Jerome Eberhardt ,Manuel A. Llanos Author ,Johannes R. Loeffler ,
+      Niccolo Bruciaferri ,Jerome Eberhardt ,Manuel A. Llanos ,Johannes R. Loeffler ,
       Matthew Holcomb ,Monica L. Fernandez-Quintero ,Diogo Santos-Martins ,Andrew B. Ward ,Stefano Forli.  
         
       DOI: `https://doi.org/10.26434/chemrxiv-2024-rmsnj`

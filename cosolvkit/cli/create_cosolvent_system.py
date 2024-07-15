@@ -40,7 +40,7 @@ def cmd_lineparser():
  
     return parser.parse_args()
 
-if __name__ == "__main__":
+def main():
     args = cmd_lineparser()
     config_file = args.config
     config = Config.from_config(config_file)
@@ -174,3 +174,8 @@ if __name__ == "__main__":
                         seed=None
         )
         print(f"Simulation finished after {(time.time() - start)/60:.2f} min.")
+    return
+
+
+if __name__ == "__main__":
+    sys.exit(main())

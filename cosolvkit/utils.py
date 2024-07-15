@@ -12,6 +12,7 @@ import tempfile
 import shutil
 import subprocess
 import importlib
+from typing import List, Tuple
 from collections import defaultdict
 
 import numpy as np
@@ -89,7 +90,7 @@ class MutuallyExclusiveParametersError(Exception):
     
 #     simulation.context.setParameter('k', k)
 
-def fix_pdb(pdbfile: str, pdbxfile: str, keep_heterogens: bool=False) -> tuple[Topology, list]:
+def fix_pdb(pdbfile: str, pdbxfile: str, keep_heterogens: bool=False) -> Tuple[Topology, List]:
     """Fixes common problems in PDB such as:
             - missing atoms
             - missing residues
@@ -123,7 +124,7 @@ def fix_pdb(pdbfile: str, pdbxfile: str, keep_heterogens: bool=False) -> tuple[T
     fixer.addMissingHydrogens(7)
     return fixer.topology, fixer.positions
     
-def add_variants(topology: Topology, positions: list, variants: list=list()) -> tuple[Topology, list]:
+def add_variants(topology: Topology, positions: list, variants: list=list()) -> Tuple[Topology, List]:
     """Adds variants for specific protonation states.
 
     :param topology: openmm topology

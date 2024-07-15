@@ -1,9 +1,9 @@
 {
-  "cosolvents": "data/cosolvents.json",
-  "forcefields": "data/forcefields.json",
+  "cosolvents": "cosolvkit/data/cosolvents.json",
+  "forcefields": "cosolvkit/data/forcefields.json",
   "md_format": "openmm",
   "receptor": true,
-  "protein_path": "/path/to/protein/structure",
+  "protein_path": "example/protein.pdb",
   "clean_protein": true,
   "keep_heterogens": false,
   "variants_d": {},
@@ -19,7 +19,7 @@
   "cosolvent_placement": 0,
   "waters_to_keep": [],
   "radius": null,
-  "output": "/path/to/where/to/save/results",
+  "output": "results",
   "run_cosolvent_system": true,
   "run_md": false
 }
