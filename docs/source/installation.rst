@@ -1,17 +1,19 @@
 .. _installation:
 
 Installing cosolvkit
-###############
+####################
 
 Installation from conda/mamba
-#############################
+*Please note that Apple M1 chips are not supported by some of CosolvKit's dependencies.
+we recommend macOS users of Apple Silicon install the x86_64 version of MiniForge and run CosolvKit through Rosetta.*
+
 .. code-block:: bash
 
     $ conda install --channel cosolvkit
 
 
 Installation (from PyPI)
-*******************
+************************
 Please note that CosolvKit requires Python >=3.10.
 
 .. code-block:: bash
@@ -28,7 +30,7 @@ To install cosolvkit dependencies:
 
 
 Installation from source code
-*******************
+*****************************
 
 .. code-block:: bash
 

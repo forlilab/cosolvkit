@@ -27,6 +27,9 @@ or via `mamba`:
 ```bash
 $ mamba install -c conda-forge cosolvkit
 ```
+**_*Please note that Apple M1 chips are not supported by some of CosolvKit's dependencies.
+we recommend macOS users of Apple Silicon install the x86_64 version of MiniForge and run CosolvKit through Rosetta._**
+
 
 Finally, we can install the `CosolvKit` package via `pip`:
 ```bash
@@ -43,6 +46,12 @@ $ git clone https://github.com/forlilab/cosolvkit
 $ cd cosolvkit
 $ pip install -e .
 ```
+
+## Example
+To run an example of CosolvKit system creation run the command `create_cosolvent_system -c cosolvkit/data/config.json`.
+By default this example creates the cosolvent system without running any MD simualtion or post processing analysis.
+If you want it to run the simulation as well modify the field `run_MD: true` in the `config.json`.
+The results can be found in `cosolvkit/data/results`.
 
 ## Quick tutorial
 
