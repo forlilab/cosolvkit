@@ -166,6 +166,7 @@ def main():
                         positions = pos,
                         pdb = pdb,
                         system = system,
+                        membrane_protein = config.membrane,
                         traj_write_freq = args.traj_write_freq,
                         time_step = args.time_step,
                         warming_steps = 100000,
