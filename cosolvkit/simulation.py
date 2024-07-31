@@ -10,7 +10,8 @@ def run_simulation( simulation_format: str = 'OPENMM',
                     topology: str=None, 
                     positions: str=None,
                     pdb: str = 'output/system.pdb',
-                    system: str = 'output/system.xml', 
+                    system: str = 'output/system.xml',
+                    membrane_protein: bool = False, 
                     traj_write_freq: int = 25000,
                     time_step: float = 0.004, 
                     warming_steps: int = 100000,
@@ -31,6 +32,8 @@ def run_simulation( simulation_format: str = 'OPENMM',
     :type pdb: str, optional
     :param system: path to the system.xml file if using simulation_format OPENMM, defaults to 'output/system.xml'
     :type system: str, optional
+    :param membrane_protein: True if using a membrane in the system, False otherwise
+    :type membrane_protein: bool, optional
     :param warming_steps: number of warming steps, defaults to 100000
     :type warming_steps: int, optional
     :param simulation_steps: number of simulation steps, defaults to 25000000
@@ -151,7 +154,17 @@ def run_simulation( simulation_format: str = 'OPENMM',
     integrator.setStepSize(time_step * openmmunit.picoseconds)
 
     print(f'Adding a Montecarlo Barostat to the system')
-    system.addForce(openmm.MonteCarloBarostat(1 * openmmunit.bar, Tend * openmmunit.kelvin))
+    if membrane_protein:
+        barostat = openmm.MonteCarloMembraneBarostat( 1.0 * openmmunit.bar,  # Pressure in bar 
+                                                     0.0 * openmmunit.nanometers * openmmunit.bar,  # surface tension 
+                                                     Tend * openmmunit.kelvin,  # Temperature in Kelvin 
+                                                     openmm.MonteCarloMembraneBarostat.XYIsotropic,  # XY isotropic scaling 
+                                                     openmm.MonteCarloMembraneBarostat.ZFree,  # Z dimension is free 
+                                                     15  # Number of Monte Carlo steps 
+                                                     ) 
+        system.addForce(barostat)
+    else:
+        system.addForce(openmm.MonteCarloBarostat(1 * openmmunit.bar, Tend * openmmunit.kelvin))
     simulation.context.reinitialize(preserveState=True)
 
     print(f"Running simulation in NPT ensemble for {simulation_steps*0.004/1000} ns")
