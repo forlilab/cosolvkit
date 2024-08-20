@@ -99,6 +99,10 @@ def main():
 
         protein_modeller = Modeller(protein_topology, protein_positions)
 
+        # Check for repulsive forces consistency beforehand        
+        if config.add_repulsive and len(config.repulsive_residues) < 1:
+            raise Exception("At least one residue name must be specified if custom repulsive forces are requested!")
+        
         # Load cosolvents and forcefields dictionaries
         with open(config.cosolvents) as fi:
             cosolvents = json.load(fi)
@@ -112,6 +116,7 @@ def main():
                                                     forcefields=forcefields,
                                                     simulation_format=config.md_format,
                                                     modeller=protein_modeller,
+                                                    radius=config.radius,
                                                     lipid_type=config.lipid_type,
                                                     lipid_patch_path=config.lipid_patch_path)
             cosolv_system.add_membrane(cosolvent_placement=config.cosolvent_placement,

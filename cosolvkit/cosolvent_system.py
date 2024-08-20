@@ -195,7 +195,6 @@ class CosolventSystem(object):
         self.modeller = None
         self.cosolvents = dict()
         self.radius = radius
-        
         assert (simulation_format.upper() in self._available_formats), f"Error! The simulation format supplied is not supported! Available simulation engines:\n\t{self._available_formats}"
 
         # Creating cosolvent molecules
@@ -293,7 +292,7 @@ class CosolventSystem(object):
         :type epsilon: float, optional
         :param sigma: inter-particle distance in Angstrom, defaults to 10.0
         :type sigma: float, optional
-        """
+        """            
         epsilon = np.sqrt(epsilon * epsilon) * openmmunit.kilocalories_per_mole
         sigma = sigma * openmmunit.angstrom
 
@@ -1279,7 +1278,7 @@ class CosolventMembraneSystem(CosolventSystem):
         # OpenMM default
         padding = 1 * openmmunit.nanometer
         self._cosolvent_placement = cosolvent_placement
-        if self._cosolvent_placement == 0: print("No preference of what side of the membrane to place the cosolvents")
+        if self._cosolvent_placement == 0: print("No preference on what side of the membrane to place the cosolvents")
         elif self._cosolvent_placement == 1: print("Placing cosolvent molecules outside of the membrane")
         elif self._cosolvent_placement == -1: print("Placing cosolvent molecules inside the membrane")
         else: 
