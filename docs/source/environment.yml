@@ -10,6 +10,6 @@ dependencies:
   - espaloma 
   - pymol-open-source 
   - griddataformats
-  - sphinx
-  - sphinx_rtd_theme
+  - sphinx < 8.0
+  - sphinx_rtd_theme >= 2.0 
    
