@@ -54,29 +54,29 @@ def run_simulation( simulation_format: str = 'OPENMM',
     if simulation_format not in ['OPENMM', 'AMBER', 'GROMACS', 'CHARMM']:
         raise ValueError(f"Unknown simulation_format {simulation_format}. It must be one of 'OPENMM', 'AMBER', 'GROMACS', or 'CHARMM'.")
     
-    if not openmm_flag:
-        assert topology is not None and positions is not None, "If the simulation format specified is not OpenMM be sure to pass both topology and positions files"
-        if simulation_format == "AMBER":
-            positions = app.AmberInpcrdFile(positions)
-            topology = app.AmberPrmtopFile(topology, periodicBoxVectors=positions.boxVectors)
-        elif simulation_format == "GROMACS":
-            positions = app.GromacsGroFile(positions)
-            topology = app.GromacsTopFile(topology, periodicBoxVectors=positions.getPeriodicBoxVectors())
-        elif simulation_format == "CHARMM":
-            topology = app.CharmmPsfFile(topology)
-            positions = app.CharmmCrdFile(positions)
-        system = topology.createSystem(nonbondedMethod=app.PME,
-                                       nonbondedCutoff=10*openmmunit.angstrom,
-                                       switchDistance=9*openmmunit.angstrom,
-                                       constraints=app.HBonds,
-                                       removeCMMotion=True,
-                                       hydrogenMass=3.0*openmmunit.amu)
-    else:
-        assert pdb is not None and system is not None, "If the simulation format specified is OpenMM be sure to pass both pdb file and system.xml"
-        pdb = app.PDBFile(f'{results_path}/system.pdb')
-        topology = pdb.topology
-        positions = pdb.positions
-        system = openmm.XmlSerializer.deserialize(open(f'{results_path}/system.xml').read())
+    # if not openmm_flag:
+    #     assert topology is not None and positions is not None, "If the simulation format specified is not OpenMM be sure to pass both topology and positions files"
+    #     if simulation_format == "AMBER":
+    #         positions = app.AmberInpcrdFile(positions)
+    #         topology = app.AmberPrmtopFile(topology, periodicBoxVectors=positions.boxVectors)
+    #     elif simulation_format == "GROMACS":
+    #         positions = app.GromacsGroFile(positions)
+    #         topology = app.GromacsTopFile(topology, periodicBoxVectors=positions.getPeriodicBoxVectors())
+    #     elif simulation_format == "CHARMM":
+    #         topology = app.CharmmPsfFile(topology)
+    #         positions = app.CharmmCrdFile(positions)
+    #     system = topology.createSystem(nonbondedMethod=app.PME,
+    #                                    nonbondedCutoff=10*openmmunit.angstrom,
+    #                                    switchDistance=9*openmmunit.angstrom,
+    #                                    constraints=app.HBonds,
+    #                                    removeCMMotion=True,
+    #                                    hydrogenMass=3.0*openmmunit.amu)
+    # else:
+    assert pdb is not None and system is not None, "If the simulation format specified is OpenMM be sure to pass both pdb file and system.xml"
+    pdb = app.PDBFile(f'{results_path}/system.pdb')
+    topology = pdb.topology
+    positions = pdb.positions
+    system = openmm.XmlSerializer.deserialize(open(f'{results_path}/system.xml').read())
 
     print('Selecting simulation platform')
     try:

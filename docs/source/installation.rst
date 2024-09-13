@@ -36,7 +36,7 @@ Installation from source code
 
     $ git clone git@github.com:forlilab/cosolvkit.git
     $ cd cosolvkit
-    $ conda create -n cosolvkit --file environment.yml
+    $ conda create -n cosolvkit --file environment.yml && conda activate cosolvkit
     $ pip install .
 
 
@@ -50,5 +50,6 @@ Test installation
 *******************
 
 .. code-block:: python
+    
     import cosolvkit
     from cosolvkit.cosolvent_system import CosolventSystem

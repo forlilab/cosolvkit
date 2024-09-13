@@ -22,7 +22,7 @@ It is also possible to overwrite some of the options from the API:
     config.radius = 8.5
 
 Creating CosolventMolecules without json files
-###############################
+##############################################
 
 It is possible to avoid to create a `cosolvents.json` recipe file (although highly recommended).  
 
@@ -44,7 +44,7 @@ It is possible to avoid to create a `cosolvents.json` recipe file (although high
 
 
 Building a CosolventSystem
-###############################
+##########################
 
 Thanks to the flexible API CosolvKit allows the user to instantiate custom CosolventSystem classes with user prepared proteins:
 
@@ -66,7 +66,7 @@ Thanks to the flexible API CosolvKit allows the user to instantiate custom Cosol
     cosolvent_system.build()
 
 Building a CosolventMembraneSystem
-###############################
+##################################
 
 A cosolvent system with membrane can be easily built:
 
@@ -97,7 +97,7 @@ A cosolvent system with membrane can be easily built:
 
 
 Adding repulsive forces in case of aggregation events
-###############################
+#####################################################
 
 Aggregation events can be common for some types of cosolvents, if in doubt, we suggest to run a simulation without custom repulsive forces and inspect the RDF profiles (please refer to the original paper for more details).  
 If aggregation is observed, CosolvKit offers the possibility to add a custom repulsive force between specified residues.
@@ -132,7 +132,7 @@ If aggregation is observed, CosolvKit offers the possibility to add a custom rep
 
 
 Use custom solvent
-###############################
+##################
 
 CosolvKit offers the possibility of using solvents different from water. In case of water the solvation is done by OpenMM, while for custom cosolvents CosolvKit exploits the same method used to place cosolvent molecules to place solvent molecules (if filling the box with solvent can be pretty slow).
 This feature of CosolvKit is meant to offer flexibility for different advanced tasks.  
@@ -146,7 +146,7 @@ The solvent can be specified as SMILES string and the number of molecules reques
 
 
 Saving topologies and the system
-###############################
+################################
 
 Once the cosolvent system is created and parametrized, it has to be saved for the next steps (likely MD simulation).
 Depending on what MD engine was selected the format of the topology files can change.  
@@ -163,7 +163,7 @@ Depending on what MD engine was selected the format of the topology files can ch
 
 
 Run MD simulations with CosolvKit
-###############################
+#################################
 
 CosolvKit offers a general and standard protocol to run MD simulations that can be used for the majority of the use cases.  
 The flags `run_cosolvent_system` and `run_md` in the `Config` class take care of building the cosolvent system and using the standard MD protocol to run a simulation.
@@ -204,7 +204,7 @@ The flags `run_cosolvent_system` and `run_md` in the `Config` class take care of
         )
 
 Post processing analysis
-###############################
+########################
 
 CosolvKit offers a very basic package to analyze the results of the MD simulations.  
 In particualr, Radial Distribution Functions (RDFs) of the cosolvent atoms and waters are generated with the respective autocorrelation functions.  
