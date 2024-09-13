@@ -19,7 +19,7 @@ from rdkit.Chem import AllChem
 from openff.toolkit import Molecule, Topology
 from openmmforcefields.generators import EspalomaTemplateGenerator, GAFFTemplateGenerator, SMIRNOFFTemplateGenerator
 from openmmforcefields.generators.template_generators import SmallMoleculeTemplateGenerator
-from cosolvkit.utils import fix_pdb, MutuallyExclusiveParametersError
+from cosolvkit.utils import fix_pdb, MutuallyExclusiveParametersError, MD_FORMAT_EXTENSIONS
 
 
 proteinResidues = ['ALA', 'ASN', 'CYS', 'GLU', 'HIS', 'LEU', 'MET', 'PRO', 'THR', 'TYR', 'ARG', 'ASP', 'GLN', 'GLY', 'ILE', 'LYS', 'PHE', 'SER', 'TRP', 'VAL']
@@ -360,7 +360,7 @@ class CosolventSystem(object):
         :param system: system to save
         :type system: openmm.System
         """
-        with open(f"{out_path}/system.xml", "w") as fo:
+        with open(f"{out_path}/system{MD_FORMAT_EXTENSIONS['OPENMM']['system']}", "w") as fo:
             fo.write(XmlSerializer.serialize(system))
         return
     
@@ -402,22 +402,16 @@ class CosolventSystem(object):
         parmed_structure = parmed.openmm.topsystem.load_topology(topology, new_system, positions)   
         
         simulation_format = simulation_format.upper()
-        if simulation_format == "AMBER":
-            parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True, format="amber")
-            parmed_structure.save(f'{out_path}/system.rst7', overwrite=True, format="rst7")
-
-        elif simulation_format == "GROMACS":
-            parmed_structure.save(f'{out_path}/system.top', overwrite=True)
-            parmed_structure.save(f'{out_path}/system.gro', overwrite=True)
-
-        elif simulation_format == "CHARMM":
-            parmed_structure.save(f'{out_path}/system.psf', overwrite=True)
-            parmed_structure.save(f'{out_path}/system.crd', overwrite=True)
-            
+        parmed_formats = {"AMBER": "amber", "GROMACS": "gro", "CHARMM": "charmm"}
+        top_extension = MD_FORMAT_EXTENSIONS[simulation_format]['topology']
+        pos_extension = MD_FORMAT_EXTENSIONS[simulation_format]['position']
+        if simulation_format != "OPENMM":
+            parmed_structure.save(f'{out_path}/system{top_extension}', overwrite=True, format=parmed_formats[simulation_format])
+            parmed_structure.save(f'{out_path}/system{pos_extension}', overwrite=True)
         elif simulation_format == "OPENMM":
             self.save_system(out_path, system)
-            self.save_pdb(topology, positions, f"{out_path}/system.pdb")
-            parmed_structure.save(f'{out_path}/system.prmtop', overwrite=True)
+            self.save_pdb(topology, positions, f"{out_path}/system{MD_FORMAT_EXTENSIONS[simulation_format]['structure']}")
+            parmed_structure.save(f'{out_path}/system{top_extension}', overwrite=True)
         else:
             print("The specified simulation engine is not supported!")
             print(f"Available simulation engines:\n\t{self._available_formats}")

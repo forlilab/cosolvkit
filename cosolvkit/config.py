@@ -35,7 +35,7 @@ class Config(object):
         
         self.cosolvents = cosolvents
         self.forcefields = forcefields
-        self.md_format = md_format
+        self.md_format = md_format.upper()
         self.receptor = receptor
         self.protein_path = protein_path
         self.clean_protein = clean_protein
@@ -56,6 +56,7 @@ class Config(object):
         self.output = output
         self.run_cosovlent_system = run_cosolvent_system
         self.run_md = run_md
+        self.check_validity()
     
     @classmethod
     def get_defaults_dict(cls):
@@ -92,3 +93,10 @@ class Config(object):
             raise ValueError(err_msg)
         p = cls(**config)
         return p
+    
+    def check_validity(self):
+        if self.run_md:
+            assert self.md_format == "OPENMM", f"{self.md_format} is not supported with the parameter run_md set to {self.run_md}. Only OPENMM is available with this option."
+        if self.add_repulsive:
+            assert self.md_format == "OPENMM", f"{self.md_format} is not supported with the parameter add_repulsive set to {self.run_md}. Only OPENMM is available with this option."
+        return

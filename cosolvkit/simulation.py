@@ -48,7 +48,6 @@ def run_simulation( simulation_format: str = 'OPENMM',
     Tend = 300
     Tstep = 5
     
-    simulation_format = simulation_format.upper()
     openmm_flag = simulation_format == "OPENMM"
     total_steps = warming_steps + simulation_steps
 

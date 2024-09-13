@@ -22,6 +22,14 @@ from openmm.app import *
 from openmm import *
 import pdbfixer
 
+
+MD_FORMAT_EXTENSIONS = {
+    "AMBER": {"topology": ".prmtop", "position": ".rst7"},
+    "GROMACS": {"topology": ".top", "position": ".gro"},
+    "CHARMM": {"topology": ".psf", "position": ".crd"},
+    "OPENMM": {"system": ".xml", "structure": ".pdb", "topology": ".prmtop"}
+}
+
 class MutuallyExclusiveParametersError(Exception):
     """A custom exception.
 

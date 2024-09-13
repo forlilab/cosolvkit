@@ -5,7 +5,7 @@ import time
 import argparse
 from collections import defaultdict
 from cosolvkit.config import Config
-from cosolvkit.utils import fix_pdb, add_variants
+from cosolvkit.utils import fix_pdb, add_variants, MD_FORMAT_EXTENSIONS
 from cosolvkit.cosolvent_system import CosolventSystem, CosolventMembraneSystem
 from cosolvkit.simulation import run_simulation
 from openmm.app import *
@@ -146,10 +146,10 @@ def main():
     if config.run_md:
         print("Running MD simulation")
         start = time.time()
-        if config.md_format.upper() != "OPENMM":
-            # Change the next two lines depending on the simulation_format you chose
-            topo = os.path.join(config.output, "system.prmtop")
-            pos = os.path.join(config.output, "system.rst7")
+        md_format = config.md_format.upper()
+        if md_format != "OPENMM":
+            topo = os.path.join(config.output, f"system{MD_FORMAT_EXTENSIONS[md_format]['topology']}")
+            pos = os.path.join(config.output, f"system{MD_FORMAT_EXTENSIONS[md_format]['position']}")
             # This is for openmm
             pdb = None
             system = None
@@ -160,13 +160,13 @@ def main():
             pdb = os.path.join(config.output, "system.pdb")
             system = os.path.join(config.output, "system.xml")
         
-        if config.md_format.upper() == "OPENMM":
+        if md_format == "OPENMM":
             print(f"Starting MD simulation from the files: {pdb}, {system}")
         else:
             print(f"Starting MD simulation from the files: {topo}, {pos}")
         
         run_simulation(
-                        simulation_format = config.md_format,
+                        simulation_format = md_format,
                         topology = topo,
                         positions = pos,
                         pdb = pdb,
