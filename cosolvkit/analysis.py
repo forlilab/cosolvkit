@@ -443,17 +443,17 @@ class Report:
 
         axs[0].plot(self._potential_energy, color='green', linewidth=2)
         axs[0].set_title('Potential Energy',)
-        axs[0].set_xlabel('Time (ps)')
+        axs[0].set_xlabel('Frames')
         axs[0].set_ylabel('Energy (kJ/mole)')
     
         axs[1].plot(self._volume, color='blue', linewidth=2)
         axs[1].set_title('Volume')
-        axs[1].set_xlabel('Time (ps)')
+        axs[1].set_xlabel('Frames')
         axs[1].set_ylabel('Volume (nm^3)')
 
         axs[2].plot(self._temperature, color='red', linewidth=2)
         axs[2].set_title('Temperature')
-        axs[2].set_xlabel('Time (ps)')
+        axs[2].set_xlabel('Frames')
         axs[2].set_ylabel('Temperature (K)')
 
         plt.tight_layout()
