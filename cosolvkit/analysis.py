@@ -327,7 +327,7 @@ class Report:
                   'salmon',
                   'purple']
         
-        assert len(density_files) < len(colors), "Error! Too many density files, not enough colors available!"
+        assert len(density_files) <= len(colors), "Error! Too many density files, not enough colors available!"
         base_path = os.getcwd()
         topology = os.path.join(base_path, topology)
         trajectory = os.path.join(base_path, trajectory)
@@ -357,7 +357,8 @@ class Report:
         cmd_string += f"cmd.remove('solvent')\n"
         cmd_string += f"cmd.remove('org')\n"
 
-        for idx in range(len(density_files)):
+        for idx, density in enumerate(density_files):
+            cosolv = density.split('_')[-1]
             # Create isomesh for hydrogen bond probes
             cmd.isomesh(f"dens_{cosolv}", f"density_map_{cosolv}", 10)
 
