@@ -1,7 +1,7 @@
 {
   "cosolvents": "cosolvkit/data/cosolvents.json",
   "forcefields": "cosolvkit/data/forcefields.json",
-  "md_format": "gromacs",
+  "md_format": "openmm",
   "receptor": true,
   "protein_path": "example/protein.pdb",
   "clean_protein": true,
@@ -20,6 +20,6 @@
   "waters_to_keep": [],
   "radius": null,
   "output": "results",
-  "run_cosolvent_system": false,
+  "run_cosolvent_system": true,
   "run_md": true
 }
