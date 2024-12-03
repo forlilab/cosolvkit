@@ -12,7 +12,7 @@
 # CosolvKit
 The python package for creating cosolvent system.  
 
-Pre-print version of the original paper is freely accessible at the link https://doi.org/10.26434/chemrxiv-2024-rmsnj.
+The original paper is freely accessible at the link (https://pubs.acs.org/doi/10.1021/acs.jcim.4c01398).
 
 ## Documentation
 The installation instructions, documentation and tutorials can be found on http://cosolvkit.readthedocs.io/.
