@@ -70,7 +70,6 @@ def run_simulation( simulation_format: str = 'OPENMM',
     except: 
         try:
             platform = openmm.Platform.getPlatformByName("OpenCL")
-            platform.setPropertyDefaultValue('DeterministicForces', 'true')
             platform.setPropertyDefaultValue('Precision', 'mixed')
             print('Using GPU:OpenCL')
         except:
