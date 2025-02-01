@@ -151,7 +151,7 @@ the trajectory after `center` command, and the one for aligning after `rms`.
 See the [documentation for defining selections](https://amberhub.chpc.utah.edu/atom-mask-selection-syntax/).
 To run it, `system.pdb` needs to be on the working directory:
 ```
-cpptraj system.pdb process.cpptraj
+cpptraj -p system.pdb -i process.cpptraj
 ```
 It will write `clean.xtc`. This trajectory should inspected to make sure the
 region of interest is not moving or wrapping around the periodic boundaries.
