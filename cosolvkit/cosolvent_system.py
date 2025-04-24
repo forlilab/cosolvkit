@@ -1071,12 +1071,12 @@ class CosolventSystem(object):
         :rtype: Union[float, None]
         """
 
-        self.logger.info(f"Volume of the box: {self.box_volume:.2f} nm^3")
+        self.logger.info(f"Volume of the box: {self.box_volume:.2f} nm³")
 
         prot_volume = 0
         if self.receptor:
             prot_volume = self.calculate_mol_volume(self.modeller.positions)
-            self.logger.info(f"Volume of the protein: {prot_volume:.2f} nm^3")
+            self.logger.info(f"Volume of the protein: {prot_volume:.2f} nm³")
         empty_volume = self.cubic_nanometers_to_liters(self.box_volume - prot_volume)
         self._copies_from_concentration(empty_volume)
         cosolvs_volume = defaultdict(float)
@@ -1084,8 +1084,8 @@ class CosolventSystem(object):
             cosolvs_volume[cosolvent] = self.calculate_mol_volume(self.cosolvents[cosolvent])*cosolvent.copies
         volume_occupied_by_cosolvent = round(sum(cosolvs_volume.values()), 3)
         empty_available_volume = round(self.liters_to_cubic_nanometers(empty_volume)/2., 3)
-        self.logger.info(f"Volume requested for cosolvents: {volume_occupied_by_cosolvent:.2f} nm^3")
-        self.logger.info(f"Volume available for cosolvents: {empty_available_volume} nm^3")
+        self.logger.info(f"Volume requested for cosolvents: {volume_occupied_by_cosolvent:.2f} nm³")
+        self.logger.info(f"Volume available for cosolvents: {empty_available_volume} nm³")
         if volume_occupied_by_cosolvent > empty_available_volume:
             return None
         return empty_available_volume

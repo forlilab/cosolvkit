@@ -100,18 +100,14 @@ from cosolvkit.simulation import run_simulation
 
 print("Running MD simulation")
 start = time.time()
-# Depending on the simulation format you would pass either a topology and positions file or a pdb and system file
 run_simulation(
-                simulation_format = simulation_format,
-                topology = None,
-                positions = None,
-                pdb = 'system.pdb',
-                system = 'system.xml',
-                warming_steps = 100000,
-                simulation_steps = 6250000, # 25ns
-                results_path = results_path, # This should be the name of system being simulated
-                seed=None
-    )
+                pdb_fname = 'system.pdb',
+                system_fname = 'system.xml',
+                temperature = 300,
+                time_step = 0.04,
+                simulation_steps = 25000000, 
+                results_path = 'results',
+                )
 print(f"Simulation finished after {(time.time() - start)/60:.2f} min.")
 ```
 
@@ -166,35 +162,24 @@ MDAnalysis. For imaging, see its documentation about
 ```python
 from cosolvkit.analysis import Report
 """
-Report class:
-    log_file: is the statistics.csv or whatever log_file produced during the simulation.
-        At least Volume, Temperature and Pot_e should be reported on this log file.
-    traj_file: trajectory file
-    top_file: topology file
-    cosolvents_file: json file describing the cosolvents
-
-generate_report():
-    out_path: where to save the results. 3 folders will be created:
-        - report
-            - autocorrelation
-            - rdf
-generate_density_maps():
-    out_path: where to save the results.
-    analysis_selection_string: selection string of cosolvents you want to analyse. This
-        follows MDAnalysis selection strings style. If no selection string, one density file
-        for each cosolvent will be created.
-
-generate_pymol_report()
-    selection_string: important residues to select and show in the PyMol session.
 """
-report = Report(log_file, traj_file, top_file, cosolvents_file)
-report.generate_report(out_path=out_path)
-report.generate_density_maps(out_path=out_path, analysis_selection_string="")
-report.generate_pymol_reports(report.topology, 
-                              report.trajectory, 
-                              density_files="/path/to/density/file", 
-                              selection_string='', 
-                              out_path=out_path)
+    report = Report(statistics_file, traj_file_aligned, top_file, 
+                    cosolvent_names=['BEN'], out_path=out_path)
+    
+    report.generate_report(equilibration=True, 
+                           rdf=True,
+                           rmsf=True, 
+                           avg_selection='protein',
+                           align_selection='protein and name CA',
+                           )
+    report.generate_density_maps(
+                                 cosolvent_names=['BEN'],
+                                 gridsize=0.375,
+                                 temperature=300,
+                                 use_atomtypes=True, 
+                                 atomtypes_definitions='../cosolvkit/data/dacar_atomtypes.json', 
+                                 )    
+    report.generate_pymol_session(density_files=out_path)
 ```
 
 ## Add centroid-repulsive potential

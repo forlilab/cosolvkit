@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from typing import List, Union
 
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter,binary_dilation
 from scipy.signal import correlate
 from scipy.interpolate import RegularGridInterpolator
 from gridData import Grid
@@ -69,14 +69,14 @@ def combine_dx_maps(filepaths: List[str] = None, method:str= 'mean', out_fname:s
 
     return combined_grid
 
-def _normalization(data, a:float=None, b:float=None):
+def _normalization(data, a:float=0, b:float=1):
     """_summary_
 
     :param data: list of data points
     :type data: list
-    :param a: int a, defaults to None
+    :param a: int a, defaults to 0
     :type a: int, optional
-    :param b: int b, defaults to None
+    :param b: int b, defaults to 1
     :type b: int, optional
     :return: normalized data
     :rtype: list
@@ -86,22 +86,17 @@ def _normalization(data, a:float=None, b:float=None):
     epsilon = 1e-20  # small value to avoid division by zero
     return a + ((data - min_data) * (b - a)) / (max_data - min_data + epsilon)
 
-def _grid_free_energy(hist, n_atoms, n_frames, temperature=300):
+def _grid_free_energy(hist, n_atoms, n_frames, n_accessible_voxels, temperature=300):
     """
     Compute the atomic grid free energy (GFE) from a given histogram.
     
     :param hist: Histogram of cosolvent occupancy in each voxel
-    :param n_atoms: Total number of cosolvent atoms (not total system atoms)
+    :param n_atoms: Total number of cosolvent atoms (not total system atoms). Also this is per atom-type
     :param n_frames: Number of frames in the trajectory
+    :param n_accessible_voxels: Number of solvent accessible voxels in the grid
     :param temperature: Temperature in Kelvin (default 300K)
     :return: 3D numpy array of free energy values (same shape as `hist`)
     """
-
-    # for atomtype analysis Im not sure if we need to use the all cosolvent atoms to calculate the volume    
-    # Before the volume_water was calculated as the total volume of the box, but it should be the volume of the solvent region
-    # this approximation is not correct, but it is a good starting point
-    n_accessible_voxels = np.sum(hist > 0)  # Count nonzero occupancy voxels
-
     # Apply occupancy filtering: remove low-occupancy grid points
     # occupancy = hist / n_frames
     # occupancy_threshold = 0.001
@@ -111,15 +106,11 @@ def _grid_free_energy(hist, n_atoms, n_frames, temperature=300):
     N_o = n_atoms / n_accessible_voxels  # Bulk probability of cosolvent
     N = hist / n_frames  # Local probability in the grid
 
-    # self.logger.info(f"Min N: {np.min(N)}, Max N: {np.max(N)}, Min N_o: {np.min(N_o)}, Max N_o: {np.max(N_o)}")
-
     #if hist contains very low values (or zeros), N = hist / n_frames can be much smaller than N_o
     # making log(N / N_o) too negative and gfe extremely large.
     N = np.maximum(N, 1E-10)
    
     gfe = -(BOLTZMANN_CONSTANT_KB * temperature) * np.log(N / N_o)
-
-    print(f'Min GFE: {np.min(gfe)}, Max GFE: {np.max(gfe)}')
     
     return gfe
 
@@ -137,23 +128,15 @@ def _smooth_grid_free_energy(gfe,
     """
 
     gfe_filtered = np.copy(gfe)
-
-    # the energy cutoff is applied before smoothing, 
-    gfe_filtered[gfe_filtered >= energy_cutoff] = 0.0
-
-    # Apply Gaussian smoothing AFTER filtering (not sure if this is the best approach)
+ 
+    # Apply Gaussian smoothing BEFORE filtering.
     gfe_smoothed = gaussian_filter(gfe_filtered, sigma=sigma)
-    # self.logger.info(f'Energy cutoff is: {energy_cutoff}')
 
     # Keep only favorable energy values after smoothing
-    # gfe_smoothed[gfe_smoothed >= energy_cutoff] = 0.0
-
-    print(f'Min gfe_smoothed: {np.min(gfe_smoothed)}, Max gfe_smoothed: {np.max(gfe_smoothed)}')
+    gfe_smoothed[gfe_smoothed >= energy_cutoff] = 0.0
 
     # Normalization has not no effect
     gfe_smoothed = _normalization(gfe_smoothed, np.min(gfe_filtered), 0.0)
-
-    print(f'Min gfe_smooth_norm: {np.min(gfe_smoothed)}, Max gfe_smooth_norm: {np.max(gfe_smoothed)}')
 
     return gfe_smoothed
 
@@ -269,6 +252,9 @@ class Analysis(AnalysisBase):
                     np.linspace(0, self._box_size[2], num=hbins[2] + 1, endpoint=True) + (z - sd[2]))
         origin = (self._edges[0][0], self._edges[1][0], self._edges[2][0])
 
+        # get the mask of accesible voxels that will be used for the free energy calculation
+        self._build_accessible_mask()
+
         # Get positions and atom types
         positions = self._get_positions()
 
@@ -282,8 +268,6 @@ class Analysis(AnalysisBase):
             atom_types_array = np.tile(mapped_atomtypes, self._nframes)
 
             for atom_type in self.atomtypes_dict.keys():
-                if atom_type == 'OTHER':
-                    continue
 
                 self.logger.info(f"Processing atom type: {atom_type}")
 
@@ -294,7 +278,7 @@ class Analysis(AnalysisBase):
 
                 # Skip empty positions for a type
                 if len(type_positions) == 0:
-                    self.logger.info(f"Skipping atom type {atom_type} as it has no positions.")
+                    self.logger.warning(f"Skipping atom type {atom_type} as it has no positions.")
                     continue
 
                 # Generate histogram for this type
@@ -310,6 +294,9 @@ class Analysis(AnalysisBase):
             self._histogram = Grid(hist, origin=origin, delta=self._gridsize)
             self._density = Grid(_grid_density(hist), origin=origin, delta=self._gridsize)
 
+        # Calculate the number of accessible voxels, once per trajectory
+        self._build_accessible_mask()
+
     def _get_positions(self, start=0, stop=None):
         positions = self._positions[start:stop, :, :]
         new_shape = (positions.shape[0] * positions.shape[1], 3)
@@ -317,6 +304,53 @@ class Analysis(AnalysisBase):
 
         return positions           
     
+    def _build_accessible_mask(self, traj_step=5, probe_radius=1.4, export=True):
+        """
+        Build a boolean grid where True = voxel is solvent-accessible.
+        Use both water-oxygen and one cosolvent heavy atom per mol to capture small cavities and
+        also hydrophobic pockets not accessed by water.
+        The grid is dilated by `probe_radius` to account for the size of the probe.
+
+        Parameters
+        ----------
+        traj_step   : int   use every `traj_step`-th frame to save time
+        probe_radius: float Å, radius you want to allow beyond sampled O positions
+        export      : bool  if True, export the grid to a .dx file
+        """
+        if hasattr(self, "_n_accessible_voxels"):
+            return  # already built
+
+        # collect water-oxygen + one cosolvent heavy-atom per mol
+        O_sel  = self._u.select_atoms("resname HOH WAT and name O")
+        # probeH = self._u.select_atoms("not resname HOH WAT and not name H* and prop q<0.1").unique  # e.g. any neutral heavy atom
+
+        coords = []
+        for ts in self._u.trajectory[::traj_step]: # this stride saves time
+            coords.append(O_sel.positions.copy())
+            # coords.append(probeH.positions.copy())
+        coords = np.vstack(coords)
+
+        # histogram into current grid
+        hist, _ = np.histogramdd(coords, bins=self._edges)
+        mask = hist > 0
+
+        # dilate by ≈ probe_radius
+        n_iter = int(round(probe_radius / self._gridsize))
+        mask = binary_dilation(mask, iterations=max(1, n_iter))
+
+        # count and save the mask
+        self._n_accessible_voxels = int(mask.sum())
+        grid_vol = self._gridsize ** 3
+        self.logger.info(f"Number of accessible voxels: {self._n_accessible_voxels:.2f}")
+        self.logger.info(f"Volume of accessible voxels: {self._n_accessible_voxels/1000 * grid_vol:.2f} nm³")
+        
+        if export:
+            mask_grid = mask.astype(float)
+            grid = Grid(mask_grid, edges=self._edges)
+            grid.export(f"solvent_accessible_map.dx")
+
+        return
+
     def _map_atomtypes(self, atomtypes_definitions:list=None) -> np.ndarray:
         """Maps atom types to their respective categories based on SMARTS patterns.
         Some useful definitions here:  https://www.daylight.com/dayhtml_tutorials/languages/smarts/smarts_examples.html
@@ -327,10 +361,12 @@ class Analysis(AnalysisBase):
         """
         
         # select atoms based on SMARTS patterns
-        # usually we don't want to include hydrogens in the analysis
-        self.atomtypes_dict = {atomtype['atype']: self._ag.select_atoms(f"smarts {atomtype['smarts']} and not name H*") for atomtype in atomtypes_definitions}
+        self.atomtypes_dict = {atomtype['atype']: self._ag.select_atoms(f"smarts {atomtype['smarts']}") for atomtype in atomtypes_definitions}
+        # Count the number of atoms by type, this is required for the free energy calculation
+        self._n_atoms_by_type = {key: ag.n_atoms for key, ag in self.atomtypes_dict.items()}
+        self.logger.debug(f"Atom types count: {self._n_atoms_by_type}")
+
         self.atomtypes_dict = {key: np.unique(ag.atoms.types) for key, ag in self.atomtypes_dict.items()}
-        # self.logger.info(f"Unique atom types in the selection: {self.atomtypes_dict}")
 
         mapped_atomtypes = np.zeros_like(self._ag.atoms.types, dtype=object)
 
@@ -340,9 +376,9 @@ class Analysis(AnalysisBase):
                 if atom in atomtypes:
                     mapped_atomtypes[np.where(self._ag.atoms.types == atom)] = key
                     break
-            else:
-                mapped_atomtypes[np.where(self._ag.atoms.types == atom)] = 'OTHER'
-
+            # else:
+            #     mapped_atomtypes[np.where(self._ag.atoms.types == atom)] = 'OTHER'
+        
         return mapped_atomtypes
     
     def atomic_grid_free_energy(self, temperature=300., atom_radius=1.4, smoothing=True):
@@ -357,18 +393,21 @@ class Analysis(AnalysisBase):
         
         if self.use_atomtypes:
             for atom_type, grid in self._type_histograms.items():
-                agfe = _grid_free_energy(grid.grid, self._n_atoms, self._nframes, temperature)
-
+                n_atoms_type = self._n_atoms_by_type[atom_type]
+                agfe = _grid_free_energy(grid.grid, n_atoms_type, self._nframes, self._n_accessible_voxels, temperature)
+                # self.logger.debug(f"Free energy for {atom_type}: MIN: {np.min(agfe):.2f} kcal/mol, MAX: {np.max(agfe):.2f} kcal/mol")
                 if smoothing:
-                    agfe = _smooth_grid_free_energy(agfe, sigma=atom_radius / 3., energy_cutoff=0)
-
+                    agfe = _smooth_grid_free_energy(agfe, sigma=atom_radius /35., energy_cutoff=0)
+                
+                self.logger.info(f"Free energy for {atom_type}: MIN: {np.min(agfe):.2f} kcal/mol, MAX: {np.max(agfe):.2f} kcal/mol")
                 self._type_histograms[atom_type] = Grid(agfe, edges=grid.edges)
         else:
-            agfe = _grid_free_energy(self._histogram.grid, self._n_atoms, self._nframes, temperature)
+            agfe = _grid_free_energy(self._histogram.grid, self._n_atoms, self._nframes, self._n_accessible_voxels, temperature)
 
             if smoothing:
                 # We divide by 3 in order to have radius == 3 sigma
                 agfe = _smooth_grid_free_energy(agfe, sigma=atom_radius / 3., energy_cutoff=0)
+                self.logger.info(f"Free energy: MIN: {np.min(agfe):.2f} kcal/mol, MAX: {np.max(agfe):.2f} kcal/mol")
 
             self._agfe = Grid(agfe, edges=self._histogram.edges)
 
@@ -745,7 +784,7 @@ class Report:
         axs[1].plot(self._volume, color='blue', linewidth=2)
         axs[1].set_title('Volume')
         axs[1].set_xlabel('Frames')
-        axs[1].set_ylabel('Volume (nm^3)')
+        axs[1].set_ylabel('Volume (nm³)')
 
         axs[2].plot(self._temperature, color='red', linewidth=2)
         axs[2].set_title('Temperature')

@@ -56,9 +56,9 @@ def main():
 
     # Set up logging
     logger=setup_logging(level="INFO", filepath=f"{config.output_dir}/cosolvkit.log")
-
+    
+    start = time.time()
     if config.run_cosovlent_system:
-        start = time.time()
         if (config.protein_path is not None and config.box_size is not None) or (config.protein_path is None and config.box_size is None):
             logger.error("Error! If the config file specifies a receptor, the box_size should be set to null and vice versa.")
             raise SystemExit("Error! If the config file specifies a receptor, the box_size should be set to null and vice versa.")
