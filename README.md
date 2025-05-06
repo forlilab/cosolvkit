@@ -104,7 +104,7 @@ run_simulation(
                 pdb_fname = 'system.pdb',
                 system_fname = 'system.xml',
                 temperature = 300,
-                time_step = 0.04,
+                time_step = 0.004,
                 simulation_steps = 25000000, 
                 results_path = 'results',
                 )
