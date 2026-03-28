@@ -141,8 +141,10 @@ def main():
                                                     lipid_type=config.lipid_type,
                                                     lipid_patch_path=config.lipid_patch_path)
             cosolv_system.add_membrane(cosolvent_placement=config.memb_cosolv_placement,
+                                    positive_ion=config.positive_ion,
+                                    negative_ion=config.negative_ion,
                                     waters_to_keep=config.waters_to_keep)
-            cosolv_system.build(iteratively_adjust_copies=args.iteratively_adjust_copies)
+            cosolv_system.build(positive_ion=config.positive_ion, negative_ion=config.negative_ion, iteratively_adjust_copies=args.iteratively_adjust_copies)
         else:
             logger.info("Building cosolvent system")
             cosolv_system = CosolventSystem(cosolvents=cosolvents,
@@ -154,6 +156,8 @@ def main():
                                             box_size=config.box_size)
             cosolv_system.build(solvent_smiles=config.solvent_smiles,
                                 n_solvent_molecules=config.solvent_copies,
+                                positive_ion=config.positive_ion,
+                                negative_ion=config.negative_ion,
                                 iteratively_adjust_copies=args.iteratively_adjust_copies)
             
         if len(config.repulsive_residues) > 0:
