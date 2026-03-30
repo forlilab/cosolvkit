@@ -240,9 +240,11 @@ class CosolventSystem(object):
     
 #region Public
     def build(self,
-              solvent_smiles: str="H2O", 
+              solvent_smiles: str="H2O",
               n_solvent_molecules: int=None,
               neutralize: bool=True,
+              positive_ion: str="Na+",
+              negative_ion: str="Cl-",
               iteratively_adjust_copies: bool=False):
         """This function adds the cosolvents specified in the CosolvSystem
         and solvates with the desired solvent. If n_solvent_molecules is not passed
@@ -256,8 +258,12 @@ class CosolventSystem(object):
         :type n_solvent_molecules: int, optional
         :param neutralize: if True, the system charge will be neutralized by OpenMM, defaults to True
         :type neutralize: bool, optional
+        :param positive_ion: positive ion to use for neutralization, defaults to "Na+"
+        :type positive_ion: str, optional
+        :param negative_ion: negative ion to use for neutralization, defaults to "Cl-"
+        :type negative_ion: str, optional
         :param iteratively_adjust_copies: if True, the number of copies of each cosolvent will iteratively be reduced until a valid starting configuration is found
-        :type iteratively_adjust_copies: bool, optional 
+        :type iteratively_adjust_copies: bool, optional
         """
         self.logger.info("Checking volumes..")
         volume_not_occupied_by_cosolvent = self.fitting_checks()
@@ -274,8 +280,8 @@ class CosolventSystem(object):
             self._parametrize_ligands(self.ligands)
 
         if solvent_smiles == "H2O":
-            if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=neutralize)
-            else: self.modeller.addSolvent(self.forcefield, numAdded=n_solvent_molecules, neutralize=neutralize)
+            if n_solvent_molecules is None: self.modeller.addSolvent(self.forcefield, neutralize=neutralize, positiveIon=positive_ion, negativeIon=negative_ion)
+            else: self.modeller.addSolvent(self.forcefield, numAdded=n_solvent_molecules, neutralize=neutralize, positiveIon=positive_ion, negativeIon=negative_ion)
             self.logger.info(f"Waters added: {self._get_n_waters()}")
         elif solvent_smiles is not None:
             c = {"name": "solvent",
@@ -1318,7 +1324,7 @@ class CosolventMembraneSystem(CosolventSystem):
             self.logger.error("Error! <lipid_type> and <lipid_patch_path> are mutually exclusive parameters. Please pass just one of them.")
             raise MutuallyExclusiveParametersError("Error! <lipid_type> and <lipid_patch_path> are mutually exclusive parameters. Please pass just one of them.")
     
-    def add_membrane(self, cosolvent_placement: str='both', neutralize: bool=True, waters_to_keep: list=None):
+    def add_membrane(self, cosolvent_placement: str='both', neutralize: bool=True, positive_ion: str="Na+", negative_ion: str="Cl-", waters_to_keep: list=None):
         """Create a membrane system
 
         :param cosolvent_placement: determines on what side of the membrane will the cosolvents be placed, defaults to both.
@@ -1328,6 +1334,10 @@ class CosolventMembraneSystem(CosolventSystem):
         :type cosolvent_placement: str, optional
         :param neutralize: if neutralize the system when solvating the membrane, defaults to True
         :type neutralize: bool, optional
+        :param positive_ion: positive ion to use for neutralization, defaults to "Na+"
+        :type positive_ion: str, optional
+        :param negative_ion: negative ion to use for neutralization, defaults to "Cl-"
+        :type negative_ion: str, optional
         :param waters_to_keep: a list of the indices of key waters that should not be deleted, defaults to None
         :type waters_to_keep: list, optional
         :raises SystemError: if OpenMM is not able to relax the system after adding the membrane a SystemError is raised
@@ -1347,11 +1357,15 @@ class CosolventMembraneSystem(CosolventSystem):
                 self.modeller.addMembrane(forcefield=self.forcefield,
                                         lipidType=self.lipid_type,
                                         neutralize=neutralize,
+                                        positiveIon=positive_ion,
+                                        negativeIon=negative_ion,
                                         minimumPadding=padding)
             elif self.lipid_patch is not None:
                 self.modeller.addMembrane(forcefield=self.forcefield,
                                         lipidType=self.lipid_patch,
                                         neutralize=neutralize,
+                                        positiveIon=positive_ion,
+                                        negativeIon=negative_ion,
                                         minimumPadding=padding)
             if waters_to_keep is not None:
                 waters_to_delete = [atom for atom in self.modeller.topology.atoms() if atom.residue.index not in waters_to_keep and atom.residue.name in waters_residue_names]
@@ -1380,13 +1394,17 @@ class CosolventMembraneSystem(CosolventSystem):
         self._periodic_box_vectors = self.modeller.topology.getPeriodicBoxVectors().value_in_unit(openmmunit.nanometer)
         return
 
-    def build(self, neutralize: bool=True, iteratively_adjust_copies: bool=False):
+    def build(self, neutralize: bool=True, positive_ion: str="Na+", negative_ion: str="Cl-", iteratively_adjust_copies: bool=False):
         """Adds the cosolvent molecules to the system
 
         :param neutralize: if neutralize the system during solvation, defaults to True
         :type neutralize: bool, optional
+        :param positive_ion: positive ion to use for neutralization, defaults to "Na+"
+        :type positive_ion: str, optional
+        :param negative_ion: negative ion to use for neutralization, defaults to "Cl-"
+        :type negative_ion: str, optional
         :param iteratively_adjust_copies: if True, the number of copies of each cosolvent will iteratively be reduced until a valid starting configuration is found
-        :type iteratively_adjust_copies: bool, optional 
+        :type iteratively_adjust_copies: bool, optional
         """
         if self._cosolvent_placement != 'both':
             lipid_positions = list()
@@ -1415,7 +1433,7 @@ class CosolventMembraneSystem(CosolventSystem):
         else:
             cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, lowerBound, upperBound, receptor_positions)
         self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
-        self.modeller.addSolvent(forcefield=self.forcefield, neutralize=neutralize)
+        self.modeller.addSolvent(forcefield=self.forcefield, neutralize=neutralize, positiveIon=positive_ion, negativeIon=negative_ion)
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
         

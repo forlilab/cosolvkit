@@ -21,6 +21,8 @@ class Config(object):
                  repulsive_sigma=None,
                  solvent_smiles=None,
                  solvent_copies=None,
+                 positive_ion="Na+",
+                 negative_ion="Cl-",
                  ligands= dict(),
                  padding=None,
                  box_size=None,
@@ -45,6 +47,8 @@ class Config(object):
         self.repulsive_sigma = repulsive_sigma
         self.solvent_smiles = solvent_smiles
         self.solvent_copies = solvent_copies
+        self.positive_ion = positive_ion
+        self.negative_ion = negative_ion
         self.ligands = ligands
         self.padding = padding
         self.box_size = box_size

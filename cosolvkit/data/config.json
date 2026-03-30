@@ -11,6 +11,8 @@
   "repulsive_sigma": 4.0,
   "solvent_smiles": "H2O",
   "solvent_copies": null,
+  "positive_ion": "Na+",
+  "negative_ion": "Cl-",
   "ligands": {},
   "padding": 10.0,
   "box_size": null,
