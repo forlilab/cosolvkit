@@ -264,6 +264,14 @@ class Analysis(AnalysisBase):
             # Map atom types to atoms in the system
             mapped_atomtypes = self._map_atomtypes(self.atomtypes_definitions)
 
+            # Fall back to standard density if SMARTS matching failed completely
+            if mapped_atomtypes is None:
+                hist, _ = np.histogramdd(positions, bins=self._edges)
+                self._histogram = Grid(hist, origin=origin, delta=self._gridsize)
+                self._density = Grid(_grid_density(hist), origin=origin, delta=self._gridsize)
+                self._build_accessible_mask()
+                return
+
             # Get atom types for all frames as a single array
             atom_types_array = np.tile(mapped_atomtypes, self._nframes)
 
@@ -286,6 +294,16 @@ class Analysis(AnalysisBase):
                 self._type_histograms[atom_type] = Grid(hist, origin=origin, delta=self._gridsize)
 
             # Create a combined density grid by summing all atom types
+            if not self._type_histograms:
+                self.logger.warning(
+                    "No atom type histograms were produced (all types had no matching positions). "
+                    "Falling back to standard density estimation."
+                )
+                hist, _ = np.histogramdd(positions, bins=self._edges)
+                self._histogram = Grid(hist, origin=origin, delta=self._gridsize)
+                self._density = Grid(_grid_density(hist), origin=origin, delta=self._gridsize)
+                self._build_accessible_mask()
+                return
             total_hist = sum(grid.grid for grid in self._type_histograms.values())
             self._histogram = Grid(total_hist, origin=origin, delta=self._gridsize)
             self._density = Grid(_grid_density(total_hist), origin=origin, delta=self._gridsize)
@@ -366,6 +384,14 @@ class Analysis(AnalysisBase):
         self._n_atoms_by_type = {key: ag.n_atoms for key, ag in self.atomtypes_dict.items()}
         self.logger.debug(f"Atom types count: {self._n_atoms_by_type}")
 
+        # Warn if any SMARTS pattern matched no atoms in the cosolvent molecule
+        for key, n in self._n_atoms_by_type.items():
+            if n == 0:
+                self.logger.warning(
+                    f"SMARTS pattern for atom type '{key}' matched no atoms in the cosolvent. "
+                    f"Check that the SMARTS is appropriate for this molecule."
+                )
+
         self.atomtypes_dict = {key: np.unique(ag.atoms.types) for key, ag in self.atomtypes_dict.items()}
 
         mapped_atomtypes = np.zeros_like(self._ag.atoms.types, dtype=object)
@@ -376,9 +402,24 @@ class Analysis(AnalysisBase):
                 if atom in atomtypes:
                     mapped_atomtypes[np.where(self._ag.atoms.types == atom)] = key
                     break
-            # else:
-            #     mapped_atomtypes[np.where(self._ag.atoms.types == atom)] = 'OTHER'
-        
+
+        # Warn about atoms that could not be assigned to any SMARTS-defined type
+        unmatched_mask = mapped_atomtypes == 0
+        n_unmatched = int(unmatched_mask.sum())
+        if n_unmatched > 0:
+            unmatched_ff_types = np.unique(self._ag.atoms.types[unmatched_mask])
+            self.logger.warning(
+                f"{n_unmatched} atom(s) with force-field types {list(unmatched_ff_types)} "
+                f"did not match any SMARTS pattern and will be excluded from the density maps."
+            )
+
+        # If no atom was assigned at all, signal the caller to fall back to standard density
+        if n_unmatched == len(mapped_atomtypes):
+            self.logger.warning(
+                "No atoms matched any SMARTS pattern. Falling back to standard (non-atomtype) density estimation."
+            )
+            return None
+
         return mapped_atomtypes
     
     def atomic_grid_free_energy(self, temperature=300., atom_radius=1.4, smoothing=True):
