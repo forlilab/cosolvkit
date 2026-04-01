@@ -1,0 +1,7 @@
+{
+"ad4_simple": [
+    {"atype": "A", "smarts": "[c]"},
+    {"atype": "NA", "smarts": "[#7]"},
+    {"atype": "OA", "smarts": "[#8]"}
+    ]
+}

@@ -12,48 +12,52 @@ class Config(object):
                  cosolvents=None,
                  forcefields=None,
                  md_format=None,
-                 receptor=True,
                  protein_path=None,
                  clean_protein=True,
                  keep_heterogens=False,
-                 variants_d=dict(),
-                 add_repulsive=False,
+                 variants=dict(),
                  repulsive_residues=list(),
-                 epsilon=None,
-                 sigma=None,
+                 repulsive_epsilon=None,
+                 repulsive_sigma=None,
                  solvent_smiles=None,
                  solvent_copies=None,
+                 positive_ion="Na+",
+                 negative_ion="Cl-",
+                 ligands= dict(),
+                 padding=None,
+                 box_size=None,
                  membrane=False,
                  lipid_type=None,
                  lipid_patch_path=None,
-                 cosolvent_placement=0,
+                 memb_cosolv_placement='both',
                  waters_to_keep=list(),
-                 radius=None,
-                 output=None,
+                 output_dir=None,
                  run_cosolvent_system=True,
                  run_md=False):
         
         self.cosolvents = cosolvents
         self.forcefields = forcefields
         self.md_format = md_format.upper()
-        self.receptor = receptor
         self.protein_path = protein_path
         self.clean_protein = clean_protein
         self.keep_heterogens = keep_heterogens
-        self.variants_d = variants_d
-        self.add_repulsive = add_repulsive
+        self.variants = variants
         self.repulsive_residues = repulsive_residues
-        self.epsilon = epsilon
-        self.sigma = sigma
+        self.repulsive_epsilon = repulsive_epsilon
+        self.repulsive_sigma = repulsive_sigma
         self.solvent_smiles = solvent_smiles
         self.solvent_copies = solvent_copies
+        self.positive_ion = positive_ion
+        self.negative_ion = negative_ion
+        self.ligands = ligands
+        self.padding = padding
+        self.box_size = box_size
         self.membrane = membrane
         self.lipid_type = lipid_type
         self.lipid_patch_path = lipid_patch_path
-        self.cosolvent_placement = cosolvent_placement
+        self.memb_cosolv_placement = memb_cosolv_placement
         self.waters_to_keep = waters_to_keep
-        self.radius = radius
-        self.output = output
+        self.output_dir = output_dir
         self.run_cosovlent_system = run_cosolvent_system
         self.run_md = run_md
         self.check_validity()
@@ -97,6 +101,5 @@ class Config(object):
     def check_validity(self):
         if self.run_md:
             assert self.md_format == "OPENMM", f"{self.md_format} is not supported with the parameter run_md set to {self.run_md}. Only OPENMM is available with this option."
-        if self.add_repulsive:
-            assert self.md_format == "OPENMM", f"{self.md_format} is not supported with the parameter add_repulsive set to {self.run_md}. Only OPENMM is available with this option."
         return
+    

@@ -1,0 +1,7 @@
+{
+"DACAr_types": [
+    {"atype": "HBD", "smarts": "[!$([#6,H0,-,-2,-3])]", "comment": "H-Bond Donor is a non-negatively charged heteroatom with at least one H"},
+    {"atype": "HBA", "smarts": "[!$([#6,F,Cl,Br,I,o,s,nX3,#7v5,#15v5,#16v4,#16v6,*+1,*+2,*+3])]", "comment": "H-Bond Acceptor is a heteroatom with no positive charge, note that negatively charged oxygen or sulphur are included."},
+    {"atype": "Car", "smarts": "[c]", "comment": "Aromatic carbon"}
+    ]
+}

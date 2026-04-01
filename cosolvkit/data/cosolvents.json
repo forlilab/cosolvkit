@@ -2,7 +2,7 @@
     {
         "name": "benzene",
         "smiles": "c1ccccc1",
-        "concentration": 1.5,
+        "concentration": 0.2,
         "resname": "BEN"
     },
     {
