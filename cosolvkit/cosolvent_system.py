@@ -1242,18 +1242,19 @@ class CosolventSystem(object):
             minRange = Vec3(*(min((pos[i] for pos in positions)) for i in range(3)))
             maxRange = Vec3(*(max((pos[i] for pos in positions)) for i in range(3)))
             center = 0.5*(minRange+maxRange)
-            radius = max(unit.norm(center-pos) for pos in positions)
-            width = max(2*radius+padding, 2*padding)
+            widthX = max((maxRange[0]-minRange[0]) + 2*padding, 2*padding)
+            widthY = max((maxRange[1]-minRange[1]) + 2*padding, 2*padding)
+            widthZ = max((maxRange[2]-minRange[2]) + 2*padding, 2*padding)
         else:
             center = Vec3(0, 0, 0)
-            radius = box_size.value_in_unit(openmmunit.nanometer)
-            maxRange = Vec3(radius, radius, radius)
-            minRange = Vec3(-radius, -radius, -radius)
-            width = radius
+            side = box_size.value_in_unit(openmmunit.nanometer)
+            maxRange = Vec3(side/2, side/2, side/2)
+            minRange = Vec3(-side/2, -side/2, -side/2)
+            widthX = widthY = widthZ = side
 
-        vectors = (Vec3(width, 0, 0), Vec3(0, width, 0), Vec3(0, 0, width))
-        box = Vec3(vectors[0][0], vectors[1][1], vectors[2][2])
-        origin = center - (np.ceil(np.array((width, width, width))))
+        vectors = (Vec3(widthX, 0, 0), Vec3(0, widthY, 0), Vec3(0, 0, widthZ))
+        box = Vec3(widthX, widthY, widthZ)
+        origin = center - (np.ceil(np.array((widthX, widthY, widthZ))))
         self._box_origin = origin
         self._box_size = np.ceil(np.array([maxRange[0]-minRange[0],
                                            maxRange[1]-minRange[1],
