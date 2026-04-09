@@ -41,7 +41,11 @@ def cmd_lineparser():
     parser.add_argument(
         "--iteratively_adjust_copies", action="store_true", default=False
     )
- 
+    parser.add_argument(
+        "--gpu_id", type=int, default=0,
+        help="GPU device index to use for CUDA simulations (default: 0)"
+    )
+
     return parser.parse_args()
 
 def main():
@@ -141,10 +145,8 @@ def main():
                                                     lipid_type=config.lipid_type,
                                                     lipid_patch_path=config.lipid_patch_path)
             cosolv_system.add_membrane(cosolvent_placement=config.memb_cosolv_placement,
-                                    positive_ion=config.positive_ion,
-                                    negative_ion=config.negative_ion,
                                     waters_to_keep=config.waters_to_keep)
-            cosolv_system.build(positive_ion=config.positive_ion, negative_ion=config.negative_ion, iteratively_adjust_copies=args.iteratively_adjust_copies)
+            cosolv_system.build(iteratively_adjust_copies=args.iteratively_adjust_copies)
         else:
             logger.info("Building cosolvent system")
             cosolv_system = CosolventSystem(cosolvents=cosolvents,
@@ -156,8 +158,6 @@ def main():
                                             box_size=config.box_size)
             cosolv_system.build(solvent_smiles=config.solvent_smiles,
                                 n_solvent_molecules=config.solvent_copies,
-                                positive_ion=config.positive_ion,
-                                negative_ion=config.negative_ion,
                                 iteratively_adjust_copies=args.iteratively_adjust_copies)
             
         if len(config.repulsive_residues) > 0:
@@ -180,7 +180,8 @@ def main():
         
         logger.info("Running MD simulation")
         start = time.time()
-        pdb_fname = os.path.join(config.output_dir, "system.pdb")
+        pos_ext = MD_FORMAT_EXTENSIONS['OPENMM']['position']
+        pdb_fname = os.path.join(config.output_dir, f"system{pos_ext}")
         system_fname = os.path.join(config.output_dir, "system.xml")
         run_simulation(
                         pdb_fname = pdb_fname,
@@ -189,9 +190,10 @@ def main():
                         traj_write_freq = args.traj_write_freq,
                         time_step = args.time_step,
                         temperature=args.temperature,
-                        simulation_steps = args.num_simulation_steps, 
+                        simulation_steps = args.num_simulation_steps,
                         results_path = config.output_dir,
-                        seed=None
+                        seed=None,
+                        gpu_id=args.gpu_id
         )
         logger.info(f"Simulation finished after {(time.time() - start)/60:.2f} min.")
     return
