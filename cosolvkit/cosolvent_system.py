@@ -476,26 +476,14 @@ class CosolventSystem(object):
         res = [r.name for r in self.modeller.topology.residues()]
         return res.count('HOH')
  
-    def _setup_new_topology(self, cosolvents_positions: dict, receptor_topology: app.Topology = None, receptor_positions:list = None) -> app.Modeller:
+     def _setup_new_topology(self, cosolvents_positions: dict) -> app.Modeller:
         """Returns a new modeller with the topolgy with the new molecules specified
 
         :param cosolvents_positions: keys are cosolvent molecules and values are lists of position of the new molecules to add
         :type cosolvents_positions: dict
-        :param receptor_topology: old topology to which add the new molecules, defaults to None
-        :type receptor_topology: openmm.app.Topology, optional
-        :param receptor_positions: old positions to which add the new molecules, defaults to None
-        :type receptor_positions: list, optional
         :return: new modeller containing combined topology and positions
         :rtype: openmm.app.Modeller
         """
-        new_mod = None
-        last_res_id = 0
-        
-        # Add the receptor first if present
-        if receptor_topology is not None and receptor_positions is not None and len(receptor_positions) > 0: 
-            new_mod = app.Modeller(receptor_topology, receptor_positions)
-            last_res_id = int(list(receptor_topology.residues())[-1].index)+1
-
         # Add cosolvent molecules
         molecules = []
         molecules_positions = []
@@ -510,149 +498,28 @@ class CosolventSystem(object):
 
         molecules_positions = np.array(molecules_positions)*openmmunit.nanometer
         new_top_openff = Topology.from_molecules(molecules)
-        new_top = self._to_openmm_topology(new_top_openff, starting_id=last_res_id)       
+        new_top = new_top_openff.to_openmm()
+        
+        used_chains = set(c.id for c in self.modeller.topology.chains()) if self.modeller is not None else set()
+        chain_id = ord('A')
+        while chr(chain_id) in used_chains:
+            chain_id += 1
+        for chain in new_top.chains():
+            chain.id = chr(chain_id)
+        used_chains.add(chr(chain_id))
+        chain_id += 1
+
         residues = list(new_top.residues())
         for i in range(len(cosolvent_names)):
             residues[i].name = cosolvent_names[i]
           
-        if new_mod is None:
-            new_mod = app.Modeller(new_top, molecules_positions)
+        if self.modeller is None:
+            self.modeller = app.Modeller(new_top, molecules_positions)
         else:
-            new_mod.add(new_top, molecules_positions)
+            self.modeller.add(new_top, molecules_positions)
             
-        new_mod.topology.setPeriodicBoxVectors(self._periodic_box_vectors)
-
-        return new_mod
-    
-    def _to_openmm_topology(self, off_topology: Topology, starting_id: int) -> app.Topology:
-        """Converts an openff topology to openmm without specifying a different chain for each residue.
-
-        :param off_topology: Openff Topology
-        :type off_topology: openff.Topology
-        :param starting_id: starting index
-        :type starting_id: int
-        :raises RuntimeError: if something goes wrong
-        :return: openmm topology
-        :rtype: openmm.app.Topology
-        """
-        from openff.toolkit.topology.molecule import Bond
-
-        omm_topology = app.Topology()
-
-        off_topology._ensure_unique_atom_names("residues")
-
-        # Go through atoms in OpenFF to preserve the order.
-        omm_atoms = []
-
-        last_chain = None
-        cnt = 0
-        # For each atom in each molecule, determine which chain/residue it should be a part of
-        for molecule in off_topology.molecules:
-            # No chain or residue can span more than one OFF molecule, so reset these to None for the first
-            # atom in each molecule.
-            last_residue = None
-            for atom in molecule.atoms:
-                
-                atom_residue_name = molecule.name
-
-                # If the residue number is undefined, assume a default of "0"
-                if "residue_number" in atom.metadata:
-                    atom_residue_number = atom.metadata["residue_number"]
-                else:
-                    atom_residue_number = str(starting_id+cnt)
-
-                # If the insertion code  is undefined, assume a default of " "
-                if "insertion_code" in atom.metadata:
-                    atom_insertion_code = atom.metadata["insertion_code"]
-                else:
-                    atom_insertion_code = " "
-
-                # If the chain ID is undefined, assume a default of "X"
-                if "chain_id" in atom.metadata:
-                    atom_chain_id = atom.metadata["chain_id"]
-                else:
-                    atom_chain_id = "X"
-
-                # Determine whether this atom should be part of the last atom's chain, or if it
-                # should start a new chain
-                if last_chain is None:
-                    chain = omm_topology.addChain(atom_chain_id)
-                elif last_chain.id == atom_chain_id:
-                    chain = last_chain
-                else:
-                    chain = omm_topology.addChain(atom_chain_id)
-                # Determine whether this atom should be a part of the last atom's residue, or if it
-                # should start a new residue
-                if last_residue is None:
-                    residue = omm_topology.addResidue(
-                        atom_residue_name,
-                        chain,
-                        id=atom_residue_number,
-                        insertionCode=atom_insertion_code,
-                    )
-                elif (
-                    (last_residue.name == atom_residue_name)
-                    and (int(last_residue.id) == int(atom_residue_number))
-                    and (last_residue.insertionCode == atom_insertion_code)
-                    and (chain.id == last_chain.id)
-                ):
-                    residue = last_residue
-                else:
-                    residue = omm_topology.addResidue(
-                        atom_residue_name,
-                        chain,
-                        id=atom_residue_number,
-                        insertionCode=atom_insertion_code,
-                    )
-
-                # Add atom.
-                element = app.Element.getByAtomicNumber(atom.atomic_number)
-                omm_atom = omm_topology.addAtom(atom.name, element, residue)
-
-                # Make sure that OpenFF and OpenMM Topology atoms have the same indices.
-                assert off_topology.atom_index(atom) == int(omm_atom.id) - 1
-                omm_atoms.append(omm_atom)
-
-                last_chain = chain
-                last_residue = residue
-            
-            cnt += 1 
-            # Add all bonds.
-            bond_types = {1: app.Single, 2: app.Double, 3: app.Triple}
-            for bond in molecule.bonds:
-                atom1, atom2 = bond.atoms
-                atom1_idx, atom2_idx = off_topology.atom_index(
-                    atom1
-                ), off_topology.atom_index(atom2)
-                if isinstance(bond, Bond):
-                    if bond.is_aromatic:
-                        bond_type = app.Aromatic
-                    else:
-                        bond_type = bond_types[bond.bond_order]
-                    bond_order = bond.bond_order
-                elif isinstance(bond, _SimpleBond):
-                    bond_type = None
-                    bond_order = None
-                else:
-                    raise RuntimeError(
-                        "Unexpected bond type found while iterating over Topology.bonds."
-                        f"Found {type(bond)}, allowed are Bond and _SimpleBond."
-                    )
-
-                omm_topology.addBond(
-                    omm_atoms[atom1_idx],
-                    omm_atoms[atom2_idx],
-                    type=bond_type,
-                    order=bond_order,
-                )
-
-        if off_topology.box_vectors is not None:
-            from openff.units.openmm import to_openmm
-
-            omm_topology.setPeriodicBoxVectors(to_openmm(off_topology.box_vectors))
-        return omm_topology
-
- 
+        return self.modeller
+     
     def _create_system(self, forcefield: app.forcefield, topology: app.Topology) -> System:
         """Returns system created from the Forcefield and the Topology.
 
