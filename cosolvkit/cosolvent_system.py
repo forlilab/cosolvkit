@@ -273,7 +273,7 @@ class CosolventSystem(object):
             cosolv_xyzs = self.add_cosolvents_adaptive(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions)
         else:
             cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, self.lowerBound, self.upperBound, receptor_positions)
-        self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
+        self.modeller = self._setup_new_topology(cosolv_xyzs)
         
         # Parametrize ligands
         if self.ligands is not None:
@@ -301,7 +301,7 @@ class CosolventSystem(object):
                 solv_xyz = self.add_cosolvents_adaptive(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
             else:
                 solv_xyz = self.add_cosolvents(d_mol, self.vectors, self.lowerBound, self.upperBound, self.modeller.positions)
-            self.modeller = self._setup_new_topology(solv_xyz, self.modeller.topology, self.modeller.positions)
+            self.modeller = self._setup_new_topology(solv_xyz)
             
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
@@ -1299,7 +1299,7 @@ class CosolventMembraneSystem(CosolventSystem):
             cosolv_xyzs = self.add_cosolvents_adaptive(self.cosolvents, self.vectors, lowerBound, upperBound, receptor_positions)
         else:
             cosolv_xyzs = self.add_cosolvents(self.cosolvents, self.vectors, lowerBound, upperBound, receptor_positions)
-        self.modeller = self._setup_new_topology(cosolv_xyzs, self.modeller.topology, self.modeller.positions)
+        self.modeller = self._setup_new_topology(cosolv_xyzs)
         self.modeller.addSolvent(forcefield=self.forcefield, neutralize=neutralize, positiveIon=positive_ion, negativeIon=negative_ion)
         self.system = self._create_system(self.forcefield, self.modeller.topology)
         return
