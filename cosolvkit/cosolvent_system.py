@@ -512,6 +512,7 @@ class CosolventSystem(object):
         residues = list(new_top.residues())
         for i in range(len(cosolvent_names)):
             residues[i].name = cosolvent_names[i]
+            residues[i].id = str(i+1)
           
         if self.modeller is None:
             self.modeller = app.Modeller(new_top, molecules_positions)
